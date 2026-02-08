@@ -1,4 +1,8 @@
 <script lang="ts">
+    /**
+     * 應用程式首頁 (Landing Page / Auth Test)
+     * 職責：目前的登入入口與環境測試介面。
+     */
     import { createBrowserSupabaseClient } from "$lib/supabase";
     const { data } = $props();
     const supabase = createBrowserSupabaseClient();

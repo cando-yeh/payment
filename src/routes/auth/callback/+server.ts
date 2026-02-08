@@ -1,3 +1,7 @@
+/**
+ * OAuth 認證回傳處理中心 (Server-side)
+ * 職責：接收 Google 回傳的 Code，並向 Supabase 交換成正式的 Session。
+ */
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 

@@ -1,4 +1,8 @@
 <script lang="ts">
+	/**
+	 * 全域共用版面 (Root Layout)
+	 * 職責：定義所有頁面的共用結構（如 CSS、導覽列、Session 監聽）。
+	 */
 	import "../app.css";
 	import { invalidate } from "$app/navigation";
 	import { onMount } from "svelte";

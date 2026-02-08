@@ -38,6 +38,19 @@ cp .env.example .env
 # PUBLIC_GOOGLE_CLIENT_ID
 ```
 
+## 🧪 測試架構
+
+本專案使用以下測試工具進行品質控管：
+- **Vitest**: 單元測試與業務邏輯驗證。
+- **Playwright**: 端對端 (E2E) 使用者流程測試。
+
+執行測試：
+```bash
+npm run test:unit    # 執行單元測試
+npm run test:e2e     # 執行端對端測試 (瀏覽器模擬)
+```
+詳細測試規範請參考：[測試策略文件](./參考文件/測試策略文件.md)
+
 ## 🔐 Google OAuth 設定指南
 
 本專案支援 Google 帳號登入，請依照以下步驟設定：

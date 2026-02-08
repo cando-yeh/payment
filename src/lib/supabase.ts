@@ -1,3 +1,7 @@
+/**
+ * Supabase 客戶端配置中心
+ * 職責：定義瀏覽器與伺服器端的 Supabase 連線，處理 Session 與 Cookie 同步。
+ */
 import { createBrowserClient, createServerClient, parseCookieHeader } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import type { Handle } from '@sveltejs/kit';

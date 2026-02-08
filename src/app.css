@@ -1,3 +1,7 @@
+/**
+ * 全域 CSS 樣式檔 (App Styles)
+ * 職責：載入 TailwindCSS 核心、定義 shadcn UI 的色彩變數以及全域樣式規則。
+ */
 @import "tailwindcss";
 
 @import "tw-animate-css";

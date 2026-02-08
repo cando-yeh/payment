@@ -1,3 +1,7 @@
+/**
+ * SvelteKit 框架設定檔
+ * 職責：配置適配器 (Adapter)、路徑別名、以及 Svelte 編譯器的相關設定。
+ */
 import adapter from '@sveltejs/adapter-auto';
 
 /** @type {import('@sveltejs/kit').Config} */
