@@ -55,19 +55,24 @@
     import { Plus } from 'lucide-svelte';
   </script>
   
-  <!-- 基本用法 -->
-<EmptyState title="尚無請款單" description="您還沒有建立任何請款單" />
+  基本用法：
+  <EmptyState title="尚無請款單" description="您還沒有建立任何請款單" />
 
-<!-- 帶操作按鈕 -->
-<EmptyState
-    title="尚無請款單"
-    description="立即建立您的第一筆請款單"
-    actionLabel="新增請款"
-    actionHref="/claims/new"
-    icon={Plus}
-/>
-``` 設計說明： - 大型圖標吸引視覺焦點 - 標題與描述提供清楚說明 - 操作按鈕引導使用者下一步
-- 整體置中顯示，適合作為空列表的替代內容 -->
+  帶操作按鈕：
+  <EmptyState
+      title="尚無請款單"
+      description="立即建立您的第一筆請款單"
+      actionLabel="新增請款"
+      actionHref="/claims/new"
+      icon={Plus}
+  />
+  ```
+  設計說明：
+  - 大型圖標吸引視覺焦點
+  - 標題與描述提供清楚說明
+  - 操作按鈕引導使用者下一步
+  - 整體置中顯示，適合作為空列表的替代內容
+-->
 
 <!-- 
   空狀態容器：

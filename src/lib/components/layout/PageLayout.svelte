@@ -23,7 +23,7 @@
       <Button href="/claims/new">新增請款</Button>
     {/snippet}
     
-    <!-- 頁面主要內容 -->
+    頁面主要內容：
     <div>...</div>
   </PageLayout>
   ```
@@ -34,14 +34,14 @@
   - 內容區域自動填滿剩餘空間並支援滾動
 -->
 <script lang="ts">
-	import { cn } from '$lib/utils';
-	import Breadcrumb from './Breadcrumb.svelte';
-	import type { Snippet } from 'svelte';
+	import { cn } from "$lib/utils";
+	import Breadcrumb from "./Breadcrumb.svelte";
+	import type { Snippet } from "svelte";
 
 	// ========================================
 	// 型別定義
 	// ========================================
-	
+
 	/**
 	 * 麵包屑項目介面 (重新定義以避免循環引用)
 	 */
@@ -73,21 +73,20 @@
 	// ========================================
 	// 狀態與屬性
 	// ========================================
-	
+
 	// 接收 props，breadcrumbs 預設為空陣列
-	let { 
-		title, 
-		description, 
-		breadcrumbs = [], 
-		actions, 
-		children, 
-		class: className 
+	let {
+		title,
+		description,
+		breadcrumbs = [],
+		actions,
+		children,
+		class: className,
 	}: Props = $props();
 </script>
 
 <!-- 頁面容器：全高度 Flexbox 垂直排列 -->
-<div class={cn('flex flex-col h-full', className)}>
-	
+<div class={cn("flex flex-col h-full", className)}>
 	<!-- ====================================== -->
 	<!-- 頁面標頭區域 -->
 	<!-- ====================================== -->
