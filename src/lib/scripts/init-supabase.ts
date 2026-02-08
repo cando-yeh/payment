@@ -1,66 +1,82 @@
 /**
- * Supabase 專案初始化腳本 (一次性工具)
+ * Supabase 專案自動化初始化腳本 (Admin Tool)
  * 
- * 此腳本的主要任務：
- * 1. 建立存放收據圖片的 Storage Bucket: 'receipts'
- * 2. 設定 Bucket 為非公開 (Private)，確保只有授權使用者能存取
- * 3. 限制檔案格式與大小 (5MB, 圖片或 PDF)
+ * 職責：
+ * 1. 確保雲端 Supabase 環境具備運算必要的 Storage 基礎設施。
+ * 2. 建立 'receipts' Bucket (用於存放報銷憑證)。
+ * 3. 設定預設的安全防護參數 (非公開存取、檔案類型限制、大小限制)。
  * 
- * 執行方式：
- * npx tsx src/lib/scripts/init-supabase.ts
- * (注意：執行前需確保環境變數 PUBLIC_SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY 已設定)
+ * 使用場景：
+ * - 專案初次建立後。
+ * - 切換至新的 Supabase 專案 (如測試環境) 時。
+ * 
+ * 安全說明：
+ * - 必須使用 SUPABASE_SERVICE_ROLE_KEY (管理員權限)。
+ * - 嚴禁將此 Key 寫死在代碼中，必須透過環境變數傳入。
  */
 
 import { createClient } from '@supabase/supabase-js';
 
-// 1. 從環境變數讀取連線資訊
-// 注意：這裡使用 Service Role Key，因為建立 Bucket 需要管理員權限
+/**
+ * 腳本入口點：檢查環境變數並執行操作
+ */
 const supabaseUrl = process.env.PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('❌ 找不到環境變數，請確保已傳入 PUBLIC_SUPABASE_URL 與 SUPABASE_SERVICE_ROLE_KEY');
+    console.error('❌ 錯誤：環境變數 PUBLIC_SUPABASE_URL 或 SUPABASE_SERVICE_ROLE_KEY 缺失！');
     process.exit(1);
 }
 
-// 2. 初始化具有管理員權限的 Supabase 客戶端
+// 初始化管理員等級的客戶端
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+/**
+ * 初始化 Storage Buckets
+ */
 async function initStorage() {
-    console.log('🚀 開始檢查/建立 Storage Bucket: receipts...');
+    console.log('🚀 [Storage] 開始檢查並初始化磁碟空間...');
 
     try {
-        // 3. 獲取現有的 Bucket 列表
+        // 取得目前專案中所有的儲存桶
         const { data: buckets, error: getError } = await supabase.storage.listBuckets();
 
         if (getError) {
-            console.error('❌ 獲取 Bucket 列表失敗:', getError.message);
+            console.error('❌ [Storage] 無法獲取 Bucket 列表:', getError.message);
             return;
         }
 
-        // 4. 檢查 'receipts' 是否已經存在
-        const receiptsBucket = buckets.find((b: any) => b.name === 'receipts');
+        // 檢查目標 Bucket 是否已存在
+        const RECEIPTS_BUCKET = 'receipts';
+        const receiptsBucket = buckets.find((b: any) => b.name === RECEIPTS_BUCKET);
 
         if (!receiptsBucket) {
-            // 5. 建立新的 Bucket
-            const { data, error } = await supabase.storage.createBucket('receipts', {
-                public: false, // 安全第一：設為非公開，需透過程式碼取得簽名 URL 才能看到圖片
-                fileSizeLimit: 5242880, // 限制單一檔案 5MB，避免使用者上傳超大原始圖檔
-                allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf']
+            console.log(`📡 [Storage] '${RECEIPTS_BUCKET}' 不存在，正在為您建立...`);
+
+            // 建立設定
+            const { error } = await supabase.storage.createBucket(RECEIPTS_BUCKET, {
+                public: false, // 禁止未經授權的 URL 直接存取 (Protect PII)
+                fileSizeLimit: 5 * 1024 * 1024, // 限制 5MB
+                allowedMimeTypes: [
+                    'image/png',
+                    'image/jpeg',
+                    'image/jpg',
+                    'application/pdf'
+                ]
             });
 
             if (error) {
-                console.error('❌ 建立 Bucket 失敗:', error.message);
+                console.error(`❌ [Storage] 建立 '${RECEIPTS_BUCKET}' 失敗:`, error.message);
             } else {
-                console.log('✅ 成功建立 receipts bucket！');
+                console.log(`✅ [Storage] '${RECEIPTS_BUCKET}' 建立成功！`);
             }
         } else {
-            console.log('✨ receipts bucket 已存在，無需重複建立。');
+            console.log(`✨ [Storage] '${RECEIPTS_BUCKET}' 已存在，無需動作。`);
         }
     } catch (e: any) {
-        console.error('❌ 發生意外錯誤:', e.message);
+        console.error('❌ [Storage] 發生意外異常:', e.message);
     }
 }
 
-// 執行初始化動作
+// 啟動流程
 initStorage();

@@ -1,16 +1,37 @@
 /**
- * 單元測試範例 (Unit Test Template)
- * 職責：作為測試撰寫範本，並用於驗證 Vitest 測試環境是否正常運作（冒煙測試）。
+ * 基礎工具單元測試 (Vitest)
+ * 
+ * 本檔案兼具兩個職責：
+ * 1. 冒煙測試 (Smoke Test)：確保測試框架 (Vitest) 與環境 (Node.js/JSDOM) 已正確安裝及配置。
+ * 2. 作為範本：提供撰寫高品質測試案例的範例。
  */
 import { describe, it, expect } from 'vitest';
 
-describe('基礎環境測試', () => {
-    it('應能執行基本的數學運算', () => {
-        expect(1 + 1).toBe(2);
+/**
+ * 基礎環境邏輯驗證
+ */
+describe('測試環境驗證 (Environment Check)', () => {
+
+    it('應能執行標準 JavaScript 數學運算 (驗證渲染引擎)', () => {
+        // 確保基本的 JavaScript 行為如預期
+        const sum = 1 + 1;
+        expect(sum).toBe(2);
+        expect(sum).not.toBe(3);
     });
 
-    it('應能處理字串連線', () => {
-        const str = 'Svelte' + 'Kit';
-        expect(str).toBe('SvelteKit');
+    it('應能處理 Svelte 專用的字串串接邏輯', () => {
+        // 模擬簡單的應用程式資料處理
+        const framework = 'Svelte';
+        const tool = 'Kit';
+        const result = `${framework}${tool}`;
+
+        expect(result).toBe('SvelteKit');
+        expect(result).toHaveLength(9);
+    });
+
+    it('應能正確處理物件比對 (深層比對驗證)', () => {
+        // 驗證 expect.toEqual 常見用法
+        const user = { name: 'Admin', role: 'finance' };
+        expect(user).toEqual({ name: 'Admin', role: 'finance' });
     });
 });
