@@ -31,10 +31,54 @@ npm run preview
 # 複製環境變數範本
 cp .env.example .env
 
-# 填入 Supabase 連線資訊
+# 填入以下資訊：
+# PUBLIC_SUPABASE_URL
+# PUBLIC_SUPABASE_ANON_KEY
+# SUPABASE_SERVICE_ROLE_KEY
+# PUBLIC_GOOGLE_CLIENT_ID
 ```
 
-## 📁 專案結構
+## 🔐 Google OAuth 設定指南
+
+本專案支援 Google 帳號登入，請依照以下步驟設定：
+
+1. **Google Cloud Console 設定**:
+   - 建立專案並設定 **OAuth 同意畫面**。
+   - 建立 **OAuth 2.0 用戶端 ID** (網頁應用程式)。
+   - **已授權的 JavaScript 來源**: `http://localhost:5173`
+   - **已授權的重新導向 URI**: `https://lelewlcyubsxyudrysmvh.supabase.co/auth/v1/callback`
+
+2. **Supabase 後台設定**:
+   - 前往 `Authentication` -> `Providers` -> `Google`。
+   - 啟用 Google 並填入 **Client ID** 與 **Client Secret**。
+   - 將 **Client ID** 填入 `.env` 中的 `PUBLIC_GOOGLE_CLIENT_ID`。
+
+3. **初始化 Storage**:
+   ```bash
+   # 建立收據存放空間 (receipts bucket)
+   export $(cat .env | xargs) && npx tsx src/lib/scripts/init-supabase.ts
+   ```
+
+## � Vercel 部署流程 (CI/CD)
+
+本專案建議部署至 Vercel，設定步驟如下：
+
+1. **連結 GitHub**:
+   - 在 [Vercel Dashboard](https://vercel.com/dashboard) 點擊 `Add New...` -> `Project`。
+   - 匯出 (Import) 此 GitHub 儲存庫。
+
+2. **設定環境變數**:
+   - 在部署設定頁面的 `Environment Variables` 區塊，依序加入以下變數：
+     - `PUBLIC_SUPABASE_URL`
+     - `PUBLIC_SUPABASE_ANON_KEY`
+     - `SUPABASE_SERVICE_ROLE_KEY` (安全考量，僅伺服器端可用)
+     - `PUBLIC_GOOGLE_CLIENT_ID`
+     - `PUBLIC_APP_ENV` (填入 `production`)
+
+3. **自動部署**:
+   - 之後只要執行 `git push` 到 `main` 分支，Vercel 就會自動觸發重新部署。
+
+## �📁 專案結構
 
 ```
 src/
