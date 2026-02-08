@@ -311,6 +311,14 @@
                 variant="ghost"
                 size="icon"
                 class="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                onclick={async () => {
+                    const { createBrowserSupabaseClient } = await import(
+                        "$lib"
+                    );
+                    const supabase = createBrowserSupabaseClient();
+                    await supabase.auth.signOut();
+                    window.location.href = "/auth";
+                }}
             >
                 <LogOut class="h-4 w-4" />
             </Button>

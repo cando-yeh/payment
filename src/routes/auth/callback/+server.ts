@@ -30,9 +30,10 @@ export const GET: RequestHandler = async (event) => {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error) {
-            // 交換成功，導向使用者原本要求的頁面 (next) 或首頁
-            // 使用 slice(1) 移除可能的前導斜線，避免雙斜線問題
-            throw redirect(303, `/${next.slice(1)}`);
+            // 成功交換 Session，導向至目標頁面
+            // 確保路徑以 / 開頭
+            const finalRedirect = next.startsWith('/') ? next : `/${next}`;
+            throw redirect(303, finalRedirect);
         }
     }
 

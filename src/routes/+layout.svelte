@@ -11,29 +11,65 @@
 	// 引入全域 CSS (Tailwind, shadcn 變數)
 	import "../app.css";
 	import { invalidate } from "$app/navigation";
+	import { createBrowserSupabaseClient } from "$lib";
 	import { onMount } from "svelte";
+	import { page } from "$app/state";
+	import Sidebar from "$lib/components/layout/Sidebar.svelte";
 
 	// 接收來自 +layout.server.ts 的資料 (data) 及其子頁面 (children)
 	let { data, children } = $props();
 
+	// 初始化瀏覽器端 Supabase Client
+	const supabase = createBrowserSupabaseClient();
+
 	/**
 	 * 生命週期：掛載時執行
-	 *
-	 * 用途：
-	 * 監聽 Supabase 認證狀態變更 (登入、登出、Session 到期)。
-	 * 當狀態變更時，通知 SvelteKit 重新運行 load 函數以更新頁面資料。
 	 */
 	onMount(() => {
-		// 未來會在此處實作 supabase.auth.onAuthStateChange 監聽
-		// 目前暫時預留結構
 		const {
 			data: { subscription },
-		} = { data: { subscription: { unsubscribe: () => {} } } };
+		} = supabase.auth.onAuthStateChange((event, _session) => {
+			if (_session?.expires_at !== data.session?.expires_at) {
+				invalidate("supabase:auth");
+			}
+		});
 
-		// 元件銷毀時取消監聽
 		return () => subscription.unsubscribe();
 	});
+
+	// 判斷是否為認證相關頁面 (例如登入頁)
+	const isAuthPage = $derived(page.url.pathname.startsWith("/auth"));
+
+	// 從 Session 中提取使用者資訊供 Sidebar 使用
+	const sidebarUser = $derived(
+		data.session
+			? {
+					name:
+						data.session.user.user_metadata.full_name ||
+						data.session.user.email?.split("@")[0] ||
+						"User",
+					email: data.session.user.email || "",
+					avatarUrl: data.session.user.user_metadata.avatar_url,
+					// 這裡的角色資訊未來應從資料庫讀取，目前先給預設
+					isFinance: false,
+					isAdmin: false,
+					isApprover: false,
+				}
+			: null,
+	);
 </script>
 
-<!-- 渲染子頁面內容 -->
-{@render children()}
+{#if data.session && !isAuthPage && sidebarUser}
+	<!-- 已登入且不在登入頁：顯示側邊欄佈局 -->
+	<div class="flex min-h-screen bg-background text-foreground">
+		<Sidebar user={sidebarUser} />
+		<main class="flex-1 overflow-auto">
+			{@render children()}
+		</main>
+	</div>
+{:else}
+	<!-- 未登入或在登入頁：顯示純內容 (例如登入表單) -->
+	<div class="min-h-screen bg-background">
+		{@render children()}
+	</div>
+{/if}

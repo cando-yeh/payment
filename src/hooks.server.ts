@@ -6,7 +6,7 @@
  * 2. 初始化 Supabase 認證狀態。
  * 3. 未來可擴充：路由保護、日誌記錄、效能監控。
  */
-import { supabaseHandle } from '$lib/supabase';
+import { supabaseHandle } from '$lib';
 import { sequence } from '@sveltejs/kit/hooks';
 
 /**
