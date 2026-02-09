@@ -17,7 +17,10 @@
 	import Sidebar from "$lib/components/layout/Sidebar.svelte";
 
 	// 接收來自 +layout.server.ts 的資料 (data) 及其子頁面 (children)
-	let { data, children } = $props();
+	let {
+		data,
+		children,
+	}: { data: import("./$types").LayoutData; children: any } = $props();
 
 	// 初始化瀏覽器端 Supabase Client
 	const supabase = createBrowserSupabaseClient();
@@ -40,20 +43,22 @@
 	// 判斷是否為認證相關頁面 (例如登入頁)
 	const isAuthPage = $derived(page.url.pathname.startsWith("/auth"));
 
-	// 從 Session 中提取使用者資訊供 Sidebar 使用
+	// 從 Session 與 Profile 中提取使用者資訊供 Sidebar 使用
 	const sidebarUser = $derived(
 		data.session
 			? {
 					name:
+						data.profile?.full_name ||
 						data.session.user.user_metadata.full_name ||
 						data.session.user.email?.split("@")[0] ||
 						"User",
 					email: data.session.user.email || "",
-					avatarUrl: data.session.user.user_metadata.avatar_url,
-					// 這裡的角色資訊未來應從資料庫讀取，目前先給預設
-					isFinance: false,
-					isAdmin: false,
-					isApprover: false,
+					avatarUrl:
+						data.profile?.avatar_url ||
+						data.session.user.user_metadata.avatar_url,
+					isFinance: data.profile?.is_finance ?? false,
+					isAdmin: data.profile?.is_admin ?? false,
+					isApprover: data.profile?.is_approver ?? false,
 				}
 			: null,
 	);

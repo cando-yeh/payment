@@ -22,6 +22,14 @@ declare global {
 			supabase: SupabaseClient;
 			/** 獲取當前使用者會話 (Session) 的輔助函數 */
 			getSession: () => Promise<Session | null>;
+			/** 
+			 * 整理後的使用者資訊 (由 hooks.server.ts 注入)
+			 * 包含原始 Session User 及擴充的角色權限
+			 */
+			user: (Session['user'] & {
+				is_admin: boolean;
+				is_finance: boolean;
+			}) | null;
 		}
 
 		/**
@@ -31,6 +39,18 @@ declare global {
 		interface PageData {
 			/** 當前登入使用者的會話資訊，若未登入則為 null */
 			session: Session | null;
+			/** 
+			 * 當前使用者的詳細 Profile 資料 (含衍生狀態)
+			 * 透過 +layout.server.ts 注入
+			 */
+			profile: {
+				full_name: string | null;
+				avatar_url: string | null;
+				is_admin: boolean;
+				is_finance: boolean;
+				approver_id: string | null;
+				is_approver: boolean;
+			} | null;
 		}
 
 		// 頁面狀態型別定義 (用於 SvelteKit 2.0 的 shallow routing)

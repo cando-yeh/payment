@@ -27,9 +27,25 @@ export const GET: RequestHandler = async (event) => {
          * 這是一個伺服器對伺服器 (S2S) 的請求。
          * 成功後，Supabase SSR 會自動透過 supabaseHandle 設定 Cookie。
          */
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code);
 
-        if (!error) {
+        if (!error && session?.user) {
+            // Profile 存在性檢查：確保新使用者登入後自動建立資料
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('id', session.user.id)
+                .single();
+
+            if (!profile) {
+                // 如果找不到 Profile，則建立一筆基礎資料
+                await supabase.from('profiles').insert({
+                    id: session.user.id,
+                    full_name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
+                    avatar_url: session.user.user_metadata.avatar_url,
+                });
+            }
+
             // 成功交換 Session，導向至目標頁面
             // 確保路徑以 / 開頭
             const finalRedirect = next.startsWith('/') ? next : `/${next}`;
