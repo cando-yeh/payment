@@ -26,6 +26,7 @@
     } from "lucide-svelte";
     import { deserialize, applyAction } from "$app/forms";
     import { invalidateAll } from "$app/navigation";
+    import { untrack } from "svelte";
 
     // 接收來自 Sidebar 的使用者資料物件
     let { user, open = $bindable(false) } = $props();
@@ -49,8 +50,8 @@
      * 使用本地狀態是為了讓 Input 能夠與 bind:value 綁定，
      * 而不會因為使用者正在輸入時 Prop 更新而導致輸入中斷。
      */
-    let fullName = $state(user.name);
-    let bankName = $state(user.bank || "");
+    let fullName = $state(untrack(() => user.name));
+    let bankName = $state(untrack(() => user.bank || ""));
     let inputBankAccount = $state("");
 
     /**
