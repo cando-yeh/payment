@@ -34,16 +34,9 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
         }
     }
 
-    // 路由保護規則：
-    // 若未登入且目前不在 /auth 路徑下，則強制跳轉至登入頁
-    if (!session && !url.pathname.startsWith('/auth')) {
-        throw redirect(303, '/auth');
-    }
 
-    // 若已登入但仍在 /auth 頁面，則導向至首頁
-    if (session && url.pathname === '/auth') {
-        throw redirect(303, '/');
-    }
+
+
 
     return {
         session,

@@ -25,7 +25,12 @@ const authHandle: Handle = async ({ event, resolve }) => {
         throw redirect(303, `/auth?next=${pathname}`);
     }
 
-    // 2. 獲取使用者角色 (RBAC)
+    // 2. 已登入使用者不應存取登入頁 (避免重複登入)
+    if (session && pathname === '/auth') {
+        throw redirect(303, '/');
+    }
+
+    // 3. 獲取使用者角色 (RBAC)
     if (session) {
         const { data: profile } = await event.locals.supabase
             .from('profiles')
