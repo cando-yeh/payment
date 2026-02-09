@@ -92,9 +92,6 @@
         // 廠商管理：所有使用者可見 (新增需審核)
         { label: "廠商管理", href: "/vendors", icon: Building2 },
 
-        // 個人帳戶：所有使用者可見
-        { label: "個人帳戶", href: "/account", icon: User },
-
         // 使用者管理：僅管理員可見
         {
             label: "使用者管理",
@@ -115,11 +112,16 @@
     // 元件屬性
     // ========================================
 
+    import UserAccountSheet from "./UserAccountSheet.svelte";
+
     /**
      * Props 介面定義
      */
     interface Props {
-        /** 目前登入的使用者資訊 */
+        /**
+         * 目前登入的使用者資訊
+         * 這些屬性決定了 Sidebar 的導航項目顯示與否 (RBAC)
+         */
         user: {
             name: string;
             email: string;
@@ -127,13 +129,22 @@
             isFinance?: boolean;
             isAdmin?: boolean;
             isApprover?: boolean;
+            bank?: string;
         };
         /** 額外的 CSS 類別 */
         class?: string;
     }
 
-    // 接收 props
+    // 接收 props (Svelte 5 Snippets)
     let { user, class: className }: Props = $props();
+
+    /**
+     * 帳戶設定視窗開啟狀態 (Svelte 5 Rune)
+     *
+     * 在 Phase 2 中，我們將獨立的 /account 頁面重構為 Sheet 視窗。
+     * 透過點擊左下角的使用者卡片來切換此狀態。
+     */
+    let accountSheetOpen = $state(false);
 
     // ========================================
     // 輔助函數
@@ -297,14 +308,22 @@
             </Avatar.Root>
 
             <!-- 使用者名稱與角色 -->
-            <div class="flex-1 overflow-hidden">
-                <p class="truncate text-sm font-medium text-sidebar-foreground">
-                    {user.name}
-                </p>
-                <p class="truncate text-xs text-sidebar-foreground/60">
-                    {getRoleLabel()}
-                </p>
-            </div>
+            <button
+                class="flex-1 overflow-hidden appearance-none border-none bg-transparent p-0 text-left outline-none cursor-pointer group"
+                onclick={() => (accountSheetOpen = true)}
+                title="開啟個人帳戶設定"
+            >
+                <div class="flex flex-col">
+                    <p
+                        class="truncate text-sm font-medium text-sidebar-foreground group-hover:text-primary transition-colors"
+                    >
+                        {user.name}
+                    </p>
+                    <p class="truncate text-xs text-sidebar-foreground/60">
+                        {getRoleLabel()}
+                    </p>
+                </div>
+            </button>
 
             <!-- 登出按鈕 -->
             <Button
@@ -325,3 +344,5 @@
         </div>
     </div>
 </aside>
+
+<UserAccountSheet {user} bind:open={accountSheetOpen} />

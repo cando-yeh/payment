@@ -32,26 +32,27 @@ declare global {
 			}) | null;
 		}
 
-		/**
-		 * 傳遞給前端頁面的資料結構
-		 * 透過 $page.data 或各頁面的 data 屬性存取
+		/** 使用者設定檔與權限結構 */
+		interface UserProfile {
+			full_name: string | null;
+			avatar_url: string | null;
+			is_admin: boolean;
+			is_finance: boolean;
+			approver_id: string | null;
+			is_approver: boolean;
+			bank: string | null;
+		}
+
+		/** 
+		 * 頁面與佈局共用的資料結構 (PageData & LayoutData)
+		 * SvelteKit 要求這兩個介面名稱必須存在，我們透過繼承來達成「一次定義，兩處共用」。
 		 */
 		interface PageData {
-			/** 當前登入使用者的會話資訊，若未登入則為 null */
 			session: Session | null;
-			/** 
-			 * 當前使用者的詳細 Profile 資料 (含衍生狀態)
-			 * 透過 +layout.server.ts 注入
-			 */
-			profile: {
-				full_name: string | null;
-				avatar_url: string | null;
-				is_admin: boolean;
-				is_finance: boolean;
-				approver_id: string | null;
-				is_approver: boolean;
-			} | null;
+			profile: UserProfile | null;
 		}
+
+		interface LayoutData extends PageData { }
 
 		// 頁面狀態型別定義 (用於 SvelteKit 2.0 的 shallow routing)
 		// interface PageState {}

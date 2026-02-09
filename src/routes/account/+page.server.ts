@@ -1,29 +1,44 @@
-import { fail, redirect } from '@sveltejs/kit';
-import type { PageServerLoad, Actions } from './$types';
+import { fail, redirect, type Actions, type RequestEvent } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async ({ locals }) => {
-    const session = await locals.getSession();
-    if (!session) {
-        throw redirect(303, '/auth');
-    }
-
-    const { data: profile, error } = await locals.supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
-    if (error) {
-        console.error('Error fetching profile:', error);
-    }
-
-    return {
-        profile
-    };
-};
-
+/**
+ * Account Page Server Actions
+ * 
+ * 由於 Phase 2 將帳戶頁面轉為 Sheet 形式，
+ * 這些 Action 負責處理來自 UserAccountSheet.svelte 的後端請求。
+ */
 export const actions: Actions = {
-    updateProfile: async ({ request, locals }) => {
+    /** 
+     * 揭露銀行帳號 
+     * 
+     * 安全邏輯：
+     * 1. 透過 RPC 'reveal_profile_bank_account' 呼叫資料庫。
+     * 2. 資料庫端的函數使用 SECURITY DEFINER 並執行 pgp_sym_decrypt。
+     * 3. 只有當 auth.uid() 與目標 ID 吻合（本人）或為管理員時，才會回傳解密後的文字。
+     */
+    revealAccount: async ({ locals }: RequestEvent) => {
+        const session = await locals.getSession();
+        if (!session) throw redirect(303, '/auth');
+
+        const { data, error } = await locals.supabase.rpc('reveal_profile_bank_account', {
+            target_id: session.user.id
+        });
+
+        if (error) {
+            return fail(500, { message: '讀取失敗', error: error.message });
+        }
+
+        return { success: true, decryptedAccount: data };
+    },
+
+    /**
+     * 更新個人資料
+     * 
+     * 開發紀錄：
+     * - 早期版本使用 `upsert` 可能導致銀行帳號欄位在未傳送時被覆寫為 null。
+     * - 現已改為針對性 `update` 專注於姓名與銀行名稱。
+     * - 銀行帳號更新則是獨立透過加密 RPC `update_profile_bank_account` 執行。
+     */
+    updateProfile: async ({ request, locals }: RequestEvent) => {
         const session = await locals.getSession();
         if (!session) throw redirect(303, '/auth');
 
@@ -32,32 +47,30 @@ export const actions: Actions = {
         const bank = formData.get('bank') as string;
         const bankAccount = formData.get('bankAccount') as string;
 
-        // 注意：bank_account 在資料庫中是 bytea 且預期透過 pgcrypto 加密。
-        // 這裡我們暫時使用 Supabase RPC 或 SQL 函數處理，
-        // 或者如果環境允許，直接在前端/後端處理後傳入。
-        // 根據規約，我們應該呼叫 pgp_sym_encrypt。
-
-        // 實作建議：在 Supabase 建立一個 RPC 函數來處理加密更新。
-        // 但如果無法動資料庫，我們只能先寫入文字 (如果是測試環境) 或使用 Node 加密。
-        // 這裡我們先照規約透過 rpc 呼叫（假設已經建立）或直接更新。
-
+        /**
+         * 1. 更新基本非敏感資料
+         */
         const updates = {
-            id: session.user.id,
             full_name: fullName,
             bank: bank,
-            // bank_account: bankAccount, // 這裡需要加密處理
             updated_at: new Date().toISOString()
         };
 
         const { error } = await locals.supabase
             .from('profiles')
-            .upsert(updates);
+            .update(updates)
+            .eq('id', session.user.id);
 
         if (error) {
-            return fail(500, { message: '更新失敗', error: error.message });
+            return fail(500, { message: '個人基本資料更新失敗', error: error.message });
         }
 
-        // 處理銀行帳號更新 (使用 RPC 處理加密)
+        /**
+         * 2. 處理銀行帳號更新 (敏感資料加密路徑)
+         * 
+         * 為了確保安全性，敏感欄位 `bank_account` (bytea) 僅能透過
+         * 資料庫層級的加密函數進行寫入。
+         */
         if (bankAccount) {
             const { error: cryptoError } = await locals.supabase.rpc('update_profile_bank_account', {
                 target_id: session.user.id,
@@ -66,7 +79,7 @@ export const actions: Actions = {
 
             if (cryptoError) {
                 console.error('Crypto update error:', cryptoError);
-                // 如果 RPC 不存在，這裡會失敗。目前先忽略或記錄。
+                return fail(500, { message: '銀行帳號加密更新失敗', error: cryptoError.message });
             }
         }
 

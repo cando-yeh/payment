@@ -1,4 +1,15 @@
 <script lang="ts">
+    /**
+     * Admin Users Page
+     *
+     * 職責：
+     * 1. 讓管理員管理系統內所有使用者的角色權限。
+     * 2. 指派每個使用者的核准人 (Approver)。
+     *
+     * 技術重點：
+     * - 使用 Svelte 5 $state 與 $effect 處理伺服器資料與本地資料的即時同步。
+     * - 實作樂觀更新 (Optimistic UI)，點擊按鈕後立即更新本地狀態，提升操作流暢感。
+     */
     import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
@@ -17,17 +28,28 @@
     import { Input } from "$lib/components/ui/input";
 
     let { data } = $props();
-    // 使用 $state() 初始空值，並透過 $effect 同步，避免「僅捕捉初始值」的警告
+
+    /**
+     * 本地使用者狀態
+     * 我們不直接在 Template 使用 data.users，而是轉換為 $state，
+     * 這樣我們在 fetch 成功後可以直接修改該陣列項目，觸發 UI 局部重新渲染。
+     */
     let users = $state<any[]>([]);
 
-    // 當伺服器資料更新時（例如透過 invalidate），同步更新本地狀態
+    /**
+     * 資料同步效應
+     *
+     * 如果頁面被重新整理或 data 物件發生變化，確保本地狀態能跟上。
+     */
     $effect(() => {
         users = data.users;
     });
 
     let searchTerm = $state("");
 
-    // 過濾搜尋結果
+    /**
+     * 衍生搜尋結果
+     */
     let filteredUsers = $derived(
         users.filter(
             (u) =>
@@ -36,7 +58,12 @@
         ),
     );
 
-    // 更新權限的處理函數
+    /**
+     * 更新使用者權限 (管理員/財務)
+     *
+     * 使用 fetch 直接呼叫後端 Action 並取得結果後手動更新 users 狀態，
+     * 以維持 Svelte 5 的零延遲反應性。
+     */
     async function togglePermission(
         userId: string,
         field: string,
@@ -53,7 +80,7 @@
         });
 
         if (response.ok) {
-            // 本地狀態更新
+            // 手動更新本地狀態物件，觸發 Svelte 5 的 Proxy 選取
             const index = users.findIndex((u) => u.id === userId);
             if (index !== -1) {
                 users[index] = { ...users[index], [field]: !currentValue };
@@ -64,7 +91,12 @@
         }
     }
 
-    // 更新核准人的處理函數
+    /**
+     * 指派核准人
+     *
+     * 同樣使用 fetch + 本地狀態更新模式，
+     * 確保選擇核准人後下拉選單能立即反映正確的名稱。
+     */
     async function selectApprover(
         userId: string,
         approverId: string | undefined,
@@ -79,6 +111,10 @@
         });
 
         if (response.ok) {
+            const index = users.findIndex((u) => u.id === userId);
+            if (index !== -1) {
+                users[index] = { ...users[index], approver_id: approverId };
+            }
             toast.success("核准人指派成功");
         } else {
             toast.error("操作失敗");
