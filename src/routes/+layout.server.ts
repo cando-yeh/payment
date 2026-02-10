@@ -35,9 +35,6 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
     }
 
 
-
-
-
     return {
         session,
         profile
