@@ -17,21 +17,24 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
     let profile = null;
 
     if (session) {
-        const { data, error } = await locals.supabase
-            .from('profiles')
-            .select('full_name, avatar_url, is_admin, is_finance, approver_id, bank')
-            .eq('id', session.user.id)
-            .single();
-
-        if (!error && data) {
-            // 動態判斷我是否為別人的核准人（使用 limit(1) 避免全表掃描）
-            const { count } = await locals.supabase
+        const [profileResponse, approverResponse] = await Promise.all([
+            locals.supabase
+                .from('profiles')
+                .select('full_name, avatar_url, is_admin, is_finance, approver_id, bank')
+                .eq('id', session.user.id)
+                .single(),
+            locals.supabase
                 .from('profiles')
                 .select('id', { count: 'exact', head: true })
                 .eq('approver_id', session.user.id)
-                .limit(1);
+                .limit(1)
+        ]);
 
-            profile = { ...data, is_approver: (count || 0) > 0 };
+        if (!profileResponse.error && profileResponse.data) {
+            profile = {
+                ...profileResponse.data,
+                is_approver: (approverResponse.count || 0) > 0
+            };
         }
     }
 

@@ -7,34 +7,28 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         throw redirect(303, '/auth');
     }
 
-    // 1. Fetch all existing payees
-    const { data: payees, error: payeesError } = await supabase
-        .from('payees')
-        .select('id, name, type, status, bank, service_description, created_at, updated_at')
-        .order('created_at', { ascending: false });
+    // 1. Fetch data in parallel
+    const [payeesResponse, requestsResponse] = await Promise.all([
+        supabase
+            .from('payees')
+            .select('id, name, type, status, bank, service_description, created_at, updated_at')
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('payee_change_requests')
+            .select('id, change_type, status, proposed_data, reason, created_at, requested_by')
+            .eq('change_type', 'create')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false })
+    ]);
 
-    if (payeesError) {
-        console.error('Error fetching payees:', payeesError);
+    if (payeesResponse.error) {
+        console.error('Error fetching payees:', payeesResponse.error);
         throw error(500, 'Error fetching payees');
     }
 
-    // 2. Fetch pending "Create" requests (these are not yet in the payees table)
-    // We only need the pending creation requests to show them in the list as "Pending Approval"
-    const { data: pendingCreates, error: requestsError } = await supabase
-        .from('payee_change_requests')
-        .select('id, change_type, status, proposed_data, reason, created_at, requested_by')
-        .eq('change_type', 'create')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-    if (requestsError) {
-        console.error('Error fetching payee requests:', requestsError);
-        // Non-blocking error, we can just return empty list
-    }
-
     return {
-        payees: payees || [],
-        pendingCreates: pendingCreates || [],
+        payees: payeesResponse.data || [],
+        pendingCreates: requestsResponse.data || [],
         user: session.user
     };
 };

@@ -57,17 +57,23 @@ export const supabaseHandle: Handle = async ({ event, resolve }) => {
      * - auth.getUser() 會向 Supabase Auth Server 發送請求驗證 JWT，確保安全。
      * - 伺服器端應優先使用 getUser() 確認身分後，再用 getSession() 取得 token 資訊。
      */
+    let sessionPromise: Promise<any> | null = null;
     event.locals.getSession = async () => {
-        const {
-            data: { user },
-        } = await event.locals.supabase.auth.getUser();
-        if (!user) return null;
+        if (sessionPromise) return sessionPromise;
 
-        // 使用者已經過伺服器驗證，可以安全地取得 session 資訊
-        const {
-            data: { session },
-        } = await event.locals.supabase.auth.getSession();
-        return session;
+        sessionPromise = (async () => {
+            const {
+                data: { user },
+            } = await event.locals.supabase.auth.getUser();
+            if (!user) return null;
+
+            const {
+                data: { session },
+            } = await event.locals.supabase.auth.getSession();
+            return session;
+        })();
+
+        return sessionPromise;
     };
 
     /**
