@@ -77,6 +77,7 @@
         const response = await fetch("?/updateUserPermissions", {
             method: "POST",
             body: formData,
+            headers: { "x-sveltekit-action": "true" },
         });
 
         if (response.ok) {
@@ -108,6 +109,7 @@
         const response = await fetch("?/assignApprover", {
             method: "POST",
             body: formData,
+            headers: { "x-sveltekit-action": "true" },
         });
 
         if (response.ok) {

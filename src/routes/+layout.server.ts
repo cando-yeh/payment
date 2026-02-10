@@ -24,11 +24,12 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
             .single();
 
         if (!error && data) {
-            // 做法 B：動態判斷我是否為別人的核准人
+            // 動態判斷我是否為別人的核准人（使用 limit(1) 避免全表掃描）
             const { count } = await locals.supabase
                 .from('profiles')
-                .select('*', { count: 'exact', head: true })
-                .eq('approver_id', session.user.id);
+                .select('id', { count: 'exact', head: true })
+                .eq('approver_id', session.user.id)
+                .limit(1);
 
             profile = { ...data, is_approver: (count || 0) > 0 };
         }

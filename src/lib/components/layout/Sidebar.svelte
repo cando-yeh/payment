@@ -89,8 +89,8 @@
             requiredRoles: ["finance", "admin", "approver"],
         },
 
-        // 廠商管理：所有使用者可見 (新增需審核)
-        { label: "廠商管理", href: "/vendors", icon: Building2 },
+        // 受款人管理：所有使用者可見 (新增需審核)
+        { label: "受款人管理", href: "/payees", icon: Building2 },
 
         // 使用者管理：僅管理員可見
         {

@@ -51,9 +51,19 @@ export const supabaseHandle: Handle = async ({ event, resolve }) => {
 
     /**
      * 輔助函數：供所有伺服器端 Load 函數獲取當前 Session
-     * 使用 auth.getSession() 會自動驗證 Refresh Token，確保身分有效
+     *
+     * 安全注意事項：
+     * - auth.getSession() 僅從本地儲存讀取，不做伺服器端驗證，可能被竄改。
+     * - auth.getUser() 會向 Supabase Auth Server 發送請求驗證 JWT，確保安全。
+     * - 伺服器端應優先使用 getUser() 確認身分後，再用 getSession() 取得 token 資訊。
      */
     event.locals.getSession = async () => {
+        const {
+            data: { user },
+        } = await event.locals.supabase.auth.getUser();
+        if (!user) return null;
+
+        // 使用者已經過伺服器驗證，可以安全地取得 session 資訊
         const {
             data: { session },
         } = await event.locals.supabase.auth.getSession();

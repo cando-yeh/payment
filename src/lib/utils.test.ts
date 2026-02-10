@@ -1,36 +1,81 @@
 /**
  * 基礎工具單元測試 (Vitest)
- * 
- * 本檔案兼具兩個職責：
- * 1. 冒煙測試 (Smoke Test)：確保測試框架 (Vitest) 與環境 (Node.js/JSDOM) 已正確安裝及配置。
- * 2. 作為範本：提供撰寫高品質測試案例的範例。
+ *
+ * 本檔案測試 utils.ts 中的實際工具函數，而非僅驗證測試環境。
  */
 import { describe, it, expect } from 'vitest';
+import { cn } from './utils';
 
 /**
- * 基礎環境邏輯驗證
+ * cn() 函數測試
  */
-describe('測試環境驗證 (Environment Check)', () => {
-
-    it('應能執行標準 JavaScript 數學運算 (驗證渲染引擎)', () => {
-        // 確保基本的 JavaScript 行為如預期
-        const sum = 1 + 1;
-        expect(sum).toBe(2);
-        expect(sum).not.toBe(3);
+describe('cn() - Tailwind Class Merge Utility', () => {
+    it('應合併多個 class 字串', () => {
+        const result = cn('p-4', 'text-red-500');
+        expect(result).toBe('p-4 text-red-500');
     });
 
-    it('應能處理 Svelte 專用的字串串接邏輯', () => {
-        // 模擬簡單的應用程式資料處理
-        const framework = 'Svelte';
-        const tool = 'Kit';
-        const result = `${framework}${tool}`;
+    it('應解決 Tailwind 衝突（後者覆蓋前者）', () => {
+        const result = cn('p-4', 'p-2');
+        expect(result).toBe('p-2');
+    });
 
+    it('應處理條件式 class（falsy 值被過濾）', () => {
+        const isActive = false;
+        const result = cn('base', isActive && 'active-class', 'another');
+        expect(result).toBe('base another');
+    });
+
+    it('應處理空輸入', () => {
+        const result = cn();
+        expect(result).toBe('');
+    });
+
+    it('應處理 undefined 和 null 輸入', () => {
+        const result = cn('base', undefined, null, 'end');
+        expect(result).toBe('base end');
+    });
+
+    it('應處理物件式 class', () => {
+        const result = cn({ 'bg-blue-500': true, 'text-white': true, 'hidden': false });
+        expect(result).toContain('bg-blue-500');
+        expect(result).toContain('text-white');
+        expect(result).not.toContain('hidden');
+    });
+
+    it('應處理陣列式 class', () => {
+        const result = cn(['p-4', 'mx-auto'], 'text-center');
+        expect(result).toContain('p-4');
+        expect(result).toContain('mx-auto');
+        expect(result).toContain('text-center');
+    });
+
+    it('應正確解決複雜的 Tailwind 衝突', () => {
+        // bg-red-500 與 bg-blue-500 衝突，後者勝出
+        const result = cn('bg-red-500', 'bg-blue-500');
+        expect(result).toBe('bg-blue-500');
+    });
+
+    it('應保留不衝突的 class', () => {
+        const result = cn('p-4', 'mx-auto', 'text-center', 'bg-white');
+        expect(result).toBe('p-4 mx-auto text-center bg-white');
+    });
+});
+
+/**
+ * 測試環境驗證（冒煙測試）
+ */
+describe('測試環境驗證 (Smoke Test)', () => {
+    it('應能執行標準 JavaScript 運算', () => {
+        expect(1 + 1).toBe(2);
+    });
+
+    it('應能處理模板字串', () => {
+        const result = `${'Svelte'}${'Kit'}`;
         expect(result).toBe('SvelteKit');
-        expect(result).toHaveLength(9);
     });
 
-    it('應能正確處理物件比對 (深層比對驗證)', () => {
-        // 驗證 expect.toEqual 常見用法
+    it('應能正確處理物件深層比對', () => {
         const user = { name: 'Admin', role: 'finance' };
         expect(user).toEqual({ name: 'Admin', role: 'finance' });
     });

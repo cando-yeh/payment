@@ -5,18 +5,12 @@ export const load: PageServerLoad = async ({ locals }) => {
     const session = await locals.getSession();
     if (!session) throw redirect(303, '/auth');
 
-    // 檢查管理員權限
-    const { data: profile } = await locals.supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', session.user.id)
-        .single();
-
-    if (!profile?.is_admin) {
+    // 🔒 使用 hooks.server.ts 已注入的 locals.user 做權限檢查，無需額外查詢
+    if (!locals.user?.is_admin) {
         throw redirect(303, '/');
     }
 
-    // 取得所有使用者 Profile
+    // ✅ 單次查詢取得所有使用者，approverOptions 直接從中衍生
     const { data: users, error } = await locals.supabase
         .from('profiles')
         .select('*')
@@ -26,26 +20,31 @@ export const load: PageServerLoad = async ({ locals }) => {
         console.error('Error fetching users:', error);
     }
 
-    // 取得所有可用作核准人的清單 (通常是管理員或財務，或是所有人，依據業務規則)
-    // 這裡我們假設所有人都可以被指派為核准人
-    const { data: allUsers } = await locals.supabase
-        .from('profiles')
-        .select('id, full_name');
-
     return {
         users: users || [],
-        approverOptions: allUsers || []
+        approverOptions: (users || []).map((u: any) => ({ id: u.id, full_name: u.full_name }))
     };
 };
 
 export const actions: Actions = {
     updateUserPermissions: async ({ request, locals }) => {
+        // 🔒 權限驗證：僅管理員可修改使用者權限
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
         const formData = await request.formData();
         const userId = formData.get('userId') as string;
         const field = formData.get('field') as string;
         const value = formData.get('value') === 'true';
 
         if (!userId || !field) return fail(400, { message: '缺少必要參數' });
+
+        // 🔒 白名單檢查：僅允許修改特定欄位，防止動態欄位注入
+        const allowedFields = ['is_admin', 'is_finance'];
+        if (!allowedFields.includes(field)) {
+            return fail(400, { message: '不允許修改此欄位' });
+        }
 
         const { error } = await locals.supabase
             .from('profiles')
@@ -60,6 +59,11 @@ export const actions: Actions = {
     },
 
     assignApprover: async ({ request, locals }) => {
+        // 🔒 權限驗證：僅管理員可指派核准人
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
         const formData = await request.formData();
         const userId = formData.get('userId') as string;
         const approverId = formData.get('approverId') as string;
