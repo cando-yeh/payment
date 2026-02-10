@@ -1,0 +1,172 @@
+/**
+ * Payee Management Extended Flow - E2E 測試
+ *
+ * 涵蓋功能：
+ * 1. 編輯受款人申請 (Update Request)
+ * 2. 停用受款人申請 (Disable Request)
+ * 3. 財務審核流程 (Approve/Reject)
+ */
+import { test, expect } from '@playwright/test';
+import { supabaseAdmin, injectSession } from './helpers';
+
+test.setTimeout(120000);
+
+test.describe('Payee Management Extended Flow', () => {
+    let userStandard: any;
+    let userFinance: any;
+    const password = 'password123';
+    let testPayeeId: string;
+    let testPayeeName: string;
+
+    test.beforeAll(async () => {
+        const timestamp = Date.now();
+        testPayeeName = 'E2E Base Payee ' + timestamp;
+
+        // 1. 建立標準使用者
+        const stdEmail = `std_e2e_${timestamp}@example.com`;
+        const { data: u1, error: e1 } = await supabaseAdmin.auth.admin.createUser({
+            email: stdEmail,
+            password,
+            email_confirm: true,
+            user_metadata: { full_name: 'Std E2E' }
+        });
+        if (e1) throw e1;
+        userStandard = u1.user;
+
+        // 2. 建立財務使用者
+        const finEmail = `fin_e2e_${timestamp}@example.com`;
+        const { data: u2, error: e2 } = await supabaseAdmin.auth.admin.createUser({
+            email: finEmail,
+            password,
+            email_confirm: true,
+            user_metadata: { full_name: 'Fin E2E' }
+        });
+        if (e2) throw e2;
+        userFinance = u2.user;
+        await supabaseAdmin.from('profiles').update({ is_finance: true }).eq('id', userFinance.id);
+
+        // 3. 建立一個初始的 'available' 受款人用於測試
+        const { data: p, error: pe } = await supabaseAdmin.from('payees').insert({
+            name: testPayeeName,
+            type: 'vendor',
+            bank: '004',
+            status: 'available'
+        }).select().single();
+        if (pe) throw pe;
+        testPayeeId = p.id;
+    });
+
+    test.afterAll(async () => {
+        if (userStandard) await supabaseAdmin.auth.admin.deleteUser(userStandard.id);
+        if (userFinance) await supabaseAdmin.auth.admin.deleteUser(userFinance.id);
+        if (testPayeeId) {
+            await supabaseAdmin.from('payee_change_requests').delete().eq('payee_id', testPayeeId);
+            await supabaseAdmin.from('payees').delete().eq('id', testPayeeId);
+        }
+    });
+
+    test('Standard User can submit an UPDATE request', async ({ page }) => {
+        await injectSession(page, userStandard.email, password);
+        await page.goto(`/payees/${testPayeeId}/edit`);
+
+        const updatedName = testPayeeName + ' (Updated)';
+        await page.fill('input[name="name"]', updatedName);
+        await page.fill('input[name="tax_id"]', '12345678');
+        await page.fill('input[name="bank_code"]', '004');
+        await page.fill('input[name="bank_account"]', '987654321');
+        await page.fill('textarea[name="reason"]', 'Testing update flow');
+
+        // SvelteKit form action: POST to /payees/[id]/edit?/updatePayeeRequest
+        // It returns a 303 redirect to /payees
+        await page.click('button[type="submit"]');
+
+        // Wait for redirect to /payees
+        await expect(page).toHaveURL(/\/payees$/, { timeout: 30000 });
+
+        // After submission, the page reloads and pending requests appear as:
+        // "[更新] {original_payee_name}" with status "待審核 (更新)"
+        // Debug: log all rows
+        const allRows = page.locator('tbody tr');
+        const rowCount = await allRows.count();
+        console.log(`DEBUG: Found ${rowCount} rows in table`);
+        for (let i = 0; i < Math.min(rowCount, 10); i++) {
+            const text = await allRows.nth(i).innerText();
+            console.log(`DEBUG Row ${i}: ${text}`);
+        }
+
+        // The pending request row should contain the original payee name with [更新] prefix
+        const pendingRow = page.locator('tbody tr').filter({ hasText: '更新' }).filter({ hasText: testPayeeName });
+        await expect(pendingRow.first()).toBeVisible({ timeout: 10000 });
+
+        // 驗證該行有「待審核」標籤
+        await expect(pendingRow.first().getByText(/待審核/)).toBeVisible();
+    });
+
+    test('Standard User can submit a DISABLE request', async ({ page }) => {
+        await injectSession(page, userStandard.email, password);
+
+        // 先用 admin 撤銷上一步的 update request，讓 payee 回到 available 狀態
+        const { data: pendingReqs } = await supabaseAdmin
+            .from('payee_change_requests')
+            .select('id')
+            .eq('payee_id', testPayeeId)
+            .eq('status', 'pending');
+
+        if (pendingReqs && pendingReqs.length > 0) {
+            for (const req of pendingReqs) {
+                await supabaseAdmin
+                    .from('payee_change_requests')
+                    .update({ status: 'withdrawn' })
+                    .eq('id', req.id);
+            }
+        }
+
+        await page.goto('/payees');
+        await page.waitForTimeout(1000);
+
+        // 找到原始 active payee row (不帶 [更新] 或 [停用] 前綴)
+        // 先確認 payee 出現在 table 中
+        const payeeCell = page.locator('td').filter({ hasText: testPayeeName }).first();
+        await expect(payeeCell).toBeVisible({ timeout: 15000 });
+
+        // 點擊該行打開 detail dialog
+        await payeeCell.click();
+
+        // 等待 dialog 出現
+        const dialog = page.locator('[role="dialog"]');
+        await expect(dialog).toBeVisible({ timeout: 5000 });
+
+        // 按下「停用受款人」按鈕 (button inside form with action ?/submitDisableRequest)
+        const disableBtn = dialog.getByRole('button', { name: '停用受款人' });
+        await expect(disableBtn).toBeVisible({ timeout: 5000 });
+
+        await disableBtn.click();
+
+        // 等待成功訊息 "停用申請已提交"
+        await expect(page.getByText('停用申請已提交')).toBeVisible({ timeout: 10000 });
+    });
+
+    test('Finance User can APPROVE a request', async ({ page }) => {
+        await injectSession(page, userFinance.email, password);
+        await page.goto('/payees');
+
+        // 找到待審核的停用申請 row (應包含 [停用] 和 testPayeeName)
+        const pendingRow = page.locator('tbody tr').filter({ hasText: '停用' }).filter({ hasText: testPayeeName });
+        await expect(pendingRow.first()).toBeVisible({ timeout: 15000 });
+
+        // 點擊開啟 detail dialog
+        await pendingRow.first().click();
+
+        const dialog = page.locator('[role="dialog"]');
+        await expect(dialog).toBeVisible({ timeout: 5000 });
+
+        // 按下「核准」按鈕
+        const approveBtn = dialog.getByRole('button', { name: '核准' });
+        await expect(approveBtn).toBeVisible({ timeout: 5000 });
+
+        await approveBtn.click();
+
+        // 等待成功訊息 "申請已核准"
+        await expect(page.getByText('申請已核准')).toBeVisible({ timeout: 10000 });
+    });
+});

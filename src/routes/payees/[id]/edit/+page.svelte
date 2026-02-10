@@ -1,33 +1,32 @@
 <script lang="ts">
     /**
-     * @file New Payee Request Page
-     * @description Allows users to submit a request to create a new payee (Vendor or Personal).
-     * The request is sent to the Finance team for approval.
+     * @file Edit Payee Request Page
+     * @description Allows users to submit a request to update an existing payee.
      */
     import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
+    import { Textarea } from "$lib/components/ui/textarea";
     import * as Card from "$lib/components/ui/card";
     import { toast } from "svelte-sonner";
     import { ArrowLeft, LoaderCircle } from "lucide-svelte";
     import { goto } from "$app/navigation";
 
+    let { data } = $props();
+    let payee = $derived(data.payee);
+
     // Component State
     let isLoading = $state(false);
-    let payeeType = $state("vendor"); // "vendor" | "personal" - Controls dynamic form fields
+    let payeeType = $derived(data.payee.type || "vendor");
 
-    /**
-     * Handles the form submission using SvelteKit's standard `enhance` action.
-     * Manages loading state and displays toast notifications based on the result.
-     */
     function handleSubmit() {
         isLoading = true;
         return async ({ result }: { result: any }) => {
             isLoading = false;
 
             if (result.type === "success") {
-                toast.success("受款人申請已提交，請等待財務審核。");
+                toast.success("更新申請已提交，請等待財務審核。");
                 goto("/payees");
             } else if (result.type === "redirect") {
                 goto(result.location);
@@ -49,9 +48,9 @@
     </Button>
 
     <div class="mb-8">
-        <h1 class="text-3xl font-bold tracking-tight">新增受款人</h1>
+        <h1 class="text-3xl font-bold tracking-tight">編輯受款人</h1>
         <p class="text-muted-foreground mt-2">
-            提交新的受款對象資料。送出後需經財務審核才可正式啟用。
+            修改受款對象資料。送出後將建立異動申請，需經財務審核通過後才會更新正式資料。
         </p>
     </div>
 
@@ -59,11 +58,11 @@
         <Card.Content class="pt-6">
             <form
                 method="POST"
-                action="?/createPayeeRequest"
+                action="?/updatePayeeRequest"
                 use:enhance={handleSubmit}
                 class="space-y-6"
             >
-                <!-- Type Selection -->
+                <!-- Type (Locked in edit usually, but showing as info) -->
                 <div class="space-y-3">
                     <Label>受款書類型</Label>
                     <div class="flex gap-4">
@@ -73,7 +72,7 @@
                                 ? "default"
                                 : "outline"}
                             class="flex-1"
-                            onclick={() => (payeeType = "vendor")}
+                            disabled
                         >
                             廠商 (公司/行號)
                         </Button>
@@ -83,12 +82,11 @@
                                 ? "default"
                                 : "outline"}
                             class="flex-1"
-                            onclick={() => (payeeType = "personal")}
+                            disabled
                         >
                             個人 (勞務/領據)
                         </Button>
                     </div>
-                    <!-- Hidden input for form submission -->
                     <input type="hidden" name="type" value={payeeType} />
                 </div>
 
@@ -102,6 +100,7 @@
                         <Input
                             id="name"
                             name="name"
+                            value={payee.name}
                             placeholder={payeeType === "vendor"
                                 ? "公司全名"
                                 : "真實姓名"}
@@ -120,6 +119,7 @@
                             <Input
                                 id="tax_id"
                                 name="tax_id"
+                                value={payee.tax_id || ""}
                                 placeholder="12345678"
                                 maxlength={8}
                                 required
@@ -131,6 +131,7 @@
                             <Input
                                 id="service_description"
                                 name="service_description"
+                                value={payee.service_description || ""}
                                 placeholder="例：網站維護費、辦公室租賃..."
                             />
                         </div>
@@ -146,6 +147,7 @@
                             <Input
                                 id="id_number"
                                 name="tax_id"
+                                value={payee.tax_id || ""}
                                 placeholder="A123456789"
                                 maxlength={10}
                                 required
@@ -156,6 +158,7 @@
                             <Input
                                 id="email"
                                 name="email"
+                                value={payee.extra_info?.email || ""}
                                 type="email"
                                 placeholder="example@email.com"
                             />
@@ -165,6 +168,7 @@
                             <Input
                                 id="address"
                                 name="address"
+                                value={payee.extra_info?.address || ""}
                                 placeholder="請填寫完整地址"
                             />
                         </div>
@@ -183,6 +187,7 @@
                             <Input
                                 id="bank_code"
                                 name="bank_code"
+                                value={payee.bank || ""}
                                 placeholder="004"
                                 maxlength={3}
                                 required
@@ -196,24 +201,44 @@
                             <Input
                                 id="bank_account"
                                 name="bank_account"
-                                type="password"
+                                value={payee.bank_account || ""}
+                                type={payee.bank_account ? "password" : "text"}
                                 placeholder="請輸入帳號"
                                 required
                             />
-                            <p class="text-xs text-muted-foreground">
-                                帳號將加密儲存，僅財務人員可查看。
-                            </p>
+                            {#if !data.is_finance}
+                                <p class="text-xs text-muted-foreground mt-1">
+                                    注意：非財務人員無法看到原始內容，若要變更請直接輸入新帳號。
+                                </p>
+                            {/if}
                         </div>
                     </div>
                 </div>
 
-                <div class="flex justify-end pt-4">
+                <div class="border-t pt-4 space-y-2">
+                    <Label for="reason"
+                        >變更原因說明 <span class="text-red-500">*</span></Label
+                    >
+                    <Textarea
+                        id="reason"
+                        name="reason"
+                        placeholder="請簡述此次資料更新的原因（如：廠商變更銀行帳戶）"
+                        required
+                    />
+                </div>
+
+                <div class="flex justify-end pt-4 gap-3">
+                    <Button
+                        variant="outline"
+                        type="button"
+                        onclick={() => history.back()}>取消</Button
+                    >
                     <Button type="submit" disabled={isLoading}>
                         {#if isLoading}
                             <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
                             提交中...
                         {:else}
-                            提交申請
+                            送出更新申請
                         {/if}
                     </Button>
                 </div>

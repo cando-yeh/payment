@@ -45,10 +45,12 @@ export const actions: Actions = {
             return fail(400, { message: '無效的受款人類型' });
         }
         if (type === 'vendor' && !/^\d{8}$/.test(tax_id)) {
-            return fail(400, { message: '統一編號格式不正確（需8碼數字）' });
+            return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });
         }
-        if (type === 'personal' && !/^[A-Z]\d{9}$/.test(tax_id)) {
-            return fail(400, { message: '身分證字號格式不正確' });
+        if (type === 'personal') {
+            if (!/^[A-Z][0-9]{9}$/.test(tax_id)) {
+                return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
+            }
         }
         if (!/^\d{3}$/.test(bank_code)) {
             return fail(400, { message: '銀行代碼需為3碼數字' });

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { cn } from "$lib/utils";
-  import { Loader2 } from "lucide-svelte";
+  import { LoaderCircle } from "lucide-svelte";
 
   // ========================================
   // 型別定義
@@ -63,7 +63,7 @@
 	  - animate-spin: Tailwind 的旋轉動畫
 	  - text-muted-foreground: 使用柔和色彩避免視覺干擾
 	-->
-  <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+  <LoaderCircle class="h-8 w-8 animate-spin text-muted-foreground" />
 
   <!-- 載入文字 -->
   <p class="mt-4 text-sm text-muted-foreground">{text}</p>

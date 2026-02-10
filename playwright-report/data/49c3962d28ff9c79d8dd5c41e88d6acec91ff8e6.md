@@ -1,0 +1,119 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - img [ref=e8]
+          - generic [ref=e11]: 請款系統
+        - link "新增請款" [ref=e12] [cursor=pointer]:
+          - /url: /claims/new
+          - img
+          - text: 新增請款
+      - separator [ref=e13]
+      - navigation [ref=e14]:
+        - link "我的請款" [ref=e15] [cursor=pointer]:
+          - /url: /
+          - img [ref=e16]
+          - text: 我的請款
+        - link "受款人管理" [ref=e19] [cursor=pointer]:
+          - /url: /payees
+          - img [ref=e20]
+          - text: 受款人管理
+      - link "說明文件" [ref=e25] [cursor=pointer]:
+        - /url: /docs
+        - img [ref=e26]
+        - text: 說明文件
+      - separator [ref=e29]
+      - generic [ref=e31]:
+        - generic [ref=e33]: S
+        - button "Std E2E 申請人" [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]:
+            - paragraph [ref=e36]: Std E2E
+            - paragraph [ref=e37]: 申請人
+        - button [ref=e38]:
+          - img
+    - main [ref=e39]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - heading "受款人管理" [level=1] [ref=e43]
+            - paragraph [ref=e44]: 管理所有廠商與個人受款對象。
+          - button "新增受款人" [ref=e45]:
+            - img
+            - text: 新增受款人
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - img [ref=e48]
+            - searchbox "搜尋名稱..." [ref=e49]
+          - generic [ref=e50]:
+            - button "全部" [ref=e51]
+            - button "廠商" [ref=e52]
+            - button "個人" [ref=e53]
+        - table [ref=e56]:
+          - rowgroup [ref=e57]:
+            - row "名稱 類型 狀態 操作" [ref=e58]:
+              - columnheader "名稱" [ref=e59]
+              - columnheader "類型" [ref=e60]
+              - columnheader "狀態" [ref=e61]
+              - columnheader "操作" [ref=e62]
+          - rowgroup [ref=e63]:
+            - row "E2E Base Payee 1770718489844 廠商 已啟用" [ref=e64] [cursor=pointer]:
+              - cell "E2E Base Payee 1770718489844" [ref=e65]
+              - cell "廠商" [ref=e66]:
+                - generic [ref=e67]:
+                  - img [ref=e68]
+                  - text: 廠商
+              - cell "已啟用" [ref=e69]:
+                - generic [ref=e70]: 已啟用
+              - cell [ref=e71]:
+                - button [ref=e72]:
+                  - img
+            - row "記帳要在晚安前 廠商 已啟用" [ref=e73] [cursor=pointer]:
+              - cell "記帳要在晚安前" [ref=e74]
+              - cell "廠商" [ref=e75]:
+                - generic [ref=e76]:
+                  - img [ref=e77]
+                  - text: 廠商
+              - cell "已啟用" [ref=e78]:
+                - generic [ref=e79]: 已啟用
+              - cell [ref=e80]:
+                - button [ref=e81]:
+                  - img
+            - row "Fuku 富可 廠商 已啟用" [ref=e82] [cursor=pointer]:
+              - cell "Fuku 富可" [ref=e83]
+              - cell "廠商" [ref=e84]:
+                - generic [ref=e85]:
+                  - img [ref=e86]
+                  - text: 廠商
+              - cell "已啟用" [ref=e87]:
+                - generic [ref=e88]: 已啟用
+              - cell [ref=e89]:
+                - button [ref=e90]:
+                  - img
+            - row "葉可為 個人 已啟用" [ref=e91] [cursor=pointer]:
+              - cell "葉可為" [ref=e92]
+              - cell "個人" [ref=e93]:
+                - generic [ref=e94]:
+                  - img [ref=e95]
+                  - text: 個人
+              - cell "已啟用" [ref=e96]:
+                - generic [ref=e97]: 已啟用
+              - cell [ref=e98]:
+                - button [ref=e99]:
+                  - img
+            - row "記帳要在 廠商 已啟用" [ref=e100] [cursor=pointer]:
+              - cell "記帳要在" [ref=e101]
+              - cell "廠商" [ref=e102]:
+                - generic [ref=e103]:
+                  - img [ref=e104]
+                  - text: 廠商
+              - cell "已啟用" [ref=e105]:
+                - generic [ref=e106]: 已啟用
+              - cell [ref=e107]:
+                - button [ref=e108]:
+                  - img
+  - generic [ref=e109]: untitled page
+```

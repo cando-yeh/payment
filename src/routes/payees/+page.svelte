@@ -3,33 +3,56 @@
     import * as Table from "$lib/components/ui/table";
     import { Badge } from "$lib/components/ui/badge";
     import { Input } from "$lib/components/ui/input";
-    import { Plus, Search, FilePen, Undo2 } from "lucide-svelte";
+    import * as Dialog from "$lib/components/ui/dialog";
+    import {
+        Plus,
+        Search,
+        Undo2,
+        Check,
+        X,
+        ExternalLink,
+        LoaderCircle,
+        Building2,
+        User,
+        Pencil,
+        Ban,
+    } from "lucide-svelte";
     import { goto, invalidateAll } from "$app/navigation";
     import { enhance } from "$app/forms";
     import { toast } from "svelte-sonner";
 
     let { data } = $props();
 
-    // Merge active payees and pending creation requests
+    // Merge active payees and all pending requests
     let payees = $derived.by(() => {
         const active = data.payees.map((p: any) => ({
             ...p,
             source: "active",
         }));
-        const pending = data.pendingCreates.map((req: any) => ({
-            id: req.id, // Request ID, not Payee ID
-            name: req.proposed_data?.name || "Unknown",
-            type: req.proposed_data?.type || "unknown",
-            tax_id: "Pending...", // Masked or just placeholder
-            status: "pending_create", // Special status for UI
+        const pending = data.pendingRequests.map((req: any) => ({
+            id: req.id, // Request ID
+            name:
+                req.change_type === "create"
+                    ? req.proposed_data?.name || "未知受款人"
+                    : `[${req.change_type === "update" ? "更新" : "停用"}] ${req.payees?.name || req.payee_id}`,
+            type:
+                req.change_type === "create"
+                    ? req.proposed_data?.type || "unknown"
+                    : req.payees?.type || "unknown",
+            status: `pending_${req.change_type}`,
             source: "request",
-            request_id: req.id,
+            payload: req, // Store full request for detail view
         }));
         return [...pending, ...active];
     });
 
     let searchTerm = $state("");
-    let typeFilter = $state("all"); // all, vendor, personal
+    let typeFilter = $state("all");
+    let isActionSubmitting = $state(false);
+
+    // Detail Dialog State
+    let selectedPayee = $state<any>(null);
+    let isDetailOpen = $state(false);
 
     let filteredPayees = $derived(
         payees.filter((p) => {
@@ -61,14 +84,38 @@
     function getTypeLabel(type: string) {
         switch (type) {
             case "vendor":
-                return "廠商";
+                return { label: "廠商", icon: Building2 };
             case "personal":
-                return "個人";
+                return { label: "個人", icon: User };
             case "employee":
-                return "員工";
+                return { label: "員工", icon: User };
             default:
-                return type;
+                return { label: type, icon: Building2 };
         }
+    }
+
+    function openDetail(payee: any) {
+        selectedPayee = payee;
+        isDetailOpen = true;
+    }
+
+    /**
+     * Common form submission handler for actions (Withdraw, Approve)
+     */
+    function handleAction(successMsg: string) {
+        return () => {
+            isActionSubmitting = true;
+            return async ({ result }: { result: any }) => {
+                isActionSubmitting = false;
+                if (result.type === "success") {
+                    toast.success(successMsg);
+                    isDetailOpen = false;
+                    await invalidateAll();
+                } else if (result.type === "failure") {
+                    toast.error(result.data?.message || "操作失敗");
+                }
+            };
+        };
     }
 </script>
 
@@ -86,7 +133,6 @@
         </Button>
     </div>
 
-    <!-- Filters -->
     <div class="flex items-center gap-4">
         <div class="relative w-full max-w-sm">
             <Search
@@ -100,31 +146,22 @@
             />
         </div>
         <div class="flex items-center rounded-md border p-1">
-            <Button
-                variant={typeFilter === "all" ? "secondary" : "ghost"}
-                size="sm"
-                onclick={() => (typeFilter = "all")}
-            >
-                全部
-            </Button>
-            <Button
-                variant={typeFilter === "vendor" ? "secondary" : "ghost"}
-                size="sm"
-                onclick={() => (typeFilter = "vendor")}
-            >
-                廠商
-            </Button>
-            <Button
-                variant={typeFilter === "personal" ? "secondary" : "ghost"}
-                size="sm"
-                onclick={() => (typeFilter = "personal")}
-            >
-                個人
-            </Button>
+            {#each ["all", "vendor", "personal"] as filter}
+                <Button
+                    variant={typeFilter === filter ? "secondary" : "ghost"}
+                    size="sm"
+                    onclick={() => (typeFilter = filter)}
+                >
+                    {filter === "all"
+                        ? "全部"
+                        : filter === "vendor"
+                          ? "廠商"
+                          : "個人"}
+                </Button>
+            {/each}
         </div>
     </div>
 
-    <!-- Data Table -->
     <div class="rounded-md border">
         <Table.Root>
             <Table.Header>
@@ -132,74 +169,266 @@
                     <Table.Head>名稱</Table.Head>
                     <Table.Head>類型</Table.Head>
                     <Table.Head>狀態</Table.Head>
-                    <Table.Head>操作</Table.Head>
+                    <Table.Head class="text-right">操作</Table.Head>
                 </Table.Row>
             </Table.Header>
             <Table.Body>
                 {#each filteredPayees as payee}
-                    <Table.Row>
+                    <Table.Row
+                        class="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onclick={() => openDetail(payee)}
+                    >
                         <Table.Cell class="font-medium">{payee.name}</Table.Cell
                         >
-                        <Table.Cell>{getTypeLabel(payee.type)}</Table.Cell>
+                        <Table.Cell>
+                            {@const typeInfo = getTypeLabel(payee.type)}
+                            <div class="flex items-center gap-2">
+                                <typeInfo.icon
+                                    class="h-4 w-4 text-muted-foreground"
+                                />
+                                {typeInfo.label}
+                            </div>
+                        </Table.Cell>
                         <Table.Cell>
                             {@const badge = getStatusBadge(payee.status)}
                             <Badge variant={badge.variant as any}
                                 >{badge.label}</Badge
                             >
                         </Table.Cell>
-                        <Table.Cell>
-                            <div class="flex items-center gap-2">
-                                {#if payee.source === "active"}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onclick={() =>
-                                            goto(`/payees/${payee.id}/edit`)}
-                                    >
-                                        <FilePen class="h-4 w-4" />
-                                    </Button>
-                                {:else if payee.source === "request"}
-                                    <!-- 撤銷申請 -->
-                                    <form
-                                        method="POST"
-                                        action="?/withdrawRequest"
-                                        use:enhance={() => {
-                                            return async ({ result }) => {
-                                                if (result.type === "success") {
-                                                    toast.success("申請已撤銷");
-                                                    await invalidateAll();
-                                                } else {
-                                                    toast.error("撤銷失敗");
-                                                }
-                                            };
-                                        }}
-                                    >
-                                        <input
-                                            type="hidden"
-                                            name="requestId"
-                                            value={payee.request_id}
-                                        />
-                                        <Button
-                                            type="submit"
-                                            variant="ghost"
-                                            size="icon"
-                                            title="撤銷申請"
-                                        >
-                                            <Undo2 class="h-4 w-4" />
-                                        </Button>
-                                    </form>
-                                {/if}
-                            </div>
+                        <Table.Cell class="text-right">
+                            <Button variant="ghost" size="icon">
+                                <ExternalLink
+                                    class="h-4 w-4 text-muted-foreground"
+                                />
+                            </Button>
                         </Table.Cell>
                     </Table.Row>
                 {:else}
                     <Table.Row>
-                        <Table.Cell colspan={4} class="h-24 text-center">
-                            無資料
-                        </Table.Cell>
+                        <Table.Cell
+                            colspan={4}
+                            class="h-24 text-center text-muted-foreground"
+                            >無資料</Table.Cell
+                        >
                     </Table.Row>
                 {/each}
             </Table.Body>
         </Table.Root>
     </div>
 </div>
+
+<!-- Detail Dialog -->
+<Dialog.Root bind:open={isDetailOpen}>
+    <Dialog.Content class="max-w-md">
+        <Dialog.Header>
+            <Dialog.Title>{selectedPayee?.name}</Dialog.Title>
+            <Dialog.Description>受款人詳細資訊與狀態管理</Dialog.Description>
+        </Dialog.Header>
+
+        {#if selectedPayee}
+            <div class="grid gap-4 py-4">
+                <div class="grid grid-cols-4 items-start gap-4">
+                    <span class="text-sm font-medium text-muted-foreground"
+                        >類型</span
+                    >
+                    <span class="col-span-3 text-sm"
+                        >{getTypeLabel(selectedPayee.type).label}</span
+                    >
+                </div>
+                <div class="grid grid-cols-4 items-start gap-4">
+                    <span class="text-sm font-medium text-muted-foreground"
+                        >狀態</span
+                    >
+                    <div class="col-span-3">
+                        <Badge
+                            variant={getStatusBadge(selectedPayee.status)
+                                .variant as any}
+                            >{getStatusBadge(selectedPayee.status).label}</Badge
+                        >
+                    </div>
+                </div>
+
+                <!-- Fields for Request -->
+                {#if selectedPayee.source === "request"}
+                    {@const data = selectedPayee.payload.proposed_data}
+                    <div class="border-t pt-4 space-y-3">
+                        <div class="grid grid-cols-4 items-start gap-4">
+                            <span
+                                class="text-sm font-medium text-muted-foreground"
+                                >銀行代碼</span
+                            >
+                            <span class="col-span-3 text-sm"
+                                >{data?.bank_code || "-"}</span
+                            >
+                        </div>
+                        <div class="grid grid-cols-4 items-start gap-4">
+                            <span
+                                class="text-sm font-medium text-muted-foreground"
+                                >服務項目</span
+                            >
+                            <span class="col-span-3 text-sm"
+                                >{data?.service_description || "-"}</span
+                            >
+                        </div>
+                        {#if data?.type === "personal"}
+                            <div class="grid grid-cols-4 items-start gap-4">
+                                <span
+                                    class="text-sm font-medium text-muted-foreground"
+                                    >電子郵件</span
+                                >
+                                <span class="col-span-3 text-sm"
+                                    >{data?.email || "-"}</span
+                                >
+                            </div>
+                            <div class="grid grid-cols-4 items-start gap-4">
+                                <span
+                                    class="text-sm font-medium text-muted-foreground"
+                                    >通訊地址</span
+                                >
+                                <span class="col-span-3 text-sm"
+                                    >{data?.address || "-"}</span
+                                >
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+
+            <Dialog.Footer class="flex sm:justify-between items-center gap-2">
+                <div>
+                    {#if selectedPayee.source === "request" && selectedPayee.payload.requested_by === data.user?.id}
+                        <form
+                            method="POST"
+                            action="?/withdrawRequest"
+                            use:enhance={handleAction("申請已撤銷")}
+                        >
+                            <input
+                                type="hidden"
+                                name="requestId"
+                                value={selectedPayee.id}
+                            />
+                            <Button
+                                type="submit"
+                                variant="outline"
+                                size="sm"
+                                disabled={isActionSubmitting}
+                            >
+                                {#if isActionSubmitting}
+                                    <LoaderCircle
+                                        class="mr-2 h-3 w-3 animate-spin"
+                                    />
+                                {:else}
+                                    <Undo2 class="mr-2 h-3 w-3" />
+                                {/if}
+                                撤銷申請
+                            </Button>
+                        </form>
+                    {/if}
+                </div>
+
+                <div class="flex gap-2">
+                    {#if selectedPayee.source === "active"}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onclick={() =>
+                                goto(`/payees/${selectedPayee.id}/edit`)}
+                        >
+                            <Pencil class="mr-2 h-3 w-3" />
+                            編輯資料
+                        </Button>
+
+                        {#if selectedPayee.status === "available"}
+                            <form
+                                method="POST"
+                                action="?/submitDisableRequest"
+                                use:enhance={handleAction("停用申請已提交")}
+                            >
+                                <input
+                                    type="hidden"
+                                    name="payeeId"
+                                    value={selectedPayee.id}
+                                />
+                                <Button
+                                    type="submit"
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={isActionSubmitting}
+                                >
+                                    {#if isActionSubmitting}
+                                        <LoaderCircle
+                                            class="mr-2 h-3 w-3 animate-spin"
+                                        />
+                                    {:else}
+                                        <Ban class="mr-2 h-3 w-3" />
+                                    {/if}
+                                    停用受款人
+                                </Button>
+                            </form>
+                        {/if}
+                    {/if}
+
+                    {#if selectedPayee.source === "request" && data.is_finance}
+                        <form
+                            method="POST"
+                            action="?/rejectPayeeRequest"
+                            use:enhance={handleAction("申請已駁回")}
+                        >
+                            <input
+                                type="hidden"
+                                name="requestId"
+                                value={selectedPayee.id}
+                            />
+                            <Button
+                                type="submit"
+                                variant="destructive"
+                                size="sm"
+                                disabled={isActionSubmitting}
+                            >
+                                {#if isActionSubmitting}
+                                    <LoaderCircle
+                                        class="mr-2 h-3 w-3 animate-spin"
+                                    />
+                                {:else}
+                                    <X class="mr-2 h-3 w-3" />
+                                {/if}
+                                駁回
+                            </Button>
+                        </form>
+                        <form
+                            method="POST"
+                            action="?/approvePayeeRequest"
+                            use:enhance={handleAction("申請已核准")}
+                        >
+                            <input
+                                type="hidden"
+                                name="requestId"
+                                value={selectedPayee.id}
+                            />
+                            <Button
+                                type="submit"
+                                variant="default"
+                                size="sm"
+                                disabled={isActionSubmitting}
+                            >
+                                {#if isActionSubmitting}
+                                    <LoaderCircle
+                                        class="mr-2 h-3 w-3 animate-spin"
+                                    />
+                                {:else}
+                                    <Check class="mr-2 h-3 w-3" />
+                                {/if}
+                                核准
+                            </Button>
+                        </form>
+                    {/if}
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onclick={() => (isDetailOpen = false)}>關閉</Button
+                    >
+                </div>
+            </Dialog.Footer>
+        {/if}
+    </Dialog.Content>
+</Dialog.Root>
