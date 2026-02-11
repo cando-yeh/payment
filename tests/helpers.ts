@@ -77,3 +77,49 @@ export async function injectSession(page: Page, email: string, password: string)
 
     await page.reload();
 }
+
+type FormValue = string | string[];
+
+export async function postFormAction(
+    page: Page,
+    url: string,
+    form: Record<string, FormValue> = {}
+) {
+    return page.evaluate(
+        async ({ targetUrl, payload }: { targetUrl: string; payload: Record<string, FormValue> }) => {
+            const fd = new FormData();
+            for (const [k, v] of Object.entries(payload)) {
+                if (Array.isArray(v)) {
+                    for (const val of v) fd.append(k, val);
+                } else {
+                    fd.append(k, v);
+                }
+            }
+            const res = await fetch(targetUrl, { method: 'POST', body: fd });
+            return res.text();
+        },
+        { targetUrl: url, payload: form }
+    );
+}
+
+export async function postFormActionDetailed(
+    page: Page,
+    url: string,
+    form: Record<string, FormValue> = {}
+) {
+    return page.evaluate(
+        async ({ targetUrl, payload }: { targetUrl: string; payload: Record<string, FormValue> }) => {
+            const fd = new FormData();
+            for (const [k, v] of Object.entries(payload)) {
+                if (Array.isArray(v)) {
+                    for (const val of v) fd.append(k, val);
+                } else {
+                    fd.append(k, v);
+                }
+            }
+            const res = await fetch(targetUrl, { method: 'POST', body: fd });
+            return { url: res.url, body: await res.text(), status: res.status };
+        },
+        { targetUrl: url, payload: form }
+    );
+}

@@ -10,7 +10,6 @@
      * - 使用 Svelte 5 $state 與 $effect 處理伺服器資料與本地資料的即時同步。
      * - 實作樂觀更新 (Optimistic UI)，點擊按鈕後立即更新本地狀態，提升操作流暢感。
      */
-    import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
     import * as Avatar from "$lib/components/ui/avatar";
@@ -20,12 +19,11 @@
     import {
         Shield,
         CreditCard,
-        UserCheck,
         Search,
         Users,
-        Settings2,
     } from "lucide-svelte";
     import { Input } from "$lib/components/ui/input";
+    import { timedFetch } from "$lib/client/timed-fetch";
 
     let { data } = $props();
 
@@ -57,6 +55,11 @@
                 u.id.toLowerCase().includes(searchTerm.toLowerCase()),
         ),
     );
+    let pendingOps = $state<Record<string, boolean>>({});
+
+    function setPending(op: string, isPending: boolean) {
+        pendingOps = { ...pendingOps, [op]: isPending };
+    }
 
     /**
      * 更新使用者權限 (管理員/財務)
@@ -69,26 +72,38 @@
         field: string,
         currentValue: boolean,
     ) {
+        const opKey = `perm:${userId}:${field}`;
+        if (pendingOps[opKey]) return;
+
+        const index = users.findIndex((u) => u.id === userId);
+        if (index === -1) return;
+
+        const previous = users[index];
+        const nextValue = !currentValue;
+        users[index] = { ...previous, [field]: nextValue };
+        setPending(opKey, true);
+
         const formData = new FormData();
         formData.append("userId", userId);
         formData.append("field", field);
-        formData.append("value", String(!currentValue));
+        formData.append("value", String(nextValue));
 
-        const response = await fetch("?/updateUserPermissions", {
-            method: "POST",
-            body: formData,
-            headers: { "x-sveltekit-action": "true" },
-        });
+        try {
+            const response = await timedFetch("?/updateUserPermissions", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
 
-        if (response.ok) {
-            // 手動更新本地狀態物件，觸發 Svelte 5 的 Proxy 選取
-            const index = users.findIndex((u) => u.id === userId);
-            if (index !== -1) {
-                users[index] = { ...users[index], [field]: !currentValue };
+            if (!response.ok) {
+                throw new Error("操作失敗");
             }
             toast.success("權限已更新");
-        } else {
+        } catch {
+            users[index] = previous;
             toast.error("操作失敗");
+        } finally {
+            setPending(opKey, false);
         }
     }
 
@@ -102,24 +117,35 @@
         userId: string,
         approverId: string | undefined,
     ) {
+        const opKey = `approver:${userId}`;
+        if (pendingOps[opKey]) return;
+
+        const index = users.findIndex((u) => u.id === userId);
+        if (index === -1) return;
+
+        const previous = users[index];
+        users[index] = { ...previous, approver_id: approverId };
+        setPending(opKey, true);
+
         const formData = new FormData();
         formData.append("userId", userId);
         formData.append("approverId", approverId || "");
+        try {
+            const response = await timedFetch("?/assignApprover", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
 
-        const response = await fetch("?/assignApprover", {
-            method: "POST",
-            body: formData,
-            headers: { "x-sveltekit-action": "true" },
-        });
-
-        if (response.ok) {
-            const index = users.findIndex((u) => u.id === userId);
-            if (index !== -1) {
-                users[index] = { ...users[index], approver_id: approverId };
+            if (!response.ok) {
+                throw new Error("操作失敗");
             }
             toast.success("核准人指派成功");
-        } else {
+        } catch {
+            users[index] = previous;
             toast.error("操作失敗");
+        } finally {
+            setPending(opKey, false);
         }
     }
 </script>
@@ -228,6 +254,7 @@
                                 <Select.Root
                                     type="single"
                                     value={user.approver_id || ""}
+                                    disabled={pendingOps[`approver:${user.id}`]}
                                     onValueChange={(v) =>
                                         selectApprover(user.id, v)}
                                 >
@@ -268,6 +295,7 @@
                                                 "is_finance",
                                                 user.is_finance,
                                             )}
+                                        disabled={pendingOps[`perm:${user.id}:is_finance`]}
                                     >
                                         {user.is_finance
                                             ? "取消財務"
@@ -285,6 +313,7 @@
                                                 "is_admin",
                                                 user.is_admin,
                                             )}
+                                        disabled={pendingOps[`perm:${user.id}:is_admin`]}
                                     >
                                         {user.is_admin
                                             ? "取消管理"

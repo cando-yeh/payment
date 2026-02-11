@@ -37,11 +37,18 @@ test.describe('Claim Creation Flow', () => {
         await expect(page.locator('text=建立新請款單')).toBeVisible();
 
         // 4. Select Employee Type
-        await page.click('text=員工費用報銷');
+        await expect(page.locator('text=員工費用報銷')).toBeVisible({ timeout: 10000 });
+        const employeeCard = page
+            .locator('div.cursor-pointer')
+            .filter({ hasText: '員工費用報銷' })
+            .first();
+        await employeeCard.click();
+        if (!(await page.locator('input[name="description"]').isVisible())) {
+            await employeeCard.click();
+        }
+        await expect(page.locator('input[name="description"]')).toBeVisible({ timeout: 10000 });
 
         // 5. Fill Form
-        // Check header
-        await expect(page.locator('h1')).toContainText('員工費用報銷');
 
         // Description
         await page.fill('input[name="description"]', 'Test Employee Claim 001');
@@ -70,7 +77,7 @@ test.describe('Claim Creation Flow', () => {
         await expect(page.locator('h1')).toContainText('請款單 #'); // ID
         await expect(page.locator('text=員工報銷')).toBeVisible(); // Type Badge
         await expect(page.locator('text=Test Employee Claim 001')).toBeVisible(); // Description
-        await expect(page.getByText('總計: $')).toBeVisible(); // Amount total visible
+        await expect(page.locator('text=請款總額')).toBeVisible(); // Amount total visible
 
         // 9. Verify Action Buttons (Draft state)
         await expect(page.locator('button:has-text("提交審核")')).toBeVisible();

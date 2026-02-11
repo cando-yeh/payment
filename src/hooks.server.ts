@@ -10,6 +10,25 @@ import { supabaseHandle } from '$lib';
 import { sequence } from '@sveltejs/kit/hooks';
 import { redirect, type Handle } from '@sveltejs/kit';
 
+const timingHandle: Handle = async ({ event, resolve }) => {
+    const start = performance.now();
+    const response = await resolve(event);
+    const elapsedMs = performance.now() - start;
+    const elapsed = `${elapsedMs.toFixed(1)}ms`;
+
+    response.headers.set('x-response-time', elapsed);
+    response.headers.set('server-timing', `app;dur=${elapsedMs.toFixed(1)}`);
+
+    const isApiLikeRequest =
+        event.url.pathname.startsWith('/api') ||
+        event.request.headers.get('x-sveltekit-action') === 'true';
+    if (isApiLikeRequest) {
+        console.info(`[API-TIME] ${event.request.method} ${event.url.pathname} ${elapsed}`);
+    }
+
+    return response;
+};
+
 /**
  * 認證與權限控制攔截器 (Auth & RBAC Hook)
  */
@@ -68,4 +87,4 @@ const authHandle: Handle = async ({ event, resolve }) => {
  * 執行流程：
  * Request → sequence(supabaseHandle) → Route Handler (+page.server.ts 等) → sequence(supabaseHandle) → Response
  */
-export const handle = sequence(supabaseHandle, authHandle);
+export const handle = sequence(timingHandle, supabaseHandle, authHandle);

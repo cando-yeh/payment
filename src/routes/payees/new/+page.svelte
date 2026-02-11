@@ -12,6 +12,7 @@
     import { toast } from "svelte-sonner";
     import { ArrowLeft, LoaderCircle } from "lucide-svelte";
     import { goto } from "$app/navigation";
+    import { compressFormImageInputs } from "$lib/client/image-compression";
 
     // Component State
     let isLoading = $state(false);
@@ -21,8 +22,14 @@
      * Handles the form submission using SvelteKit's standard `enhance` action.
      * Manages loading state and displays toast notifications based on the result.
      */
-    function handleSubmit() {
+    async function handleSubmit({ formElement }: { formElement: HTMLFormElement }) {
         isLoading = true;
+        await compressFormImageInputs(formElement, [
+            "attachment_id_front",
+            "attachment_id_back",
+            "attachment_bank_cover",
+        ]);
+
         return async ({ result }: { result: any }) => {
             isLoading = false;
 

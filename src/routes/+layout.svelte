@@ -16,6 +16,7 @@
 	import { page } from "$app/state";
 	import { Toaster } from "svelte-sonner";
 	import Sidebar from "$lib/components/layout/Sidebar.svelte";
+	import { Menu, X } from "lucide-svelte";
 
 	// 接收來自 +layout.server.ts 的資料 (data) 及其子頁面 (children)
 	let { data, children }: { data: App.LayoutData; children: any } = $props();
@@ -61,16 +62,54 @@
 				}
 			: null,
 	);
+
+	let mobileNavOpen = $state(false);
+
+	$effect(() => {
+		page.url.pathname;
+		mobileNavOpen = false;
+	});
 </script>
 
 <Toaster />
 
 {#if data.session && !isAuthPage && sidebarUser}
 	<!-- 已登入且不在登入頁：顯示側邊欄佈局 -->
-	<div class="flex min-h-screen bg-background text-foreground">
-		<Sidebar user={sidebarUser} />
-		<main class="flex-1 overflow-auto">
-			{@render children()}
+	<div
+		class="flex min-h-screen bg-secondary/50 text-foreground transition-all duration-300"
+	>
+		<button
+			type="button"
+			class="fixed top-4 left-4 z-[70] inline-flex h-10 w-10 items-center justify-center rounded-lg border bg-background/95 text-foreground shadow-sm md:hidden"
+			aria-label={mobileNavOpen ? "關閉選單" : "開啟選單"}
+			onclick={() => (mobileNavOpen = !mobileNavOpen)}
+		>
+			{#if mobileNavOpen}
+				<X class="h-5 w-5" />
+			{:else}
+				<Menu class="h-5 w-5" />
+			{/if}
+		</button>
+
+		{#if mobileNavOpen}
+			<button
+				type="button"
+				class="fixed inset-0 z-40 bg-black/30 md:hidden"
+				aria-label="關閉側邊欄"
+				onclick={() => (mobileNavOpen = false)}
+			></button>
+		{/if}
+
+		<Sidebar
+			user={sidebarUser}
+			class={mobileNavOpen
+				? "translate-x-0"
+				: "-translate-x-full md:translate-x-0"}
+		/>
+		<main class="flex-1 md:ml-64 min-h-screen overflow-x-hidden">
+			<div class="max-w-7xl mx-auto p-8 lg:p-12 space-y-10">
+				{@render children()}
+			</div>
 		</main>
 	</div>
 {:else}

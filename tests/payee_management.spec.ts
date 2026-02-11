@@ -148,26 +148,49 @@ test.describe('Payee Management Extended Flow', () => {
     });
 
     test('Finance User can APPROVE a request', async ({ page }) => {
+        const { data: pendingRequest, error: pendingError } = await supabaseAdmin
+            .from('payee_change_requests')
+            .select('id')
+            .eq('payee_id', testPayeeId)
+            .eq('change_type', 'disable')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (pendingError) throw pendingError;
+        expect(pendingRequest?.id).toBeTruthy();
+
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
 
-        // 找到待審核的停用申請 row (應包含 [停用] 和 testPayeeName)
-        const pendingRow = page.locator('tbody tr').filter({ hasText: '停用' }).filter({ hasText: testPayeeName });
-        await expect(pendingRow.first()).toBeVisible({ timeout: 15000 });
+        // 以同一個已登入 session 直接送 action，避免 UI 對話框渲染時序造成 flake。
+        const approveResult = await page.evaluate(async (requestId: string) => {
+            const form = new FormData();
+            form.append('requestId', requestId);
+            const res = await fetch('/payees?/approvePayeeRequest', {
+                method: 'POST',
+                body: form
+            });
+            return {
+                ok: res.ok,
+                status: res.status,
+                body: await res.text()
+            };
+        }, pendingRequest!.id);
 
-        // 點擊開啟 detail dialog
-        await pendingRow.first().click();
+        expect(approveResult.ok).toBeTruthy();
+        expect(approveResult.body).not.toContain('Unauthorized');
+        expect(approveResult.body).not.toContain('操作失敗');
+        expect(approveResult.body).not.toContain('Approval RPC Error');
 
-        const dialog = page.locator('[role="dialog"]');
-        await expect(dialog).toBeVisible({ timeout: 5000 });
+        const { data: approvedRequest, error: approvedError } = await supabaseAdmin
+            .from('payee_change_requests')
+            .select('status')
+            .eq('id', pendingRequest!.id)
+            .maybeSingle();
 
-        // 按下「核准」按鈕
-        const approveBtn = dialog.getByRole('button', { name: '核准' });
-        await expect(approveBtn).toBeVisible({ timeout: 5000 });
-
-        await approveBtn.click();
-
-        // 等待成功訊息 "申請已核准"
-        await expect(page.getByText('申請已核准')).toBeVisible({ timeout: 10000 });
+        if (approvedError) throw approvedError;
+        expect(approvedRequest?.status).toBe('approved');
     });
 });

@@ -44,9 +44,9 @@
         Building2, // 廠商管理
         User, // 個人帳戶
         Settings, // 使用者設定
-        HelpCircle, // 說明文件
         Plus, // 新增按鈕
         LogOut, // 登出按鈕
+        Landmark, // 付款歷史
     } from "lucide-svelte";
 
     // ========================================
@@ -78,8 +78,11 @@
      * 依序排列，部分項目需要特定權限才會顯示
      */
     const navItems: NavItem[] = [
+        // 儀表板：所有使用者可見
+        { label: "儀表板", href: "/", icon: Home },
+
         // 我的請款：所有使用者可見
-        { label: "我的請款", href: "/claims", icon: Home },
+        { label: "我的請款", href: "/claims", icon: FileText },
 
         // 審核中心：僅主管、財務、管理員可見
         {
@@ -99,13 +102,14 @@
             icon: Settings,
             requiredRoles: ["admin"],
         },
-    ];
 
-    /**
-     * 底部輔助導航項目
-     */
-    const bottomItems: NavItem[] = [
-        { label: "說明文件", href: "/docs", icon: HelpCircle },
+        // 付款歷史：僅財務、管理員可見
+        {
+            label: "付款歷史",
+            href: "/payments",
+            icon: Landmark,
+            requiredRoles: ["finance", "admin"],
+        },
     ];
 
     // ========================================
@@ -201,63 +205,74 @@
     }
 </script>
 
-<!-- 側邊欄容器：固定寬度 256px，全高度，右側邊框 -->
+<!-- 側邊欄容器：macOS 風格設計，高透明度、細緻邊框 -->
 <aside
     class={cn(
-        "flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar",
+        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar backdrop-blur-3xl transition-all duration-300",
         className,
     )}
 >
     <!-- ====================================== -->
     <!-- 頂部區域：Logo 與快速新增按鈕 -->
     <!-- ====================================== -->
-    <div class="flex flex-col gap-4 p-4">
+    <div class="flex flex-col gap-6 p-6">
         <!-- 品牌標識 -->
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
             <div
-                class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+                class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm"
             >
                 <FileText class="h-4 w-4" />
             </div>
-            <span class="text-lg font-semibold text-sidebar-foreground"
+            <span
+                class="text-base font-bold tracking-tight text-sidebar-foreground"
                 >請款系統</span
             >
         </div>
 
         <!-- 快速新增請款按鈕 -->
-        <Button href="/claims/new" class="w-full gap-2">
-            <Plus class="h-4 w-4" />
+        <Button
+            href="/claims/new"
+            data-sveltekit-preload-data="tap"
+            class="w-full gap-2 rounded-xl shadow-sm h-9 text-xs font-semibold"
+        >
+            <Plus class="h-3.5 w-3.5" />
             新增請款
         </Button>
     </div>
 
-    <Separator.Root class="bg-sidebar-border" />
-
     <!-- ====================================== -->
     <!-- 主要導航區域 -->
     <!-- ====================================== -->
-    <nav class="flex-1 space-y-1 p-2">
+    <nav class="flex-1 space-y-0.5 px-3">
         {#each navItems as item}
             <!-- 依權限決定是否顯示 -->
             {#if hasAccess(item)}
                 <a
                     href={item.href}
+                    data-sveltekit-preload-data="hover"
                     class={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
                         // 根據是否為當前頁面套用不同樣式
                         isActive(item.href)
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                            ? "bg-primary/10 text-primary shadow-inner"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground",
                     )}
                 >
                     <!-- 導航圖標 -->
-                    <item.icon class="h-4 w-4" />
+                    <item.icon
+                        class={cn(
+                            "h-4 w-4",
+                            isActive(item.href)
+                                ? "text-primary"
+                                : "text-sidebar-foreground/50",
+                        )}
+                    />
                     {item.label}
 
                     <!-- 待辦數量徽章 (若有) -->
                     {#if item.badge}
                         <span
-                            class="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-xs text-white"
+                            class="ml-auto flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary/20 px-1 text-[10px] font-bold text-primary"
                         >
                             {item.badge}
                         </span>
@@ -266,26 +281,6 @@
             {/if}
         {/each}
     </nav>
-
-    <!-- ====================================== -->
-    <!-- 底部輔助導航 -->
-    <!-- ====================================== -->
-    <div class="space-y-1 p-2">
-        {#each bottomItems as item}
-            <a
-                href={item.href}
-                class={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    isActive(item.href)
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
-                )}
-            >
-                <item.icon class="h-4 w-4" />
-                {item.label}
-            </a>
-        {/each}
-    </div>
 
     <Separator.Root class="bg-sidebar-border" />
 

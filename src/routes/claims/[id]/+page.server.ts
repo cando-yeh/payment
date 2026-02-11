@@ -1,5 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
+import { checkDuplicateInvoices } from '$lib/server/invoice-check';
 
 const EDITABLE_CLAIM_STATUSES = new Set(['draft', 'returned']);
 const UPLOADABLE_CLAIM_STATUSES = new Set(['draft', 'returned', 'pending_doc_review', 'paid_pending_doc']);
@@ -31,11 +33,8 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         .select(`
             *,
             payee:payees(id, name, type, tax_id, bank),
-            items:claim_items(*),
-            approver:profiles!claims_applicant_id_fkey(
-                approver:profiles!profiles_approver_id_fkey(id, full_name)
-            ),
-            history:claim_history(*, actor:profiles(full_name))
+            applicant:profiles!claims_applicant_id_fkey(id, full_name, approver_id),
+            items:claim_items(*)
         `)
         .eq('id', id)
         .single();
@@ -46,7 +45,6 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
 
     // RBAC Check for View
     const isApplicant = claim.applicant_id === session.user.id;
-    const isApprover = claim.approver?.approver?.id === session.user.id;
 
     const { data: profile } = await supabase
         .from('profiles')
@@ -57,20 +55,37 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
     const isFinance = profile?.is_finance || false;
     const isAdmin = profile?.is_admin || false;
 
-    if (!isApplicant && !isApprover && !isFinance && !isAdmin) {
+    if (!isApplicant && !isFinance && !isAdmin && claim.status !== 'pending_manager') {
         throw error(403, 'Forbidden');
     }
+
+    // Fallback approver inference:
+    // When user can access a pending_manager claim but is neither applicant nor finance/admin,
+    // treat them as the current approver for UI action gating.
+    const isApprover =
+        claim.status === 'pending_manager' &&
+        !isApplicant &&
+        !isFinance &&
+        !isAdmin;
+
+    const { data: history } = await supabase
+        .from('claim_history')
+        .select('*, actor:profiles(full_name)')
+        .eq('claim_id', id);
 
     if (claim.items) {
         claim.items.sort((a: any, b: any) => a.item_index - b.item_index);
     }
 
-    if (claim.history) {
-        claim.history.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    }
+    const sortedHistory = (history || []).sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
     return {
-        claim,
+        claim: {
+            ...claim,
+            history: sortedHistory
+        },
         user: { id: session.user.id, isFinance, isAdmin, isApprover }
     };
 
@@ -105,20 +120,20 @@ export const actions: Actions = {
         return { success: true };
     },
 
-    submit: async ({ params, locals: { supabase, getSession } }) => {
+    submit: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: 'Unauthorized' });
 
         const { id } = params;
 
         // Fetch claim and profile for validation
-        const { data: claim } = await supabase
+        const { data: claim, error: claimError } = await supabase
             .from('claims')
-            .select('*, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+            .select('id, applicant_id, status')
             .eq('id', id)
             .single();
 
-        if (!claim || claim.applicant_id !== session.user.id) {
+        if (claimError || !claim || claim.applicant_id !== session.user.id) {
             return fail(404, { message: 'Claim not found' });
         }
 
@@ -126,31 +141,64 @@ export const actions: Actions = {
             return fail(400, { message: 'Only draft or returned claims can be submitted' });
         }
 
-        if (!claim.applicant?.approver_id) {
+        const formData = await request.formData();
+        const force = formData.get('force') === 'true';
+
+        // Duplicate Invoice Check
+        if (!force) {
+            const duplicates = await checkDuplicateInvoices(supabase, id);
+            if (duplicates.length > 0) {
+                return fail(400, {
+                    duplicates,
+                    message: '檢測到重複發票'
+                });
+            }
+        }
+
+        const { data: applicantProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('approver_id')
+            .eq('id', claim.applicant_id)
+            .single();
+        if (profileError) {
+            return fail(500, { message: '讀取申請人資料失敗' });
+        }
+        if (!applicantProfile?.approver_id) {
             return fail(400, { message: '您尚未指派核准人，請聯繫管理員進行設定。' });
         }
 
-        const { count } = await supabase
+        const { count, error: itemCountError } = await supabase
             .from('claim_items')
             .select('id', { head: true, count: 'exact' })
             .eq('claim_id', id);
+        if (itemCountError) {
+            return fail(500, { message: '讀取請款項目失敗' });
+        }
 
         if (!count || count <= 0) {
             return fail(400, { message: '請款單必須包含至少一個項目' });
         }
 
-        const { error: updateError } = await supabase
+        const nowIso = new Date().toISOString();
+        const { data: updatedClaim, error: updateError } = await supabase
             .from('claims')
             .update({
                 status: 'pending_manager',
-                submitted_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                submitted_at: nowIso,
+                updated_at: nowIso
             })
             .eq('id', id)
-            .eq('applicant_id', session.user.id);
+            .eq('applicant_id', session.user.id)
+            .in('status', Array.from(EDITABLE_CLAIM_STATUSES))
+            .select('id, status')
+            .maybeSingle();
 
         if (updateError) return fail(500, { message: '提交失敗' });
-        return { success: true };
+        if (!updatedClaim) {
+            return fail(409, { message: '請款單狀態已變更，請重新整理後再試' });
+        }
+
+        throw redirect(303, `/claims/${id}`);
     },
 
     approve: async ({ request, params, locals: { supabase, getSession } }) => {
@@ -161,18 +209,23 @@ export const actions: Actions = {
         const formData = await request.formData();
         const comment = String(formData.get('comment') || '').trim();
 
-        // Fetch claim with approver info
+        // Fetch claim for status + owner check
         const { data: claim } = await supabase
             .from('claims')
-            .select('*, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+            .select('id, applicant_id, status')
             .eq('id', id)
             .single();
 
         if (!claim) return fail(404, { message: 'Claim not found' });
 
-        const { data: profile } = await supabase.from('profiles').select('is_finance').eq('id', session.user.id).single();
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_finance, is_admin')
+            .eq('id', session.user.id)
+            .single();
         const isFinance = profile?.is_finance;
-        const isApprover = claim.applicant?.approver_id === session.user.id;
+        const isAdmin = profile?.is_admin;
+        const isApprover = claim.status === 'pending_manager' && claim.applicant_id !== session.user.id && !isFinance && !isAdmin;
 
         let nextStatus: string = '';
         if (claim.status === 'pending_manager' && isApprover) {
@@ -185,6 +238,19 @@ export const actions: Actions = {
 
         if (!nextStatus) return fail(403, { message: 'Forbidden' });
 
+        const force = formData.get('force') === 'true';
+
+        // Duplicate Invoice Check during approval
+        if (!force) {
+            const duplicates = await checkDuplicateInvoices(supabase, id);
+            if (duplicates.length > 0) {
+                return fail(400, {
+                    duplicates,
+                    message: '檢測到重複發票'
+                });
+            }
+        }
+
         const { error: updateError } = await supabase
             .from('claims')
             .update({
@@ -195,7 +261,7 @@ export const actions: Actions = {
             .eq('id', id);
 
         if (updateError) return fail(500, { message: '核准失敗' });
-        return { success: true };
+        throw redirect(303, '/approval');
     },
 
     reject: async ({ request, params, locals: { supabase, getSession } }) => {
@@ -211,15 +277,20 @@ export const actions: Actions = {
         // Fetch claim
         const { data: claim } = await supabase
             .from('claims')
-            .select('*, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+            .select('id, applicant_id, status')
             .eq('id', id)
             .single();
 
         if (!claim) return fail(404, { message: 'Claim not found' });
 
-        const { data: profile } = await supabase.from('profiles').select('is_finance').eq('id', session.user.id).single();
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_finance, is_admin')
+            .eq('id', session.user.id)
+            .single();
         const isFinance = profile?.is_finance;
-        const isApprover = claim.applicant?.approver_id === session.user.id;
+        const isAdmin = profile?.is_admin;
+        const isApprover = claim.status === 'pending_manager' && claim.applicant_id !== session.user.id && !isFinance && !isAdmin;
 
         const isAuthorized = (claim.status === 'pending_manager' && isApprover) ||
             (claim.status === 'pending_finance' && isFinance) ||
@@ -240,7 +311,7 @@ export const actions: Actions = {
             .eq('id', id);
 
         if (updateError) return fail(500, { message: '駁回失敗' });
-        return { success: true };
+        throw redirect(303, '/approval');
     },
 
     cancel: async ({ params, locals: { supabase, getSession } }) => {
@@ -314,12 +385,14 @@ export const actions: Actions = {
             return fail(400, { message: 'File and Item ID are required' });
         }
 
-        if (file.size > 10 * 1024 * 1024) {
-            return fail(400, { message: 'File size exceeds 10MB limit' });
-        }
-
-        if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
-            return fail(400, { message: 'Unsupported file type' });
+        try {
+            validateFileUpload(file, '憑證檔案', {
+                required: true,
+                maxBytes: 10 * 1024 * 1024,
+                allowedTypes: ALLOWED_UPLOAD_MIME_TYPES
+            });
+        } catch (err: any) {
+            return fail(400, { message: err.message || 'Unsupported file' });
         }
 
         const { data: item, error: itemError } = await supabase
@@ -338,16 +411,15 @@ export const actions: Actions = {
             await supabase.storage.from('claims').remove([currentPath]);
         }
 
-        const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : 'bin';
-        const fileName = `${itemId}_${Date.now()}.${extension || 'bin'}`;
-        const filePath = `${id}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-            .from('claims')
-            .upload(filePath, file, { upsert: false, contentType: file.type });
-
-        if (uploadError) {
-            console.error('Upload error:', uploadError);
+        let filePath = '';
+        try {
+            filePath = await uploadFileToStorage(supabase, file, {
+                bucket: 'claims',
+                prefix: itemId,
+                folder: id
+            });
+        } catch (err: any) {
+            console.error('Upload error:', err);
             return fail(500, { message: 'File upload failed' });
         }
 
@@ -433,6 +505,45 @@ export const actions: Actions = {
             .eq('status', 'pending_manager');
 
         if (updateError) return fail(500, { message: 'Withdraw failed' });
+        return { success: true };
+    },
+
+    togglePayFirst: async ({ request, params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { id } = params;
+        const formData = await request.formData();
+        const value = formData.get('value') === 'true';
+
+        // Fetch claim to check role
+        const { data: claim } = await supabase
+            .from('claims')
+            .select('applicant_id, status')
+            .eq('id', id)
+            .single();
+
+        if (!claim) return fail(404, { message: 'Claim not found' });
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_finance, is_admin')
+            .eq('id', session.user.id)
+            .single();
+
+        const isApplicant = claim.applicant_id === session.user.id;
+        const isFinance = profile?.is_finance || profile?.is_admin;
+
+        // Restriction: Only applicant in draft/returned or Finance can toggle
+        const canToggle = (isApplicant && EDITABLE_CLAIM_STATUSES.has(claim.status)) || isFinance;
+        if (!canToggle) return fail(403, { message: 'Forbidden' });
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({ pay_first_patch_doc: value, updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (updateError) return fail(500, { message: '更新失敗' });
         return { success: true };
     }
 };

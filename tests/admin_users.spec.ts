@@ -16,17 +16,28 @@ test.describe('Admin Users Page', () => {
     // Use unique names with timestamp to avoid collisions with leftover test data
     const ts = Date.now();
     const standardUserName = `StdUser_${ts}`;
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    async function createUserWithRetry(emailPrefix: string, fullName: string) {
+        let lastError: any = null;
+        for (let i = 0; i < 3; i++) {
+            const email = `${emailPrefix}_${Date.now()}_${i}@example.com`;
+            const { data, error } = await supabaseAdmin.auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: { full_name: fullName },
+            });
+            if (!error) return data.user;
+            lastError = error;
+            await sleep(500);
+        }
+        throw lastError;
+    }
 
     test.beforeAll(async () => {
         // Create admin user
-        const { data: a, error: e1 } = await supabaseAdmin.auth.admin.createUser({
-            email: `admin_test_${ts}_1@example.com`,
-            password,
-            email_confirm: true,
-            user_metadata: { full_name: `AdminUser_${ts}` },
-        });
-        if (e1) throw e1;
-        adminUser = a.user;
+        adminUser = await createUserWithRetry(`admin_test_${ts}_1`, `AdminUser_${ts}`);
 
         // Set admin flag
         await supabaseAdmin
@@ -35,14 +46,7 @@ test.describe('Admin Users Page', () => {
             .eq('id', adminUser.id);
 
         // Create standard user
-        const { data: s, error: e2 } = await supabaseAdmin.auth.admin.createUser({
-            email: `admin_test_${ts}_2@example.com`,
-            password,
-            email_confirm: true,
-            user_metadata: { full_name: standardUserName },
-        });
-        if (e2) throw e2;
-        standardUser = s.user;
+        standardUser = await createUserWithRetry(`admin_test_${ts}_2`, standardUserName);
     });
 
     test.afterAll(async () => {

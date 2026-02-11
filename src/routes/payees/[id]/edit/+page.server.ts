@@ -1,20 +1,9 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
-const validateAttachment = (file: File, label: string) => {
-    if (!file || file.size === 0) return;
-
-    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
-        throw new Error(`${label} 格式不支援，僅接受 JPG / PNG / WEBP`);
-    }
-
-    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
-        throw new Error(`${label} 檔案過大，請小於 5MB`);
-    }
-};
 
 export const load: PageServerLoad = async ({ params, locals }) => {
     const { supabase, getSession, user } = locals;
@@ -142,37 +131,33 @@ export const actions: Actions = {
             };
 
             try {
-                validateAttachment(files.id_front, '身分證正面');
-                validateAttachment(files.id_back, '身分證反面');
-                validateAttachment(files.bank_cover, '存摺封面');
+                validateFileUpload(files.id_front, '身分證正面', {
+                    maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
+                    allowedTypes: ALLOWED_ATTACHMENT_TYPES
+                });
+                validateFileUpload(files.id_back, '身分證反面', {
+                    maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
+                    allowedTypes: ALLOWED_ATTACHMENT_TYPES
+                });
+                validateFileUpload(files.bank_cover, '存摺封面', {
+                    maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
+                    allowedTypes: ALLOWED_ATTACHMENT_TYPES
+                });
             } catch (err: any) {
                 return fail(400, { message: err.message || '附件驗證失敗' });
             }
-
-            const uploadFile = async (file: File, prefix: string) => {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${prefix}_${crypto.randomUUID()}.${fileExt}`;
-                const filePath = `uploads/${crypto.randomUUID()}/${fileName}`;
-
-                const { data, error } = await supabase.storage
-                    .from('payees')
-                    .upload(filePath, file);
-
-                if (error) throw error;
-                return data.path;
-            };
 
             try {
                 // Determine new paths: use new upload if present, else use existing
                 const newPaths = {
                     id_card_front: (files.id_front && files.id_front.size > 0)
-                        ? await uploadFile(files.id_front, 'id_front')
+                        ? await uploadFileToStorage(supabase, files.id_front, { bucket: 'payees', prefix: 'id_front' })
                         : currentAttachments.id_card_front,
                     id_card_back: (files.id_back && files.id_back.size > 0)
-                        ? await uploadFile(files.id_back, 'id_back')
+                        ? await uploadFileToStorage(supabase, files.id_back, { bucket: 'payees', prefix: 'id_back' })
                         : currentAttachments.id_card_back,
                     bank_passbook: (files.bank_cover && files.bank_cover.size > 0)
-                        ? await uploadFile(files.bank_cover, 'bank_cover')
+                        ? await uploadFileToStorage(supabase, files.bank_cover, { bucket: 'payees', prefix: 'bank_cover' })
                         : currentAttachments.bank_passbook
                 };
 

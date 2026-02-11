@@ -25,8 +25,8 @@
         EyeOff,
     } from "lucide-svelte";
     import { deserialize, applyAction } from "$app/forms";
-    import { invalidateAll } from "$app/navigation";
     import { untrack } from "svelte";
+    import { timedFetch } from "$lib/client/timed-fetch";
 
     // 接收來自 Sidebar 的使用者資料物件
     let { user, open = $bindable(false) } = $props();
@@ -98,26 +98,31 @@
     async function toggleReveal() {
         if (!showAccountValue && !decryptedAccount) {
             revealing = true;
-            // 使用 fetch 呼叫隱形表單 Action
-            const response = await fetch("/account?/revealAccount", {
-                method: "POST",
-                body: new FormData(),
-            });
-            const text = await response.text();
-            const result = deserialize(text) as any;
+            try {
+                // 使用 fetch 呼叫隱形表單 Action
+                const response = await timedFetch("/account?/revealAccount", {
+                    method: "POST",
+                    body: new FormData(),
+                });
+                const text = await response.text();
+                const result = deserialize(text) as any;
 
-            if (
-                result.type === "success" &&
-                result.data &&
-                "decryptedAccount" in result.data
-            ) {
-                decryptedAccount = String(result.data.decryptedAccount);
-            } else {
+                if (
+                    result.type === "success" &&
+                    result.data &&
+                    "decryptedAccount" in result.data
+                ) {
+                    decryptedAccount = String(result.data.decryptedAccount);
+                } else {
+                    toast.error("無法讀取帳號資訊");
+                    return;
+                }
+            } catch {
                 toast.error("無法讀取帳號資訊");
-                revealing = false;
                 return;
+            } finally {
+                revealing = false;
             }
-            revealing = false;
         }
         showAccountValue = !showAccountValue;
     }

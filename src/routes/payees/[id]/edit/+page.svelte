@@ -12,6 +12,7 @@
     import { toast } from "svelte-sonner";
     import { ArrowLeft, LoaderCircle } from "lucide-svelte";
     import { goto } from "$app/navigation";
+    import { compressFormImageInputs } from "$lib/client/image-compression";
 
     let { data } = $props();
     let payee = $derived(data.payee);
@@ -21,8 +22,14 @@
     let payeeType = $derived(data.payee.type || "vendor");
     let attachmentUrls = $derived(data.attachmentUrls || {});
 
-    function handleSubmit() {
+    async function handleSubmit({ formElement }: { formElement: HTMLFormElement }) {
         isLoading = true;
+        await compressFormImageInputs(formElement, [
+            "attachment_id_front",
+            "attachment_id_back",
+            "attachment_bank_cover",
+        ]);
+
         return async ({ result }: { result: any }) => {
             isLoading = false;
 
