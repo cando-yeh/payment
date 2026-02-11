@@ -166,8 +166,12 @@
             action="?/create"
             use:enhance={() => {
                 isSubmitting = true;
-                return async ({ update }) => {
+                return async ({ result, update }) => {
                     isSubmitting = false;
+                    if (result.type === "redirect") {
+                        goto(result.location);
+                        return;
+                    }
                     await update();
                 };
             }}

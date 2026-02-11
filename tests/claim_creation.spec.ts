@@ -64,7 +64,7 @@ test.describe('Claim Creation Flow', () => {
         await page.click('button:has-text("儲存草稿")');
 
         // 7. Verify Redirect
-        await expect(page).toHaveURL(/\/claims\/[A-Za-z0-9]+/);
+        await expect(page).toHaveURL(/\/claims\/(?!new$)[A-Za-z0-9]+$/);
 
         // 8. Verify Detail Page
         await expect(page.locator('h1')).toContainText('請款單 #'); // ID
