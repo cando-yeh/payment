@@ -10,19 +10,17 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession }, u
     const tab = url.searchParams.get('tab') || 'drafts';
     const search = url.searchParams.get('search') || '';
 
-    // Default to fetch drafts
     let query = supabase
         .from('claims')
         .select(`
             *,
             payee:payees(name),
             items:claim_items(count),
-            approver:applicant_id(full_name) -- Just for now, might need better relation
+            approver:applicant_id(full_name)
         `)
         .eq('applicant_id', session.user.id)
         .order('created_at', { ascending: false });
 
-    // Filter by tab
     if (tab === 'drafts') {
         query = query.in('status', ['draft', 'returned']);
     } else if (tab === 'processing') {
@@ -33,10 +31,7 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession }, u
         query = query.in('status', ['paid', 'cancelled']);
     }
 
-    // Filter by search (simple implementation for now)
     if (search) {
-        // Note: Searching description or ID. 
-        // Complex search might need a different approach or RPC if joining multiple tables
         query = query.or(`description.ilike.%${search}%,id.ilike.%${search}%`);
     }
 
@@ -44,7 +39,7 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession }, u
 
     if (error) {
         console.error('Error fetching claims:', error);
-        return { claims: [] };
+        return { claims: [], tab, search };
     }
 
     return {

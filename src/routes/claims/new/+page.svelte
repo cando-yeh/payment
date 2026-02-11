@@ -249,7 +249,7 @@
                                 <Select.Root
                                     type="single"
                                     bind:value={payeeId}
-                                    onValueChange={(v) => {
+                                    onValueChange={() => {
                                         // Reset floating account when payee changes
                                         isFloatingAccount = false;
                                         bankCode = "";
@@ -259,21 +259,31 @@
                                     }}
                                 >
                                     <Select.Trigger class="w-full">
-                                        {vendorPayees.find(
-                                            (p) => p.id === payeeId,
-                                        )?.name || "選擇受款人"}
+                                        {vendorPayees.find((p) => p.id === payeeId)
+                                            ?.name ||
+                                            personalPayees.find(
+                                                (p) => p.id === payeeId,
+                                            )?.name ||
+                                            "選擇受款人"}
                                     </Select.Trigger>
                                     <Select.Content>
-                                        {#each vendorPayees as payee}
-                                            <Select.Item
-                                                value={payee.id}
-                                                label={payee.name}
-                                            />
-                                        {/each}
+                                        {#if claimType === "vendor"}
+                                            {#each vendorPayees as payee}
+                                                <Select.Item
+                                                    value={payee.id}
+                                                    label={payee.name}
+                                                />
+                                            {/each}
+                                        {:else}
+                                            {#each personalPayees as payee}
+                                                <Select.Item
+                                                    value={payee.id}
+                                                    label={payee.name}
+                                                />
+                                            {/each}
+                                        {/if}
                                     </Select.Content>
                                 </Select.Root>
-                                type="hidden" name="payee_id" value={payeeId}
-                                />
                             </div>
 
                             <!-- Floating Account Handling -->

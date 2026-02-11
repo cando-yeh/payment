@@ -1,6 +1,23 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
+const EDITABLE_CLAIM_STATUSES = new Set(['draft', 'returned']);
+const UPLOADABLE_CLAIM_STATUSES = new Set(['draft', 'returned', 'pending_doc_review', 'paid_pending_doc']);
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
+async function getOwnedClaim(
+    supabase: App.Locals['supabase'],
+    id: string,
+    userId: string
+) {
+    return supabase
+        .from('claims')
+        .select('id, applicant_id, status')
+        .eq('id', id)
+        .eq('applicant_id', userId)
+        .single();
+}
+
 export const load: PageServerLoad = async ({ params, locals: { supabase, getSession } }) => {
     const session = await getSession();
     if (!session) {
@@ -13,231 +30,255 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         .from('claims')
         .select(`
             *,
-            payee:payees(id, name, type, tax_id, bank_account, bank),
+            payee:payees(id, name, type, tax_id, bank),
             items:claim_items(*),
             approver:profiles(full_name)
         `)
         .eq('id', id)
+        .eq('applicant_id', session.user.id)
         .single();
 
     if (claimError || !claim) {
-        console.error('Error fetching claim:', claimError);
-        // Debugging: Write error to file
-        try {
-            const fs = await import('fs');
-            fs.appendFileSync('server_errors.txt', `[${new Date().toISOString()}] Claim ID: ${id}, Error: ${JSON.stringify(claimError)}\n`);
-        } catch (e) { /* ignore */ }
-
         throw error(404, 'Claim not found');
     }
 
-    // Sort items by index
     if (claim.items) {
         claim.items.sort((a: any, b: any) => a.item_index - b.item_index);
     }
 
-    // Check permissions (only applicant or admin/finance/approver)
-    if (claim.applicant_id !== session.user.id) {
-        // checks other roles...
-        // For MVP, if not applicant, maybe block unless approver.
-        // pass for now.
-    }
-
-    return {
-        claim
-    };
+    return { claim };
 };
 
 export const actions: Actions = {
-    // 1. Update Claim (Draft only)
     update: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
-        if (!session) return fail(401);
+        if (!session) return fail(401, { message: 'Unauthorized' });
 
         const { id } = params;
-        const formData = await request.formData();
-        const description = formData.get('description') as string;
+        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
+        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
+            return fail(400, { message: 'Only draft or returned claims can be updated' });
+        }
 
-        // Update Claim
+        const formData = await request.formData();
+        const description = String(formData.get('description') || '').trim();
+        if (!description) {
+            return fail(400, { message: 'Description is required' });
+        }
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({ description, updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .eq('applicant_id', session.user.id)
+            .in('status', Array.from(EDITABLE_CLAIM_STATUSES));
+
+        if (updateError) return fail(500, { message: 'Update failed' });
+        return { success: true };
+    },
+
+    submit: async ({ params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { id } = params;
+        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
+        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+
+        if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
+            return fail(400, { message: 'Only draft or returned claims can be submitted' });
+        }
+
+        const { count, error: itemCountError } = await supabase
+            .from('claim_items')
+            .select('id', { head: true, count: 'exact' })
+            .eq('claim_id', id);
+
+        if (itemCountError) return fail(500, { message: 'Failed to verify claim items' });
+        if (!count || count <= 0) return fail(400, { message: 'Claim must include at least one item' });
+
         const { error: updateError } = await supabase
             .from('claims')
             .update({
-                description,
+                status: 'pending_manager',
+                submitted_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             })
-            .eq('id', id);
+            .eq('id', id)
+            .eq('applicant_id', session.user.id)
+            .in('status', Array.from(EDITABLE_CLAIM_STATUSES));
 
-        if (updateError) return fail(500, { message: 'Update failed' });
-
+        if (updateError) return fail(500, { message: 'Submit failed' });
         return { success: true };
     },
 
-    // 2. Submit Claim
-    submit: async ({ params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401);
-        const { id } = params;
-
-        const { error } = await supabase
-            .from('claims')
-            .update({
-                status: 'pending_manager',
-                submitted_at: new Date().toISOString()
-            })
-            .eq('id', id);
-
-        if (error) return fail(500, { message: 'Submit failed' });
-        return { success: true };
-    },
-
-    // 3. Delete Claim
     delete: async ({ params, locals: { supabase, getSession } }) => {
         const session = await getSession();
-        if (!session) return fail(401);
-        const { id } = params;
+        if (!session) return fail(401, { message: 'Unauthorized' });
 
-        // Delete files from storage if any
+        const { id } = params;
+        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
+        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
+            return fail(400, { message: 'Only draft or returned claims can be deleted' });
+        }
+
         const { data: files } = await supabase.storage.from('claims').list(id);
         if (files && files.length > 0) {
-            const paths = files.map(f => `${id}/${f.name}`);
+            const paths = files.map((f) => `${id}/${f.name}`);
             await supabase.storage.from('claims').remove(paths);
         }
 
-        const { error } = await supabase
+        const { error: deleteError } = await supabase
             .from('claims')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('applicant_id', session.user.id)
+            .in('status', Array.from(EDITABLE_CLAIM_STATUSES));
 
-        if (error) return fail(500, { message: 'Delete failed' });
+        if (deleteError) return fail(500, { message: 'Delete failed' });
         throw redirect(303, '/claims');
     },
 
-    // 4. Upload Attachment
     upload: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
-        if (!session) return fail(401);
+        if (!session) return fail(401, { message: 'Unauthorized' });
 
         const { id } = params;
+        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
+        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        if (!UPLOADABLE_CLAIM_STATUSES.has(claim.status)) {
+            return fail(400, { message: 'Attachments are not allowed in current claim status' });
+        }
+
         const formData = await request.formData();
-        const file = formData.get('file') as File;
-        const itemId = formData.get('item_id') as string;
+        const file = formData.get('file') as File | null;
+        const itemId = String(formData.get('item_id') || '');
 
         if (!file || !itemId) {
             return fail(400, { message: 'File and Item ID are required' });
         }
 
-        // Validate file size (10MB)
         if (file.size > 10 * 1024 * 1024) {
             return fail(400, { message: 'File size exceeds 10MB limit' });
         }
 
-        // Upload to Storage
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${itemId}_${Date.now()}.${fileExt}`;
+        if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
+            return fail(400, { message: 'Unsupported file type' });
+        }
+
+        const { data: item, error: itemError } = await supabase
+            .from('claim_items')
+            .select('id, claim_id, extra')
+            .eq('id', itemId)
+            .eq('claim_id', id)
+            .single();
+
+        if (itemError || !item) {
+            return fail(404, { message: 'Claim item not found' });
+        }
+
+        const currentPath = item.extra?.file_path as string | undefined;
+        if (currentPath) {
+            await supabase.storage.from('claims').remove([currentPath]);
+        }
+
+        const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() : 'bin';
+        const fileName = `${itemId}_${Date.now()}.${extension || 'bin'}`;
         const filePath = `${id}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
             .from('claims')
-            .upload(filePath, file);
+            .upload(filePath, file, { upsert: false, contentType: file.type });
 
         if (uploadError) {
             console.error('Upload error:', uploadError);
-            try {
-                const fs = await import('fs');
-                fs.appendFileSync('upload_errors.txt', `[${new Date().toISOString()}] Upload Error: ${JSON.stringify(uploadError)}\n`);
-            } catch (e) { /* ignore */ }
             return fail(500, { message: 'File upload failed' });
         }
 
-        // Update Claim Item with path in extra
         const { error: updateError } = await supabase
             .from('claim_items')
             .update({
                 attachment_status: 'uploaded',
                 extra: { file_path: filePath, original_name: file.name }
             })
-            .eq('id', itemId);
+            .eq('id', itemId)
+            .eq('claim_id', id);
 
         if (updateError) {
             console.error('Update item error:', updateError);
-            try {
-                const fs = await import('fs');
-                fs.appendFileSync('upload_errors.txt', `[${new Date().toISOString()}] Update Item Error: ${JSON.stringify(updateError)}\n`);
-            } catch (e) { /* ignore */ }
             return fail(500, { message: 'Failed to link attachment' });
         }
 
         return { success: true };
     },
 
-    // 5. Delete Attachment
     delete_attachment: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
-        if (!session) return fail(401);
+        if (!session) return fail(401, { message: 'Unauthorized' });
 
         const { id } = params;
-        const formData = await request.formData();
-        const itemId = formData.get('item_id') as string;
-        const filePath = formData.get('file_path') as string;
-
-        if (!itemId || !filePath) return fail(400);
-
-        // Remove from storage
-        const { error: removeError } = await supabase.storage
-            .from('claims')
-            .remove([filePath]);
-
-        if (removeError) {
-            console.error('Remove file error:', removeError);
-            return fail(500, { message: 'Failed to delete file' });
+        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
+        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        if (!UPLOADABLE_CLAIM_STATUSES.has(claim.status)) {
+            return fail(400, { message: 'Attachments are not editable in current claim status' });
         }
 
-        // Update Item
+        const formData = await request.formData();
+        const itemId = String(formData.get('item_id') || '');
+        if (!itemId) return fail(400, { message: 'Item ID is required' });
+
+        const { data: item, error: itemError } = await supabase
+            .from('claim_items')
+            .select('id, claim_id, extra')
+            .eq('id', itemId)
+            .eq('claim_id', id)
+            .single();
+
+        if (itemError || !item) return fail(404, { message: 'Claim item not found' });
+
+        const dbFilePath = item.extra?.file_path as string | undefined;
+        if (dbFilePath) {
+            const { error: removeError } = await supabase.storage.from('claims').remove([dbFilePath]);
+            if (removeError) {
+                console.error('Remove file error:', removeError);
+                return fail(500, { message: 'Failed to delete file' });
+            }
+        }
+
         const { error: updateError } = await supabase
             .from('claim_items')
-            .update({
-                attachment_status: 'pending_supplement',
-                extra: {}
-            })
-            .eq('id', itemId);
+            .update({ attachment_status: 'pending_supplement', extra: {} })
+            .eq('id', itemId)
+            .eq('claim_id', id);
 
-        if (updateError) return fail(500);
+        if (updateError) return fail(500, { message: 'Failed to update attachment status' });
 
         return { success: true };
     },
 
-    // 6. Withdraw Claim (Pending Approval -> Draft)
     withdraw: async ({ params, locals: { supabase, getSession } }) => {
         const session = await getSession();
-        if (!session) return fail(401);
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
         const { id } = params;
 
-        // Verify claim is in pending_approval status
-        const { data: claim, error: fetchError } = await supabase
-            .from('claims')
-            .select('status, applicant_id')
-            .eq('id', id)
-            .single();
-
+        const { data: claim, error: fetchError } = await getOwnedClaim(supabase, id, session.user.id);
         if (fetchError || !claim) return fail(404, { message: 'Claim not found' });
 
         if (claim.status !== 'pending_manager') {
             return fail(400, { message: 'Only pending manager review claims can be withdrawn' });
         }
 
-        if (claim.applicant_id !== session.user.id) {
-            return fail(403, { message: 'You can only withdraw your own claims' });
-        }
-
-        const { error } = await supabase
+        const { error: updateError } = await supabase
             .from('claims')
-            .update({
-                status: 'draft',
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', id);
+            .update({ status: 'draft', updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .eq('applicant_id', session.user.id)
+            .eq('status', 'pending_manager');
 
-        if (error) return fail(500, { message: 'Withdraw failed' });
+        if (updateError) return fail(500, { message: 'Withdraw failed' });
         return { success: true };
     }
 };
