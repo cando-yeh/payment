@@ -16,11 +16,17 @@
      * 執行 Google OAuth 登入
      */
     async function loginWithGoogle() {
+        const next = new URLSearchParams(window.location.search).get("next");
+        const safeNext = next && next.startsWith("/") && !next.startsWith("//")
+            ? next
+            : "/";
+        const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`;
+
         await supabase.auth.signInWithOAuth({
             provider: "google",
             options: {
                 // 成功後重導向至 Callback 處理路徑
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: callbackUrl,
             },
         });
     }

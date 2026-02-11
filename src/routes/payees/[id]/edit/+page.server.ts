@@ -1,6 +1,21 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+const validateAttachment = (file: File, label: string) => {
+    if (!file || file.size === 0) return;
+
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+        throw new Error(`${label} 格式不支援，僅接受 JPG / PNG / WEBP`);
+    }
+
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        throw new Error(`${label} 檔案過大，請小於 5MB`);
+    }
+};
+
 export const load: PageServerLoad = async ({ params, locals }) => {
     const { supabase, getSession, user } = locals;
     const session = await getSession();
@@ -25,7 +40,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
     let decryptedBankAccount = null;
 
     // If user is finance or admin, try to decrypt sensitive data for the form
-    if (user?.is_finance || user?.role === 'admin') {
+    if (user?.is_finance || user?.is_admin) {
         const [taxIdRes, bankAccRes] = await Promise.all([
             supabase.rpc('reveal_payee_tax_id', { _payee_id: id }),
             supabase.rpc('reveal_payee_bank_account', { _payee_id: id })
@@ -42,7 +57,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         bank_passbook: null
     };
 
-    if (payee.attachments) {
+    if (payee.attachments && (user?.is_finance || user?.is_admin)) {
         const getUrl = async (path: string) => {
             if (!path) return null;
             const { data } = await supabase.storage.from('payees').createSignedUrl(path, 3600);
@@ -125,6 +140,14 @@ export const actions: Actions = {
                 id_back: formData.get('attachment_id_back') as File,
                 bank_cover: formData.get('attachment_bank_cover') as File
             };
+
+            try {
+                validateAttachment(files.id_front, '身分證正面');
+                validateAttachment(files.id_back, '身分證反面');
+                validateAttachment(files.bank_cover, '存摺封面');
+            } catch (err: any) {
+                return fail(400, { message: err.message || '附件驗證失敗' });
+            }
 
             const uploadFile = async (file: File, prefix: string) => {
                 const fileExt = file.name.split('.').pop();

@@ -9,6 +9,13 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
+const sanitizeRedirectPath = (next: string | null): string => {
+    if (!next || !next.startsWith('/') || next.startsWith('//')) {
+        return '/';
+    }
+    return next;
+};
+
 export const GET: RequestHandler = async (event) => {
     const {
         url,
@@ -19,7 +26,7 @@ export const GET: RequestHandler = async (event) => {
     const code = url.searchParams.get('code');
 
     // 获取跳轉路徑，預設回首頁
-    const next = url.searchParams.get('next') ?? '/';
+    const next = sanitizeRedirectPath(url.searchParams.get('next'));
 
     if (code) {
         /**
@@ -46,10 +53,8 @@ export const GET: RequestHandler = async (event) => {
                 });
             }
 
-            // 成功交換 Session，導向至目標頁面
-            // 確保路徑以 / 開頭
-            const finalRedirect = next.startsWith('/') ? next : `/${next}`;
-            throw redirect(303, finalRedirect);
+            // 成功交換 Session，導向至安全路徑
+            throw redirect(303, next);
         }
     }
 

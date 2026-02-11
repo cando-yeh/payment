@@ -35,7 +35,6 @@ export const load: PageServerLoad = async ({ locals }) => {
         throw error(500, 'Error fetching payees');
     }
 
-    console.log('DEBUG: Pending Requests fetched:', requestsResponse.data);
     if (requestsResponse.error) {
         console.error('Error fetching pending requests:', requestsResponse.error);
     }

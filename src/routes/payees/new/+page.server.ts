@@ -1,6 +1,23 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+const validateAttachment = (file: File, label: string) => {
+    if (!file || file.size === 0) {
+        throw new Error(`請上傳${label}`);
+    }
+
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+        throw new Error(`${label} 格式不支援，僅接受 JPG / PNG / WEBP`);
+    }
+
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        throw new Error(`${label} 檔案過大，請小於 5MB`);
+    }
+};
+
 export const load: PageServerLoad = async ({ locals: { getSession } }) => {
     const session = await getSession();
     if (!session) {
@@ -70,10 +87,13 @@ export const actions: Actions = {
                 bank_cover: formData.get('attachment_bank_cover') as File
             };
 
-            // Basic file validation
-            if (!files.id_front || files.id_front.size === 0) return fail(400, { message: '請上傳身分證正面' });
-            if (!files.id_back || files.id_back.size === 0) return fail(400, { message: '請上傳身分證反面' });
-            if (!files.bank_cover || files.bank_cover.size === 0) return fail(400, { message: '請上傳存摺封面' });
+            try {
+                validateAttachment(files.id_front, '身分證正面');
+                validateAttachment(files.id_back, '身分證反面');
+                validateAttachment(files.bank_cover, '存摺封面');
+            } catch (err: any) {
+                return fail(400, { message: err.message || '附件驗證失敗' });
+            }
 
             const uploadFile = async (file: File, prefix: string) => {
                 const fileExt = file.name.split('.').pop();
