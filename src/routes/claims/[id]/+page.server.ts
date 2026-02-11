@@ -32,21 +32,48 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
             *,
             payee:payees(id, name, type, tax_id, bank),
             items:claim_items(*),
-            approver:profiles(full_name)
+            approver:profiles!claims_applicant_id_fkey(
+                approver:profiles!profiles_approver_id_fkey(id, full_name)
+            ),
+            history:claim_history(*, actor:profiles(full_name))
         `)
         .eq('id', id)
-        .eq('applicant_id', session.user.id)
         .single();
 
     if (claimError || !claim) {
         throw error(404, 'Claim not found');
     }
 
+    // RBAC Check for View
+    const isApplicant = claim.applicant_id === session.user.id;
+    const isApprover = claim.approver?.approver?.id === session.user.id;
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_finance, is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+    const isFinance = profile?.is_finance || false;
+    const isAdmin = profile?.is_admin || false;
+
+    if (!isApplicant && !isApprover && !isFinance && !isAdmin) {
+        throw error(403, 'Forbidden');
+    }
+
     if (claim.items) {
         claim.items.sort((a: any, b: any) => a.item_index - b.item_index);
     }
 
-    return { claim };
+    if (claim.history) {
+        claim.history.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+
+    return {
+        claim,
+        user: { id: session.user.id, isFinance, isAdmin, isApprover }
+    };
+
 };
 
 export const actions: Actions = {
@@ -83,20 +110,34 @@ export const actions: Actions = {
         if (!session) return fail(401, { message: 'Unauthorized' });
 
         const { id } = params;
-        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
-        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+
+        // Fetch claim and profile for validation
+        const { data: claim } = await supabase
+            .from('claims')
+            .select('*, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+            .eq('id', id)
+            .single();
+
+        if (!claim || claim.applicant_id !== session.user.id) {
+            return fail(404, { message: 'Claim not found' });
+        }
 
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
             return fail(400, { message: 'Only draft or returned claims can be submitted' });
         }
 
-        const { count, error: itemCountError } = await supabase
+        if (!claim.applicant?.approver_id) {
+            return fail(400, { message: '您尚未指派核准人，請聯繫管理員進行設定。' });
+        }
+
+        const { count } = await supabase
             .from('claim_items')
             .select('id', { head: true, count: 'exact' })
             .eq('claim_id', id);
 
-        if (itemCountError) return fail(500, { message: 'Failed to verify claim items' });
-        if (!count || count <= 0) return fail(400, { message: 'Claim must include at least one item' });
+        if (!count || count <= 0) {
+            return fail(400, { message: '請款單必須包含至少一個項目' });
+        }
 
         const { error: updateError } = await supabase
             .from('claims')
@@ -106,12 +147,125 @@ export const actions: Actions = {
                 updated_at: new Date().toISOString()
             })
             .eq('id', id)
-            .eq('applicant_id', session.user.id)
-            .in('status', Array.from(EDITABLE_CLAIM_STATUSES));
+            .eq('applicant_id', session.user.id);
 
-        if (updateError) return fail(500, { message: 'Submit failed' });
+        if (updateError) return fail(500, { message: '提交失敗' });
         return { success: true };
     },
+
+    approve: async ({ request, params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { id } = params;
+        const formData = await request.formData();
+        const comment = String(formData.get('comment') || '').trim();
+
+        // Fetch claim with approver info
+        const { data: claim } = await supabase
+            .from('claims')
+            .select('*, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+            .eq('id', id)
+            .single();
+
+        if (!claim) return fail(404, { message: 'Claim not found' });
+
+        const { data: profile } = await supabase.from('profiles').select('is_finance').eq('id', session.user.id).single();
+        const isFinance = profile?.is_finance;
+        const isApprover = claim.applicant?.approver_id === session.user.id;
+
+        let nextStatus: string = '';
+        if (claim.status === 'pending_manager' && isApprover) {
+            nextStatus = 'pending_finance';
+        } else if (claim.status === 'pending_finance' && isFinance) {
+            nextStatus = 'pending_payment';
+        } else if (claim.status === 'pending_doc_review' && isFinance) {
+            nextStatus = 'paid';
+        }
+
+        if (!nextStatus) return fail(403, { message: 'Forbidden' });
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({
+                status: nextStatus as any,
+                last_comment: comment || null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+
+        if (updateError) return fail(500, { message: '核准失敗' });
+        return { success: true };
+    },
+
+    reject: async ({ request, params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { id } = params;
+        const formData = await request.formData();
+        const comment = String(formData.get('comment') || '').trim();
+
+        if (!comment) return fail(400, { message: '請提供駁回原因' });
+
+        // Fetch claim
+        const { data: claim } = await supabase
+            .from('claims')
+            .select('*, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+            .eq('id', id)
+            .single();
+
+        if (!claim) return fail(404, { message: 'Claim not found' });
+
+        const { data: profile } = await supabase.from('profiles').select('is_finance').eq('id', session.user.id).single();
+        const isFinance = profile?.is_finance;
+        const isApprover = claim.applicant?.approver_id === session.user.id;
+
+        const isAuthorized = (claim.status === 'pending_manager' && isApprover) ||
+            (claim.status === 'pending_finance' && isFinance) ||
+            (claim.status === 'pending_doc_review' && isFinance);
+
+        if (!isAuthorized) return fail(403, { message: 'Forbidden' });
+
+        // If rejecting pending_doc_review, it goes back to paid_pending_doc
+        const nextStatus = claim.status === 'pending_doc_review' ? 'paid_pending_doc' : 'returned';
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({
+                status: nextStatus,
+                last_comment: comment,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+
+        if (updateError) return fail(500, { message: '駁回失敗' });
+        return { success: true };
+    },
+
+    cancel: async ({ params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { id } = params;
+        const { data: claim } = await supabase
+            .from('claims')
+            .select('id, applicant_id, status')
+            .eq('id', id)
+            .single();
+
+        if (!claim || claim.applicant_id !== session.user.id) return fail(404, { message: 'Claim not found' });
+        if (claim.status !== 'returned') return fail(400, { message: '只有已退回的單據可以撤銷' });
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (updateError) return fail(500, { message: '撤銷失敗' });
+        return { success: true };
+    },
+
 
     delete: async ({ params, locals: { supabase, getSession } }) => {
         const session = await getSession();

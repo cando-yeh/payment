@@ -20,17 +20,30 @@
         Eye,
         ExternalLink,
         Undo2,
+        CheckCircle2,
+        XCircle,
+        History,
     } from "lucide-svelte";
+    import * as Dialog from "$lib/components/ui/dialog";
+    import AuditTimeline from "$lib/components/shared/AuditTimeline.svelte";
+
     import type { PageData } from "./$types";
 
     let { data }: { data: PageData } = $props();
     let claim = $derived(data.claim);
     let items = $derived(data.claim?.items || []);
+    let history = $derived(data.claim?.history || []);
+    let currentUser = $derived(data.user);
 
     // Drawer State
     let isDrawerOpen = $state(false);
     let selectedItem = $state<any>(null);
     let isUploading = $state(false);
+
+    // Approval Modal State
+    let isRejectModalOpen = $state(false);
+    let subStatus = $state<"approve" | "reject">("approve");
+    let comment = $state("");
 
     function openAttachmentDrawer(item: any) {
         selectedItem = item;
@@ -102,7 +115,8 @@
         </div>
 
         <div class="flex items-center gap-2">
-            {#if claim.status === "draft" || claim.status === "returned"}
+            <!-- Applicant Actions -->
+            {#if (claim.status === "draft" || claim.status === "returned") && claim.applicant_id === currentUser.id}
                 <form
                     action="?/delete"
                     method="POST"
@@ -124,7 +138,16 @@
                     </Button>
                 </form>
             {/if}
-            {#if claim.status === "pending_manager"}
+
+            {#if claim.status === "returned" && claim.applicant_id === currentUser.id}
+                <form action="?/cancel" method="POST" use:enhance>
+                    <Button variant="outline" type="submit">
+                        <XCircle class="mr-2 h-4 w-4" /> 撤銷申請
+                    </Button>
+                </form>
+            {/if}
+
+            {#if claim.status === "pending_manager" && claim.applicant_id === currentUser.id}
                 <form
                     action="?/withdraw"
                     method="POST"
@@ -134,6 +157,28 @@
                 >
                     <Button variant="outline" type="submit">
                         <Undo2 class="mr-2 h-4 w-4" /> 撤回草稿
+                    </Button>
+                </form>
+            {/if}
+
+            <!-- Approver/Finance Actions -->
+            {#if (claim.status === "pending_manager" && currentUser.isApprover) || (claim.status === "pending_finance" && currentUser.isFinance) || (claim.status === "pending_doc_review" && currentUser.isFinance)}
+                <Button
+                    variant="outline"
+                    class="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onclick={() => {
+                        subStatus = "reject";
+                        isRejectModalOpen = true;
+                    }}
+                >
+                    <XCircle class="mr-2 h-4 w-4" /> 駁回
+                </Button>
+                <form action="?/approve" method="POST" use:enhance>
+                    <Button
+                        type="submit"
+                        class="bg-green-600 hover:bg-green-700"
+                    >
+                        <CheckCircle2 class="mr-2 h-4 w-4" /> 核准
                     </Button>
                 </form>
             {/if}
@@ -262,9 +307,71 @@
                 </Table.Root>
             </Card.Content>
         </Card.Root>
+
+        <!-- Audit History -->
+        <Card.Root>
+            <Card.Header class="flex flex-row items-center gap-2">
+                <History class="h-5 w-5 text-muted-foreground" />
+                <Card.Title>審核歷程</Card.Title>
+            </Card.Header>
+            <Card.Content>
+                <AuditTimeline {history} />
+            </Card.Content>
+        </Card.Root>
     </div>
 
-    <!-- Attachment Drawer -->
+    <!-- Reject Modal -->
+    <Dialog.Root bind:open={isRejectModalOpen}>
+        <Dialog.Content>
+            <Dialog.Header>
+                <Dialog.Title>駁回請款申請</Dialog.Title>
+                <Dialog.Description>
+                    請填寫駁回原因，這將幫助申請人了解如何修正並重新提交。
+                </Dialog.Description>
+            </Dialog.Header>
+            <form
+                action="?/reject"
+                method="POST"
+                use:enhance={() => {
+                    return async ({ result, update }) => {
+                        if (result.type === "success") {
+                            isRejectModalOpen = false;
+                            comment = "";
+                        }
+                        await update();
+                    };
+                }}
+            >
+                <div class="space-y-4 py-4">
+                    <div class="space-y-2">
+                        <Label for="comment"
+                            >駁回原因 <span class="text-red-500">*</span></Label
+                        >
+                        <Textarea
+                            id="comment"
+                            name="comment"
+                            placeholder="例如：發票金額與填寫不符、憑證影像模糊..."
+                            bind:value={comment}
+                            required
+                        />
+                    </div>
+                </div>
+                <Dialog.Footer>
+                    <Button
+                        variant="ghost"
+                        onclick={() => (isRejectModalOpen = false)}>取消</Button
+                    >
+                    <Button
+                        type="submit"
+                        variant="destructive"
+                        disabled={!comment.trim()}>確認駁回</Button
+                    >
+                </Dialog.Footer>
+            </form>
+        </Dialog.Content>
+    </Dialog.Root>
+
+    <!-- Attachment Drawer (Existing) -->
     <Sheet.Root bind:open={isDrawerOpen}>
         <Sheet.Content class="w-[400px] sm:w-[540px] overflow-y-auto">
             <Sheet.Header>
