@@ -31,24 +31,10 @@ test.describe('Payee Management Flow', () => {
     });
 
     test('Navigate to New Payee Page', async ({ page }) => {
-        // 注入 session
         await injectSession(page, userStandard.email, password);
 
-        // 導航至受款人頁面
-        await page.goto('/payees');
-        await expect(page).toHaveURL(/\/payees/);
-
-        // 點擊「新增受款人」
-        const newPayeeBtn = page.locator('button:has-text("新增受款人")');
-        try {
-            await expect(newPayeeBtn).toBeVisible({ timeout: 10000 });
-            await newPayeeBtn.click();
-        } catch (e) {
-            console.error('Failed to find "New Payee" button. Current URL:', page.url());
-            await page.screenshot({ path: 'failure-new-payee.png' });
-            throw e;
-        }
-
+        // 直接導航至新增受款人頁
+        await page.goto('/payees/new');
         await expect(page).toHaveURL(/\/payees\/new/);
 
         // 驗證表單元素
@@ -58,16 +44,11 @@ test.describe('Payee Management Flow', () => {
     });
 
     test('Submit Vendor Request', async ({ page }) => {
-        // 注入 session
         await injectSession(page, userStandard.email, password);
 
         // 直接導航至新增受款人頁
         await page.goto('/payees/new');
-
-        if (page.url().includes('login') || page.url().includes('auth')) {
-            console.error('Still redirected to login!');
-            return;
-        }
+        await expect(page).toHaveURL(/\/payees\/new/);
 
         // 填寫表單
         await page.click('button:has-text("廠商")');
@@ -78,8 +59,8 @@ test.describe('Payee Management Flow', () => {
         await page.fill('input[name="bank_account"]', '1234567890');
 
         // 提交並等待回應
-        const [response] = await Promise.all([
-            page.waitForResponse(resp => resp.url().includes('/payees/new') && resp.request().method() === 'POST'),
+        const [resp] = await Promise.all([
+            page.waitForResponse(r => r.url().includes('/payees/new') && r.request().method() === 'POST'),
             page.click('button[type="submit"]'),
         ]);
 

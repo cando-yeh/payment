@@ -47,15 +47,27 @@ export async function injectSession(page: Page, email: string, password: string)
     const storageKey = `sb-${projectRef}-auth-token`;
 
     // 寫入 Cookie（SSR）
-    await page.context().addCookies([{
-        name: storageKey,
-        value: JSON.stringify(session),
-        domain: 'localhost',
-        path: '/',
-        httpOnly: false,
-        secure: false,
-        sameSite: 'Lax',
-    }]);
+    // Set cookies for both localhost and 127.0.0.1 to match baseURL usage.
+    await page.context().addCookies([
+        {
+            name: storageKey,
+            value: JSON.stringify(session),
+            domain: 'localhost',
+            path: '/',
+            httpOnly: false,
+            secure: false,
+            sameSite: 'Lax',
+        },
+        {
+            name: storageKey,
+            value: JSON.stringify(session),
+            domain: '127.0.0.1',
+            path: '/',
+            httpOnly: false,
+            secure: false,
+            sameSite: 'Lax',
+        },
+    ]);
 
     // 寫入 LocalStorage（CSR）
     await page.goto('/');

@@ -12,6 +12,7 @@ import { supabaseAdmin, injectSession } from './helpers';
 test.setTimeout(120000);
 
 test.describe('Payee Management Extended Flow', () => {
+    test.describe.configure({ mode: 'serial' });
     let userStandard: any;
     let userFinance: any;
     const password = 'password123';

@@ -14,6 +14,7 @@
 	import { createBrowserSupabaseClient } from "$lib";
 	import { onMount } from "svelte";
 	import { page } from "$app/state";
+	import { Toaster } from "svelte-sonner";
 	import Sidebar from "$lib/components/layout/Sidebar.svelte";
 
 	// 接收來自 +layout.server.ts 的資料 (data) 及其子頁面 (children)
@@ -61,6 +62,8 @@
 			: null,
 	);
 </script>
+
+<Toaster />
 
 {#if data.session && !isAuthPage && sidebarUser}
 	<!-- 已登入且不在登入頁：顯示側邊欄佈局 -->

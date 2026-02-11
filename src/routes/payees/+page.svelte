@@ -29,21 +29,40 @@
             ...p,
             source: "active",
         }));
-        const pending = data.pendingRequests.map((req: any) => ({
-            id: req.id, // Request ID
-            name:
-                req.change_type === "create"
-                    ? req.proposed_data?.name || "未知受款人"
-                    : `[${req.change_type === "update" ? "更新" : "停用"}] ${req.payees?.name || req.payee_id}`,
-            type:
-                req.change_type === "create"
-                    ? req.proposed_data?.type || "unknown"
-                    : req.payees?.type || "unknown",
-            status: `pending_${req.change_type}`,
-            source: "request",
-            payload: req, // Store full request for detail view
-        }));
-        return [...pending, ...active];
+        const payeeById = new Map(active.map((p: any) => [p.id, p]));
+
+        // 1. Identify payees with pending requests
+        const payeesWithPendingRequests = new Set();
+
+        const pending = data.pendingRequests.map((req: any) => {
+            if (req.payee_id) {
+                payeesWithPendingRequests.add(req.payee_id);
+            }
+            const linkedPayee = req.payee_id
+                ? payeeById.get(req.payee_id)
+                : null;
+            return {
+                id: req.id, // Request ID
+                name:
+                    req.change_type === "create"
+                        ? req.proposed_data?.name || "未知受款人"
+                        : `[${req.change_type === "update" ? "更新" : "停用"}] ${linkedPayee?.name || req.payee_id}`,
+                type:
+                    req.change_type === "create"
+                        ? req.proposed_data?.type || "unknown"
+                        : linkedPayee?.type || "unknown",
+                status: `pending_${req.change_type}`,
+                source: "request",
+                payload: req, // Store full request for detail view
+            };
+        });
+
+        // 2. Filter out active payees that have pending requests
+        const visibleActive = active.filter(
+            (p) => !payeesWithPendingRequests.has(p.id),
+        );
+
+        return [...pending, ...visibleActive];
     });
 
     let searchTerm = $state("");

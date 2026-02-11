@@ -61,6 +61,7 @@
                 method="POST"
                 action="?/createPayeeRequest"
                 use:enhance={handleSubmit}
+                enctype="multipart/form-data"
                 class="space-y-6"
             >
                 <!-- Type Selection -->
@@ -167,6 +168,64 @@
                                 name="address"
                                 placeholder="請填寫完整地址"
                             />
+                        </div>
+
+                        <!-- Attachments for Personal -->
+                        <div class="md:col-span-2 border-t pt-4 mt-2">
+                            <h3 class="font-semibold mb-4">必要附件</h3>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div class="space-y-2">
+                                    <Label for="attachment_id_front"
+                                        >身分證正面 <span class="text-red-500"
+                                            >*</span
+                                        ></Label
+                                    >
+                                    <Input
+                                        id="attachment_id_front"
+                                        name="attachment_id_front"
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        required
+                                    />
+                                    <p class="text-xs text-muted-foreground">
+                                        支援 JPG, PNG, PDF (最大 10MB)
+                                    </p>
+                                </div>
+                                <div class="space-y-2">
+                                    <Label for="attachment_id_back"
+                                        >身分證反面 <span class="text-red-500"
+                                            >*</span
+                                        ></Label
+                                    >
+                                    <Input
+                                        id="attachment_id_back"
+                                        name="attachment_id_back"
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        required
+                                    />
+                                    <p class="text-xs text-muted-foreground">
+                                        支援 JPG, PNG, PDF (最大 10MB)
+                                    </p>
+                                </div>
+                                <div class="space-y-2">
+                                    <Label for="attachment_bank_cover"
+                                        >存摺封面 <span class="text-red-500"
+                                            >*</span
+                                        ></Label
+                                    >
+                                    <Input
+                                        id="attachment_bank_cover"
+                                        name="attachment_bank_cover"
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        required
+                                    />
+                                    <p class="text-xs text-muted-foreground">
+                                        需包含銀行帳號與戶名
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     {/if}
                 </div>

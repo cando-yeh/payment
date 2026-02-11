@@ -24,8 +24,7 @@ export const load: PageServerLoad = async ({ locals }) => {
                 reason, 
                 created_at, 
                 requested_by, 
-                payee_id,
-                payees(name, type)
+                payee_id
             `)
             .eq('status', 'pending')
             .order('created_at', { ascending: false })
@@ -37,6 +36,9 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
 
     console.log('DEBUG: Pending Requests fetched:', requestsResponse.data);
+    if (requestsResponse.error) {
+        console.error('Error fetching pending requests:', requestsResponse.error);
+    }
 
     return {
         payees: payeesResponse.data || [],
@@ -154,6 +156,7 @@ export const actions: Actions = {
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
         const reason = formData.get('reason') as string || '停用受款人申請';
+
 
         if (!payeeId) return fail(400, { message: '缺少受款人 ID' });
 

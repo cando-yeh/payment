@@ -79,7 +79,7 @@
      */
     const navItems: NavItem[] = [
         // 我的請款：所有使用者可見
-        { label: "我的請款", href: "/", icon: Home },
+        { label: "我的請款", href: "/claims", icon: Home },
 
         // 審核中心：僅主管、財務、管理員可見
         {

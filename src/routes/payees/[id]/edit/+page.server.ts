@@ -35,12 +35,40 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         if (!bankAccRes.error) decryptedBankAccount = bankAccRes.data;
     }
 
+    // Generate Signed URLs for attachments if they exist
+    let attachmentUrls: Record<string, string | null> = {
+        id_card_front: null,
+        id_card_back: null,
+        bank_passbook: null
+    };
+
+    if (payee.attachments) {
+        const getUrl = async (path: string) => {
+            if (!path) return null;
+            const { data } = await supabase.storage.from('payees').createSignedUrl(path, 3600);
+            return data?.signedUrl || null;
+        };
+
+        const [front, back, bank] = await Promise.all([
+            getUrl(payee.attachments.id_card_front),
+            getUrl(payee.attachments.id_card_back),
+            getUrl(payee.attachments.bank_passbook)
+        ]);
+
+        attachmentUrls = {
+            id_card_front: front,
+            id_card_back: back,
+            bank_passbook: bank
+        };
+    }
+
     return {
         payee: {
             ...payee,
             tax_id: decryptedTaxId,
             bank_account: decryptedBankAccount
         },
+        attachmentUrls,
         is_finance: user?.is_finance || false
     };
 };
@@ -79,8 +107,65 @@ export const actions: Actions = {
             return fail(400, { message: '銀行代碼需為3碼數字' });
         }
 
-        // In update, we might allow some fields to be empty if they are not changing, 
-        // but since we pre-fill the form, they should be present.
+        // --- Handle Attachments for Personal Payees ---
+        let attachments: Record<string, any> = {};
+
+        // Fetch current payee to get existing attachments because we need to merge
+        const { data: currentPayee } = await supabase
+            .from('payees')
+            .select('attachments')
+            .eq('id', payeeId)
+            .single();
+
+        if (type === 'personal') {
+            const currentAttachments = currentPayee?.attachments || {};
+
+            const files = {
+                id_front: formData.get('attachment_id_front') as File,
+                id_back: formData.get('attachment_id_back') as File,
+                bank_cover: formData.get('attachment_bank_cover') as File
+            };
+
+            const uploadFile = async (file: File, prefix: string) => {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${prefix}_${crypto.randomUUID()}.${fileExt}`;
+                const filePath = `uploads/${crypto.randomUUID()}/${fileName}`;
+
+                const { data, error } = await supabase.storage
+                    .from('payees')
+                    .upload(filePath, file);
+
+                if (error) throw error;
+                return data.path;
+            };
+
+            try {
+                // Determine new paths: use new upload if present, else use existing
+                const newPaths = {
+                    id_card_front: (files.id_front && files.id_front.size > 0)
+                        ? await uploadFile(files.id_front, 'id_front')
+                        : currentAttachments.id_card_front,
+                    id_card_back: (files.id_back && files.id_back.size > 0)
+                        ? await uploadFile(files.id_back, 'id_back')
+                        : currentAttachments.id_card_back,
+                    bank_passbook: (files.bank_cover && files.bank_cover.size > 0)
+                        ? await uploadFile(files.bank_cover, 'bank_cover')
+                        : currentAttachments.bank_passbook
+                };
+
+                // Validate that we have all required attachments (either new or existing)
+                if (!newPaths.id_card_front) return fail(400, { message: '請上傳身分證正面' });
+                if (!newPaths.id_card_back) return fail(400, { message: '請上傳身分證反面' });
+                if (!newPaths.bank_passbook) return fail(400, { message: '請上傳存摺封面' });
+
+                attachments = newPaths;
+
+            } catch (err: any) {
+                console.error('File Upload Error:', err);
+                return fail(500, { message: '檔案上傳失敗：' + (err.message || '未知錯誤') });
+            }
+        }
+
 
         const proposed_data: Record<string, string> = {
             name,
@@ -97,7 +182,8 @@ export const actions: Actions = {
             _proposed_data: proposed_data,
             _proposed_tax_id: tax_id || null,
             _proposed_bank_account: bank_account || null,
-            _reason: reason
+            _reason: reason,
+            _proposed_attachments: attachments
         });
 
         if (rpcError) {
