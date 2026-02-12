@@ -345,29 +345,44 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const userId = formData.get('userId') as string;
-        const fullName = formData.get('fullName') as string;
-        const bankName = formData.get('bankName') as string;
-        const bankAccount = formData.get('bankAccount') as string;
+        const fullNameRaw = formData.get('fullName');
+        const bankNameRaw = formData.get('bankName');
+        const bankAccountRaw = formData.get('bankAccount');
         const isAdmin = formData.get('isAdminValue') === 'true';
         const isFinance = formData.get('isFinanceValue') === 'true';
         const approverId = formData.get('approverId') as string;
 
         if (!userId) return fail(400, { message: '缺少使用者 ID' });
 
+        const fullName = typeof fullNameRaw === 'string' ? fullNameRaw.trim() : '';
+        const bankName = typeof bankNameRaw === 'string' ? bankNameRaw.trim() : '';
+        const bankAccount = typeof bankAccountRaw === 'string' ? bankAccountRaw.trim() : '';
+
+        const updatePayload: Record<string, any> = {
+            is_admin: isAdmin,
+            is_finance: isFinance,
+            approver_id: approverId || null
+        };
+        if (fullName) {
+            updatePayload.full_name = fullName;
+        }
+        if (typeof bankNameRaw === 'string') {
+            updatePayload.bank = bankName || null;
+        }
+
         // 1. 更新基本資料與權限
-        const { error: updateError } = await locals.supabase
+        const { data: updatedRow, error: updateError } = await locals.supabase
             .from('profiles')
-            .update({
-                full_name: fullName,
-                bank_name: bankName,
-                is_admin: isAdmin,
-                is_finance: isFinance,
-                approver_id: approverId || null
-            })
-            .eq('id', userId);
+            .update(updatePayload)
+            .eq('id', userId)
+            .select('id')
+            .maybeSingle();
 
         if (updateError) {
             return fail(500, { message: '更新基本資料失敗', error: updateError.message });
+        }
+        if (!updatedRow) {
+            return fail(403, { message: '更新未生效：請確認權限或資料狀態後再試。' });
         }
 
         // 2. 處理銀行帳號更新 (敏感資料加密路徑)

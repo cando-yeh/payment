@@ -59,17 +59,26 @@ test.describe.serial('Account Sheet', () => {
         for (let i = 0; i < 3; i++) {
             await trigger.click({ force: true });
             await page.waitForTimeout(300);
-            if (await page.locator('input#fullName').isVisible()) break;
+            if (
+                await page
+                    .getByRole('button', { name: '儲存並更新設定' })
+                    .isVisible()
+            ) break;
         }
 
-        // Wait for sheet form fields to render
-        await expect(page.locator('input#fullName')).toBeVisible({ timeout: 15000 });
-
         // Verify form fields
-        await expect(page.locator('label:has-text("顯示姓名")')).toBeVisible();
-        await expect(page.locator('text=匯款帳號資訊')).toBeVisible();
+        const sheetDialog = page.getByRole('dialog');
+        await expect(sheetDialog).toBeVisible();
+        await expect(
+            sheetDialog.getByText('匯款帳號資訊', { exact: true }),
+        ).toBeVisible();
+        await expect(
+            sheetDialog.getByText('銀行代碼', { exact: true }),
+        ).toBeVisible();
 
         // Verify the save button
-        await expect(page.locator('button:has-text("儲存並更新設定")')).toBeVisible();
+        await expect(
+            sheetDialog.getByRole('button', { name: '儲存並更新設定' })
+        ).toBeVisible();
     });
 });

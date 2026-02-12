@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         .from('claims')
         .select(`
             *,
-            applicant:profiles!claims_applicant_id_fkey(full_name, approver_id)
+            applicant:profiles!claims_applicant_id_fkey(full_name, email, approver_id)
         `)
         .eq('status', 'pending_manager')
         .eq('applicant.approver_id', session.user.id);
@@ -34,19 +34,19 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
     if (isFinance || isAdmin) {
         const { data: pf } = await supabase
             .from('claims')
-            .select('*, applicant:profiles!claims_applicant_id_fkey(full_name)')
+            .select('*, applicant:profiles!claims_applicant_id_fkey(full_name, email)')
             .eq('status', 'pending_finance');
         pendingFinance = pf || [];
 
         const { data: pp } = await supabase
             .from('claims')
-            .select('*, applicant:profiles!claims_applicant_id_fkey(full_name), payees:payees(name)')
+            .select('*, applicant:profiles!claims_applicant_id_fkey(full_name, email), payees:payees(name)')
             .eq('status', 'pending_payment');
         pendingPayment = pp || [];
 
         const { data: pdr } = await supabase
             .from('claims')
-            .select('*, applicant:profiles!claims_applicant_id_fkey(full_name), payees:payees(name)')
+            .select('*, applicant:profiles!claims_applicant_id_fkey(full_name, email), payees:payees(name)')
             .eq('status', 'pending_doc_review');
         pendingDocReview = pdr || [];
     }

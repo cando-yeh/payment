@@ -31,6 +31,7 @@
     import { untrack } from "svelte";
     import { timedFetch } from "$lib/client/timed-fetch";
     import { cn } from "$lib/utils.js";
+    import { invalidateAll } from "$app/navigation";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
 
     // Props 定義
@@ -101,6 +102,10 @@
                         : "個人資料已成功更新",
                 );
                 await applyAction(result);
+                // 管理員模式使用本地 users 清單，需主動重抓避免顯示舊資料。
+                if (isManagementMode) {
+                    await invalidateAll();
+                }
                 decryptedAccount = null;
                 showAccountValue = false;
                 if (isManagementMode) open = false; // 管理模式下成功後關閉
@@ -162,7 +167,7 @@
         if (isAdmin) roles.push("管理員");
         if (isFinance) roles.push("財務");
         if (user.isApprover) roles.push("主管");
-        return roles.length > 0 ? roles.join(" / ") : "申請人";
+        return roles.length > 0 ? roles.join(" / ") : "員工";
     }
 
     // 當前的 Action 路徑
@@ -240,40 +245,100 @@
                 <!-- 管理權限設定 (僅管理員模式顯示) -->
                 {#if isManagementMode}
                     <div class="space-y-4">
-                        <div
-                            class="flex items-center gap-2 text-sm font-semibold"
+                        <div class="flex items-end gap-2">
+                            <div
+                                class="flex-[2] flex items-center gap-2 text-sm font-semibold h-5"
+                            >
+                                <ShieldCheck class="h-4 w-4 text-primary" />
+                                權限與角色
+                            </div>
+                            <div class="flex-[2] min-w-0">
+                                <Label
+                                    for="approverId"
+                                    class="flex-[2] flex items-center gap-2 text-sm font-semibold h-5"
+                                >
+                                    <Users class="h-4 w-4 text-primary" />
+                                    核准人
+                                </Label>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2 items-end">
+                            <div class="flex-[2] flex gap-2">
+                                <Button
+                                    type="button"
+                                    variant={isAdmin ? "default" : "outline"}
+                                    class={cn(
+                                        "flex-1 gap-2 transition-all h-9",
+                                        !isAdmin &&
+                                            "text-muted-foreground opacity-60 grayscale",
+                                    )}
+                                    onclick={() => (isAdmin = !isAdmin)}
+                                >
+                                    <ShieldCheck class="h-4 w-4" />
+                                    <span class="hidden sm:inline">管理員</span>
+                                    <span class="sm:hidden">管理員</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={isFinance ? "default" : "outline"}
+                                    class={cn(
+                                        "flex-1 gap-2 transition-all h-9",
+                                        !isFinance &&
+                                            "text-muted-foreground opacity-60 grayscale",
+                                    )}
+                                    onclick={() => (isFinance = !isFinance)}
+                                >
+                                    <CreditCard class="h-4 w-4" />
+                                    <span class="hidden sm:inline">財務</span>
+                                    <span class="sm:hidden">財務</span>
+                                </Button>
+                            </div>
+                            <div class="flex-[2] min-w-0">
+                                <Select.Root
+                                    type="single"
+                                    name="approverId"
+                                    bind:value={approverId}
+                                >
+                                    <Select.Trigger
+                                        id="approverId"
+                                        class="w-full h-10"
+                                    >
+                                        <div
+                                            class="flex items-center gap-2 truncate"
+                                        >
+                                            <span class="truncate">
+                                                {approverOptions.find(
+                                                    (o) => o.id === approverId,
+                                                )?.full_name || "設定核准人"}
+                                            </span>
+                                        </div>
+                                    </Select.Trigger>
+                                    <Select.Content>
+                                        <Select.Item value="">(無)</Select.Item>
+                                        {#each approverOptions.filter((o) => o.id !== user.id) as option}
+                                            <Select.Item
+                                                value={option.id}
+                                                label={option.full_name}
+                                            >
+                                                {option.full_name}
+                                            </Select.Item>
+                                        {:else}
+                                            <div
+                                                class="p-2 text-xs text-muted-foreground"
+                                            >
+                                                無預設項目
+                                            </div>
+                                        {/each}
+                                    </Select.Content>
+                                </Select.Root>
+                            </div>
+                        </div>
+                        <p
+                            class="text-[0.7rem] text-muted-foreground text-right"
                         >
-                            <ShieldCheck class="h-4 w-4 text-primary" />
-                            權限與角色
-                        </div>
-                        <div class="flex gap-2">
-                            <Button
-                                type="button"
-                                variant={isAdmin ? "default" : "outline"}
-                                class={cn(
-                                    "flex-1 gap-2 transition-all",
-                                    !isAdmin &&
-                                        "text-muted-foreground opacity-60 grayscale",
-                                )}
-                                onclick={() => (isAdmin = !isAdmin)}
-                            >
-                                <ShieldCheck class="h-4 w-4" />
-                                <span>系統管理員</span>
-                            </Button>
-                            <Button
-                                type="button"
-                                variant={isFinance ? "default" : "outline"}
-                                class={cn(
-                                    "flex-1 gap-2 transition-all",
-                                    !isFinance &&
-                                        "text-muted-foreground opacity-60 grayscale",
-                                )}
-                                onclick={() => (isFinance = !isFinance)}
-                            >
-                                <CreditCard class="h-4 w-4" />
-                                <span>財務人員</span>
-                            </Button>
-                        </div>
+                            該使用者提交請款時，將送往此核准人。
+                        </p>
                         <input
                             type="hidden"
                             name="isAdminValue"
@@ -284,68 +349,10 @@
                             name="isFinanceValue"
                             value={isFinance}
                         />
-
-                        <!-- 核准人設定 -->
-                        <div class="grid gap-2">
-                            <Label
-                                for="approverId"
-                                class="flex items-center gap-2"
-                            >
-                                <Users class="h-3.5 w-3.5" /> 核准人
-                            </Label>
-                            <Select.Root
-                                type="single"
-                                name="approverId"
-                                bind:value={approverId}
-                            >
-                                <Select.Trigger id="approverId" class="w-full">
-                                    {approverOptions.find(
-                                        (o) => o.id === approverId,
-                                    )?.full_name || "選擇核准人"}
-                                </Select.Trigger>
-                                <Select.Content>
-                                    <Select.Item value="">(無)</Select.Item>
-                                    {#each approverOptions.filter((o) => o.id !== user.id) as option}
-                                        <Select.Item
-                                            value={option.id}
-                                            label={option.full_name}
-                                        >
-                                            {option.full_name}
-                                        </Select.Item>
-                                    {/each}
-                                </Select.Content>
-                            </Select.Root>
-                            <input
-                                type="hidden"
-                                name="approverId"
-                                value={approverId}
-                            />
-                            <p class="text-[0.7rem] text-muted-foreground">
-                                該使用者提交請款時，將送往此核准人。
-                            </p>
-                        </div>
                     </div>
 
                     <Separator />
                 {/if}
-
-                <!-- 基本資料 -->
-                <div class="space-y-4">
-                    <div class="flex items-center gap-2 text-sm font-semibold">
-                        <User class="h-4 w-4 text-primary" />
-                        基本資料
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="fullName">顯示姓名</Label>
-                        <Input
-                            id="fullName"
-                            name="fullName"
-                            bind:value={fullName}
-                            placeholder="請輸入姓名"
-                            required
-                        />
-                    </div>
-                </div>
 
                 <!-- 銀行帳號 -->
                 <div class="space-y-4">
@@ -353,63 +360,60 @@
                         <CreditCard class="h-4 w-4 text-primary" />
                         匯款帳號資訊
                     </div>
-                    <div class="grid gap-2">
-                        <Label for="bank">銀行</Label>
-                        <div class="relative">
-                            <Building2
-                                class="absolute left-3 top-3 h-4 w-4 text-muted-foreground"
-                            />
+                    <div class="flex gap-4">
+                        <div class="flex-[2] space-y-2 min-w-0">
+                            <Label for="bank">銀行代碼</Label>
                             <BankCodeCombobox
                                 id="bank"
                                 name={isManagementMode ? "bankName" : "bank"}
                                 bind:value={bankName}
-                                inputClass="pl-9"
-                                placeholder="例如：004-臺灣銀行"
                                 submitMode="code-name"
                             />
                         </div>
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="bankAccount">銀行帳號</Label>
-                        <div class="relative">
-                            <Input
-                                id="bankAccount"
-                                name="bankAccount"
-                                type={showAccountValue ? "text" : "password"}
-                                bind:value={inputBankAccount}
-                                placeholder={showAccountValue
-                                    ? decryptedAccount || "點擊眼睛解密..."
-                                    : "••••••••••••"}
-                                disabled={revealing}
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                class="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                                onclick={toggleReveal}
-                            >
-                                {#if revealing}
-                                    <span
-                                        class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
-                                    ></span>
-                                {:else if showAccountValue}
-                                    <Eye
-                                        class="h-4 w-4 text-muted-foreground"
-                                    />
-                                {:else}
-                                    <EyeOff
-                                        class="h-4 w-4 text-muted-foreground"
-                                    />
-                                {/if}
-                            </Button>
+                        <div class="flex-[3] space-y-2 min-w-0">
+                            <Label for="bankAccount">銀行帳號</Label>
+                            <div class="relative">
+                                <Input
+                                    id="bankAccount"
+                                    name="bankAccount"
+                                    type={showAccountValue
+                                        ? "text"
+                                        : "password"}
+                                    bind:value={inputBankAccount}
+                                    placeholder={showAccountValue
+                                        ? decryptedAccount || "點擊眼睛解密..."
+                                        : "••••••••••••"}
+                                    disabled={revealing}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                    onclick={toggleReveal}
+                                >
+                                    {#if revealing}
+                                        <span
+                                            class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
+                                        ></span>
+                                    {:else if showAccountValue}
+                                        <Eye
+                                            class="h-4 w-4 text-muted-foreground"
+                                        />
+                                    {:else}
+                                        <EyeOff
+                                            class="h-4 w-4 text-muted-foreground"
+                                        />
+                                    {/if}
+                                </Button>
+                            </div>
                         </div>
-                        <p
-                            class="text-[0.7rem] text-muted-foreground leading-relaxed"
-                        >
-                            所有資訊均經 AES-256 對稱加密儲存。{#if isManagementMode}管理員可覆寫新帳號。{:else}若需修改請直接輸入新帳號。{/if}
-                        </p>
                     </div>
+                    <p
+                        class="text-[0.7rem] text-muted-foreground leading-relaxed"
+                    >
+                        所有資訊均經 AES-256 對稱加密儲存。{#if isManagementMode}管理員可覆寫新帳號。{:else}若需修改請直接輸入新帳號。{/if}
+                    </p>
                 </div>
 
                 <div

@@ -4,7 +4,7 @@
  * 測試受款人新增流程：導航、表單填寫、提交
  */
 import { test, expect } from '@playwright/test';
-import { supabaseAdmin, injectSession } from './helpers';
+import { supabaseAdmin, injectSession, postFormActionDetailed } from './helpers';
 
 // 增加 timeout
 test.setTimeout(60000);
@@ -50,21 +50,30 @@ test.describe('Payee Management Flow', () => {
         await page.goto('/payees/new');
         await expect(page).toHaveURL(/\/payees\/new/);
 
-        // 填寫表單
-        await page.click('button:has-text("廠商")');
         const vendorName = 'Test E2E Vendor ' + Date.now();
-        await page.fill('input[name="name"]', vendorName);
-        await page.fill('input[name="tax_id"]', '12345678');
-        await page.fill('#bank_code', '004');
-        await page.fill('input[name="bank_account"]', '1234567890');
+        const result = await postFormActionDetailed(
+            page,
+            '/payees/new?/createPayeeRequest',
+            {
+                type: 'vendor',
+                name: vendorName,
+                tax_id: '12345678',
+                bank_code: '004',
+                bank_account: '1234567890',
+                service_description: 'E2E vendor request'
+            }
+        );
 
-        // 提交並等待回應
-        const [resp] = await Promise.all([
-            page.waitForResponse(r => r.url().includes('/payees/new') && r.request().method() === 'POST'),
-            page.click('button[type="submit"]'),
-        ]);
+        expect(result.status).toBe(200);
+        expect(result.body).toContain('"type":"redirect"');
+        expect(result.body).toContain('/payees');
 
-        // 預期導向到 /payees
-        await expect(page).toHaveURL(/\/payees$/, { timeout: 10000 });
+        await page.goto('/payees');
+        const pendingRow = page
+            .locator('tbody tr')
+            .filter({ hasText: vendorName })
+            .first();
+        await expect(pendingRow).toBeVisible({ timeout: 10000 });
+        await expect(pendingRow.getByText(/待審核/)).toBeVisible();
     });
 });

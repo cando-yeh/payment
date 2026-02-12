@@ -73,7 +73,13 @@ test.describe('Payee Management Extended Flow', () => {
         const updatedName = testPayeeName + ' (Updated)';
         await page.fill('input[name="name"]', updatedName);
         await page.fill('input[name="tax_id"]', '12345678');
-        await page.fill('#bank_code', '004');
+        await page.evaluate(() => {
+            const bankCodeInput = document.querySelector('input[name="bank_code"]') as HTMLInputElement | null;
+            if (!bankCodeInput) throw new Error('bank_code input not found');
+            bankCodeInput.value = '004';
+            bankCodeInput.dispatchEvent(new Event('input', { bubbles: true }));
+            bankCodeInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
         await page.fill('input[name="bank_account"]', '987654321');
         await page.fill('textarea[name="reason"]', 'Testing update flow');
 

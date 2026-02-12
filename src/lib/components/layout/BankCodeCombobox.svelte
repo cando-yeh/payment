@@ -1,11 +1,15 @@
 <script lang="ts">
     import { Input } from "$lib/components/ui/input";
+    import { Button } from "$lib/components/ui/button";
+    import * as Popover from "$lib/components/ui/popover";
     import {
         BANK_LIST,
         formatBankCodeName,
         getBankDisplayLabel,
         parseBankCode,
     } from "$lib/constants/banks";
+    import { Check, Search, X } from "lucide-svelte";
+    import { cn } from "$lib/utils";
 
     type SubmitMode = "code" | "code-name";
 
@@ -21,55 +25,139 @@
         inputClass = "",
     } = $props();
 
-    const datalistId = $derived(`${id}-options`);
-    let displayValue = $state("");
+    let open = $state(false);
+    let searchQuery = $state("");
+
+    // 取得當前選中的銀行資訊
+    const selectedBank = $derived(
+        BANK_LIST.find((b) => {
+            const code = parseBankCode(value);
+            return b.code === code;
+        }),
+    );
+
+    // 過濾後的銀行列表
+    const filteredBanks = $derived(
+        searchQuery.trim() === ""
+            ? BANK_LIST
+            : BANK_LIST.filter(
+                  (b) =>
+                      b.code.includes(searchQuery) ||
+                      b.name.includes(searchQuery),
+              ),
+    );
 
     function toSubmitValue(code: string): string {
         return submitMode === "code-name" ? formatBankCodeName(code) : code;
     }
 
-    function syncDisplayFromBoundValue() {
-        const currentCode = parseBankCode(value);
-        if (!currentCode) {
-            displayValue = "";
-            return;
-        }
-        value = toSubmitValue(currentCode);
-        displayValue = getBankDisplayLabel(currentCode);
+    function handleSelect(code: string) {
+        value = toSubmitValue(code);
+        open = false;
+        searchQuery = "";
     }
 
+    function clearSelection(e: MouseEvent) {
+        e.stopPropagation();
+        value = "";
+        searchQuery = "";
+    }
+
+    // 當 Popover 打開時，重置搜尋字串
     $effect(() => {
-        syncDisplayFromBoundValue();
+        if (open) {
+            searchQuery = "";
+        }
     });
-
-    function handleInput(rawValue: string) {
-        displayValue = rawValue;
-        const code = parseBankCode(rawValue);
-        value = code ? toSubmitValue(code) : "";
-    }
 </script>
 
-<div class={className}>
-    <Input
-        id={id}
-        type="text"
-        list={datalistId}
-        value={displayValue}
-        placeholder={placeholder}
-        required={required}
-        disabled={disabled}
-        pattern="\d{3}.*"
-        title="請選擇銀行代碼（3 碼）"
-        oninput={(e) => handleInput((e.currentTarget as HTMLInputElement).value)}
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded="false"
-        class={inputClass}
-    />
-    <input type="hidden" name={name} value={value} />
-    <datalist id={datalistId}>
-        {#each BANK_LIST as bank}
-            <option value={`${bank.code} ${bank.name}`}></option>
-        {/each}
-    </datalist>
+<div class={cn("relative w-full", className)}>
+    <Popover.Root bind:open>
+        <Popover.Trigger {disabled}>
+            {#snippet child({ props })}
+                <Button
+                    {...props}
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    class={cn(
+                        "w-full justify-start font-normal hover:bg-background px-3",
+                        !selectedBank && "text-muted-foreground",
+                        inputClass,
+                    )}
+                >
+                    <div class="flex-1 min-w-0 text-left">
+                        <span class="truncate block">
+                            {selectedBank
+                                ? getBankDisplayLabel(selectedBank.code)
+                                : placeholder}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-1 ml-auto shrink-0">
+                        {#if value && !disabled}
+                            <div
+                                role="button"
+                                tabindex="0"
+                                class="p-0.5 hover:bg-muted rounded-full transition-colors"
+                                onclick={clearSelection}
+                                onkeydown={(e) =>
+                                    e.key === "Enter" &&
+                                    clearSelection(e as any)}
+                            >
+                                <X class="h-3.5 w-3.5 opacity-50" />
+                            </div>
+                        {/if}
+                    </div>
+                </Button>
+            {/snippet}
+        </Popover.Trigger>
+        <Popover.Content
+            class="w-[--bits-popover-anchor-width] p-0"
+            align="start"
+        >
+            <div class="flex items-center border-b px-3 h-10">
+                <Search class="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                <input
+                    class="flex h-full w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="搜尋代碼或名稱..."
+                    bind:value={searchQuery}
+                />
+            </div>
+            <div class="max-h-[300px] overflow-y-auto p-1">
+                {#if filteredBanks.length === 0}
+                    <div class="py-6 text-center text-sm text-muted-foreground">
+                        找不到符合的銀行
+                    </div>
+                {:else}
+                    <div class="grid">
+                        {#each filteredBanks as bank}
+                            <Button
+                                variant="ghost"
+                                class="justify-start font-normal h-9 px-2"
+                                onclick={() => handleSelect(bank.code)}
+                            >
+                                <Check
+                                    class={cn(
+                                        "mr-2 h-4 w-4",
+                                        selectedBank?.code === bank.code
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                    )}
+                                />
+                                <span
+                                    class="font-mono text-xs text-muted-foreground mr-2 w-7"
+                                >
+                                    {bank.code}
+                                </span>
+                                <span>{bank.name}</span>
+                            </Button>
+                        {/each}
+                    </div>
+                {/if}
+            </div>
+        </Popover.Content>
+    </Popover.Root>
+
+    <!-- 用於表單提交 -->
+    <input type="hidden" {name} {value} {required} />
 </div>

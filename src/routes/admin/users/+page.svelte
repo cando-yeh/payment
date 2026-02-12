@@ -2,19 +2,10 @@
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
     import * as Avatar from "$lib/components/ui/avatar";
-    import * as Select from "$lib/components/ui/select";
     import * as Tabs from "$lib/components/ui/tabs";
     import { Badge } from "$lib/components/ui/badge";
     import { toast } from "svelte-sonner";
-    import {
-        Shield,
-        CreditCard,
-        Search,
-        Users,
-        Trash2,
-        UserX,
-        UserCheck,
-    } from "lucide-svelte";
+    import { Search, Users, Trash2, UserX, UserCheck } from "lucide-svelte";
     import { Input } from "$lib/components/ui/input";
     import { timedFetch } from "$lib/client/timed-fetch";
     import { deserialize } from "$app/forms";
@@ -69,12 +60,6 @@
         });
     });
 
-    const activeApproverOptions = $derived(
-        users
-            .filter((u) => isActiveUser(u))
-            .map((u) => ({ id: u.id, full_name: u.full_name })),
-    );
-
     function resolveActionMessage(payload: any, fallback: string) {
         if (typeof payload?.message === "string") return payload.message;
         if (Array.isArray(payload) && typeof payload[1] === "string")
@@ -102,77 +87,6 @@
             throw new Error(resolveActionMessage(result?.data, fallback));
         }
         return result;
-    }
-
-    async function togglePermission(
-        userId: string,
-        field: string,
-        currentValue: boolean,
-    ) {
-        const opKey = `perm:${userId}:${field}`;
-        if (pendingOps[opKey]) return;
-
-        const index = users.findIndex((u) => u.id === userId);
-        if (index === -1 || !isActiveUser(users[index])) return;
-
-        const previous = users[index];
-        const nextValue = !currentValue;
-        users[index] = { ...previous, [field]: nextValue };
-        setPending(opKey, true);
-
-        const formData = new FormData();
-        formData.append("userId", userId);
-        formData.append("field", field);
-        formData.append("value", String(nextValue));
-
-        try {
-            const response = await timedFetch("?/updateUserPermissions", {
-                method: "POST",
-                body: formData,
-                headers: { "x-sveltekit-action": "true" },
-            });
-            await parseActionResponse(response, "權限更新失敗");
-            toast.success("權限已更新");
-        } catch (e: any) {
-            users[index] = previous;
-            toast.error(e?.message || "權限更新失敗");
-        } finally {
-            setPending(opKey, false);
-        }
-    }
-
-    async function selectApprover(
-        userId: string,
-        approverId: string | undefined,
-    ) {
-        const opKey = `approver:${userId}`;
-        if (pendingOps[opKey]) return;
-
-        const index = users.findIndex((u) => u.id === userId);
-        if (index === -1 || !isActiveUser(users[index])) return;
-
-        const previous = users[index];
-        users[index] = { ...previous, approver_id: approverId || null };
-        setPending(opKey, true);
-
-        const formData = new FormData();
-        formData.append("userId", userId);
-        formData.append("approverId", approverId || "");
-
-        try {
-            const response = await timedFetch("?/assignApprover", {
-                method: "POST",
-                body: formData,
-                headers: { "x-sveltekit-action": "true" },
-            });
-            await parseActionResponse(response, "核准人指派失敗");
-            toast.success("核准人指派成功");
-        } catch (e: any) {
-            users[index] = previous;
-            toast.error(e?.message || "核准人指派失敗");
-        } finally {
-            setPending(opKey, false);
-        }
     }
 
     async function deactivateUser(userId: string, userName: string) {
@@ -339,7 +253,8 @@
             <Table.Root>
                 <Table.Header>
                     <Table.Row>
-                        <Table.Head class="w-[260px]">使用者</Table.Head>
+                        <Table.Head class="w-[200px]">使用者</Table.Head>
+                        <Table.Head>E-MAIL</Table.Head>
                         <Table.Head>狀態</Table.Head>
                         <Table.Head>權限</Table.Head>
                         <Table.Head>核准人</Table.Head>
@@ -372,12 +287,14 @@
                                         <span class="font-medium"
                                             >{user.full_name}</span
                                         >
-                                        <span
-                                            class="text-xs text-muted-foreground font-mono"
-                                            >{user.email}</span
-                                        >
                                     </div>
                                 </div>
+                            </Table.Cell>
+                            <Table.Cell>
+                                <span
+                                    class="text-xs text-muted-foreground font-mono"
+                                    >{user.email}</span
+                                >
                             </Table.Cell>
                             <Table.Cell>
                                 {#if isActiveUser(user)}
@@ -399,7 +316,7 @@
                                     {#if user.is_admin}
                                         <Badge
                                             variant="default"
-                                            class="bg-blue-50 text-blue-700 border-blue-200 gap-1 text-[10px] px-1.5 py-0"
+                                            class="bg-blue-50 text-blue-700 border-blue-200"
                                         >
                                             管理員
                                         </Badge>
@@ -407,17 +324,13 @@
                                     {#if user.is_finance}
                                         <Badge
                                             variant="secondary"
-                                            class="bg-amber-50 text-amber-700 border-amber-200 gap-1 text-[10px] px-1.5 py-0"
+                                            class="bg-amber-50 text-amber-700 border-amber-200"
                                         >
                                             財務
                                         </Badge>
                                     {/if}
                                     {#if !user.is_admin && !user.is_finance}
-                                        <Badge
-                                            variant="outline"
-                                            class="text-[10px] px-1.5 py-0"
-                                            >員工</Badge
-                                        >
+                                        <Badge variant="outline">員工</Badge>
                                     {/if}
                                 </div>
                             </Table.Cell>
@@ -483,7 +396,7 @@
                     {:else}
                         <Table.Row>
                             <Table.Cell
-                                colspan={5}
+                                colspan={6}
                                 class="h-48 text-center text-muted-foreground"
                             >
                                 無符合條件的使用者

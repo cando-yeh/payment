@@ -40,7 +40,7 @@ export const GET: RequestHandler = async (event) => {
             // Profile 存在性檢查：確保新使用者登入後自動建立資料
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('id')
+                .select('id, email')
                 .eq('id', session.user.id)
                 .single();
 
@@ -50,7 +50,13 @@ export const GET: RequestHandler = async (event) => {
                     id: session.user.id,
                     full_name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
                     avatar_url: session.user.user_metadata.avatar_url,
+                    email: session.user.email,
                 });
+            } else if (!profile.email && session.user.email) {
+                await supabase
+                    .from('profiles')
+                    .update({ email: session.user.email })
+                    .eq('id', session.user.id);
             }
 
             // 成功交換 Session，導向至安全路徑

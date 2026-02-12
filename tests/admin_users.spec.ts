@@ -115,6 +115,49 @@ test.describe('Admin Users Page', () => {
         expect(profileAfterToggle?.is_finance).toBe(true);
     });
 
+    test('Admin can update user profile via sheet and changes apply immediately', async ({ page }) => {
+        // Reset baseline for deterministic assertions
+        const { error: resetError } = await supabaseAdmin
+            .from('profiles')
+            .update({ is_finance: false })
+            .eq('id', standardUser.id);
+        expect(resetError).toBeNull();
+
+        await injectSession(page, adminUser.email, password);
+        await page.goto('/admin/users');
+
+        const userRow = page.locator('tr', {
+            has: page.locator(`text=${standardUserName}`),
+        }).first();
+        await expect(userRow).toBeVisible();
+        await expect(userRow.getByText('財務')).toHaveCount(0);
+
+        // Open sheet and toggle finance role
+        await userRow.click();
+        const sheet = page.getByRole('dialog');
+        await expect(sheet).toBeVisible();
+        await sheet.getByRole('button', { name: '財務' }).click();
+        await sheet.getByRole('button', { name: '確認儲存變更' }).click();
+
+        await expect(page.locator('text=使用者資料已更新')).toBeVisible();
+        await expect(sheet).toHaveCount(0);
+
+        // No manual refresh: table should reflect updated role immediately
+        await expect(
+            page.locator('tr', {
+                has: page.locator(`text=${standardUserName}`),
+            }).first().getByText('財務')
+        ).toBeVisible();
+
+        const { data: profileAfterSave, error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .select('is_finance')
+            .eq('id', standardUser.id)
+            .single();
+        expect(profileError).toBeNull();
+        expect(profileAfterSave?.is_finance).toBe(true);
+    });
+
     test('Admin can deactivate and reactivate user', async ({ page }) => {
         await injectSession(page, adminUser.email, password);
         await page.goto('/admin/users');

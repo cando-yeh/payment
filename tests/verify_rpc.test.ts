@@ -11,14 +11,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
-import * as dotenv from 'dotenv';
-import { readFileSync } from 'fs';
-
-// 載入環境變數
-const envConfig = dotenv.parse(readFileSync('.env'));
-const supabaseUrl = envConfig.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = envConfig.PUBLIC_SUPABASE_ANON_KEY;
-const supabaseServiceKey = envConfig.SUPABASE_SERVICE_ROLE_KEY;
+import { supabaseUrl, supabaseAnonKey, supabaseServiceKey } from './helpers';
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
