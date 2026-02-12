@@ -21,20 +21,6 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession }, u
         .eq('applicant_id', session.user.id)
         .order('created_at', { ascending: false });
 
-    if (tab === 'drafts') {
-        query = query.in('status', ['draft', 'returned']);
-    } else if (tab === 'processing') {
-        query = query.in('status', ['pending_manager', 'pending_finance', 'pending_payment']);
-    } else if (tab === 'action_required') {
-        query = query.in('status', ['paid_pending_doc', 'pending_doc_review']);
-    } else if (tab === 'history') {
-        query = query.in('status', ['paid', 'cancelled']);
-    }
-
-    if (search) {
-        query = query.or(`description.ilike.%${search}%,id.ilike.%${search}%`);
-    }
-
     const { data: claims, error } = await query;
 
     if (error) {

@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { page } from "$app/state";
     import { goto } from "$app/navigation";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
@@ -23,27 +22,25 @@
     import type { PageData } from "./$types";
 
     let { data }: { data: PageData } = $props();
-
-    let searchTimeout: NodeJS.Timeout;
+    let searchTerm = $state("");
 
     function handleSearch(e: Event) {
         const value = (e.target as HTMLInputElement).value;
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            const url = new URL(page.url);
-            if (value) {
-                url.searchParams.set("search", value);
-            } else {
-                url.searchParams.delete("search");
-            }
-            goto(url);
-        }, 500);
+        searchTerm = value;
+        const url = new URL(window.location.href);
+        if (value.trim()) {
+            url.searchParams.set("search", value);
+        } else {
+            url.searchParams.delete("search");
+        }
+        window.history.replaceState(window.history.state, "", url);
     }
 
     function handleTabChange(value: string) {
-        const url = new URL(page.url);
+        currentTab = value;
+        const url = new URL(window.location.href);
         url.searchParams.set("tab", value);
-        goto(url);
+        window.history.replaceState(window.history.state, "", url);
     }
 
     const statusMap: Record<string, { label: string; color: string }> = {
@@ -106,8 +103,57 @@
         }).format(amount);
     }
 
-    // Determine current tab from URL or default to 'drafts'
-    let currentTab = $derived(page.url.searchParams.get("tab") || "drafts");
+    let currentTab = $state("drafts");
+
+    $effect(() => {
+        currentTab = data.tab || "drafts";
+        searchTerm = data.search || "";
+    });
+
+    let filteredClaims = $derived.by(() => {
+        if (!data.claims) return [];
+        const normalizedSearch = searchTerm.trim().toLowerCase();
+        const tabFiltered = (() => {
+            if (currentTab === "drafts") {
+                return data.claims.filter((claim) =>
+                    ["draft", "returned"].includes(claim.status),
+                );
+            }
+            if (currentTab === "processing") {
+                return data.claims.filter((claim) =>
+                    ["pending_manager", "pending_finance", "pending_payment"].includes(
+                        claim.status,
+                    ),
+                );
+            }
+            if (currentTab === "action_required") {
+                return data.claims.filter((claim) =>
+                    ["paid_pending_doc", "pending_doc_review"].includes(
+                        claim.status,
+                    ),
+                );
+            }
+            if (currentTab === "history") {
+                return data.claims.filter((claim) =>
+                    ["paid", "cancelled"].includes(claim.status),
+                );
+            }
+            return data.claims;
+        })();
+
+        if (!normalizedSearch) return tabFiltered;
+
+        return tabFiltered.filter((claim) => {
+            const id = String(claim.id || "").toLowerCase();
+            const description = String(claim.description || "").toLowerCase();
+            const payeeName = String(claim.payee?.name || "").toLowerCase();
+            return (
+                id.includes(normalizedSearch) ||
+                description.includes(normalizedSearch) ||
+                payeeName.includes(normalizedSearch)
+            );
+        });
+    });
 </script>
 
 <div class="space-y-10 pb-12" in:fade={{ duration: 400 }}>
@@ -174,7 +220,7 @@
                         type="search"
                         placeholder="搜尋單號或描述..."
                         class="pl-10 pr-4 h-10 w-full md:w-[280px] rounded-xl bg-secondary/30 border-none focus:ring-primary/10 transition-all text-xs font-medium"
-                        value={data.search}
+                        value={searchTerm}
                         oninput={handleSearch}
                     />
                 </div>
@@ -216,8 +262,8 @@
                         </Table.Row>
                     </Table.Header>
                     <Table.Body class="divide-y divide-border/10">
-                        {#if data.claims && data.claims.length > 0}
-                            {#each data.claims as claim}
+                        {#if filteredClaims.length > 0}
+                            {#each filteredClaims as claim}
                                 <Table.Row
                                     class="group border-none hover:bg-secondary/30 transition-all cursor-pointer h-20"
                                     onclick={() => goto(`/claims/${claim.id}`)}

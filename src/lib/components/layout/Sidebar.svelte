@@ -225,16 +225,6 @@
                 >請款系統</span
             >
         </div>
-
-        <!-- 快速新增請款按鈕 -->
-        <Button
-            href="/claims/new"
-            data-sveltekit-preload-data="tap"
-            class="w-full gap-2 rounded-xl shadow-sm h-9 text-xs font-semibold"
-        >
-            <Plus class="h-3.5 w-3.5" />
-            新增請款
-        </Button>
     </div>
 
     <!-- ====================================== -->

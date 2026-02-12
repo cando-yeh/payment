@@ -85,4 +85,33 @@ test.describe.serial('Claims List Filters', () => {
         await expect(page.locator(`text=#${ids.cancelled}`)).toBeVisible();
         await expect(page.locator(`text=#${ids.pendingManager}`)).toHaveCount(0);
     });
+
+    test('tab switch uses local filtering and replaceState without document reload', async ({ page }) => {
+        await injectSession(page, user.email, password);
+
+        let documentClaimsRequests = 0;
+        page.on('request', (req) => {
+            if (req.isNavigationRequest() && req.resourceType() === 'document' && req.url().includes('/claims')) {
+                documentClaimsRequests += 1;
+            }
+        });
+
+        await page.goto('/claims?tab=drafts&search=filter');
+        await expect(page.locator(`text=#${ids.draft}`)).toBeVisible();
+        const baselineRequests = documentClaimsRequests;
+
+        await page.getByRole('tab', { name: '審核中' }).click();
+        await expect(page).toHaveURL(/\/claims\?tab=processing&search=filter|\/claims\?search=filter&tab=processing/);
+        await expect(page.locator(`text=#${ids.pendingManager}`)).toBeVisible();
+        await expect(page.locator(`text=#${ids.draft}`)).toHaveCount(0);
+        await page.waitForTimeout(250);
+        expect(documentClaimsRequests).toBe(baselineRequests);
+
+        await page.getByRole('tab', { name: '歷史紀錄' }).click();
+        await expect(page).toHaveURL(/\/claims\?tab=history&search=filter|\/claims\?search=filter&tab=history/);
+        await expect(page.locator(`text=#${ids.paid}`)).toBeVisible();
+        await expect(page.locator(`text=#${ids.pendingManager}`)).toHaveCount(0);
+        await page.waitForTimeout(250);
+        expect(documentClaimsRequests).toBe(baselineRequests);
+    });
 });

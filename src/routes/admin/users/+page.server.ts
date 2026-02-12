@@ -80,5 +80,66 @@ export const actions: Actions = {
         }
 
         return { success: true };
+    },
+
+    removeUser: async ({ request, locals }) => {
+        // 🔒 權限驗證：僅管理員可刪除使用者
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const userId = formData.get('userId') as string;
+
+        if (!userId) return fail(400, { message: '缺少必要參數' });
+
+        // 🛡️ 禁止自刪 (防止管理員把自己關在門外)
+        const session = await locals.getSession();
+        if (session?.user?.id === userId) {
+            return fail(400, { message: '無法刪除：您不能刪除目前的登入帳號' });
+        }
+
+        const { data: deletedRows, error } = await locals.supabase
+            .from('profiles')
+            .delete()
+            .eq('id', userId)
+            .select('id');
+
+        if (error) {
+            console.error('Delete user error:', error);
+
+            // 💡 PostgreSQL 錯誤代碼 23503: Foreign Key Violation
+            if (error.code === '23503') {
+                let context = '其他資料';
+                if (error.message.includes('claims')) context = '報銷單 (Claims)';
+                if (error.message.includes('payees')) context = '收款人 (Payees)';
+                if (error.message.includes('profiles_approver_id_fkey')) context = '其他使用者的核准流程';
+
+                return fail(409, {
+                    message: `無法刪除：此使用者仍與 ${context} 關聯，請先移除相關數據後再試。`,
+                    error: error.message
+                });
+            }
+
+            if (error.code === '42501') {
+                return fail(403, {
+                    message: '無法刪除：目前資料庫權限不足，請聯絡系統管理員檢查 RLS/角色設定。',
+                    error: error.message
+                });
+            }
+
+            return fail(500, {
+                message: `刪除失敗：${error.message || '未知錯誤'}`,
+                error: error.message
+            });
+        }
+
+        if (!deletedRows || deletedRows.length === 0) {
+            return fail(409, {
+                message: '無法刪除：找不到使用者或目前權限不足，請重新整理後再試。'
+            });
+        }
+
+        return { success: true };
     }
 };

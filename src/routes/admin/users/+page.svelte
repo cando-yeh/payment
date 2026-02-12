@@ -16,14 +16,10 @@
     import * as Select from "$lib/components/ui/select";
     import { Badge } from "$lib/components/ui/badge";
     import { toast } from "svelte-sonner";
-    import {
-        Shield,
-        CreditCard,
-        Search,
-        Users,
-    } from "lucide-svelte";
+    import { Shield, CreditCard, Search, Users, Trash2 } from "lucide-svelte";
     import { Input } from "$lib/components/ui/input";
     import { timedFetch } from "$lib/client/timed-fetch";
+    import { deserialize } from "$app/forms";
 
     let { data } = $props();
 
@@ -144,6 +140,77 @@
         } catch {
             users[index] = previous;
             toast.error("操作失敗");
+        } finally {
+            setPending(opKey, false);
+        }
+    }
+
+    /**
+     * 刪除使用者
+     *
+     * 增加二次確認機制，並在失敗時解析後端傳回的詳細錯誤訊息。
+     */
+    async function removeUser(userId: string, userName: string) {
+        if (!confirm(`確定要刪除使用者「${userName}」嗎？此操作無法復原。`)) {
+            return;
+        }
+
+        const opKey = `delete:${userId}`;
+        if (pendingOps[opKey]) return;
+
+        const index = users.findIndex((u) => u.id === userId);
+        if (index === -1) return;
+
+        const previous = users[index];
+        // 樂觀更新：先從本地列表中移除
+        users = users.filter((u) => u.id !== userId);
+        setPending(opKey, true);
+
+        const formData = new FormData();
+        formData.append("userId", userId);
+
+        try {
+            const response = await timedFetch("?/removeUser", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+
+            const responseText = await response.text();
+            let result: any = null;
+            try {
+                result = deserialize(responseText) as any;
+            } catch {
+                try {
+                    result = JSON.parse(responseText);
+                } catch {
+                    result = null;
+                }
+            }
+
+            const resolveMessage = (data: any, fallback: string) => {
+                if (typeof data?.message === "string") return data.message;
+                if (Array.isArray(data) && typeof data[1] === "string")
+                    return data[1];
+                return fallback;
+            };
+
+            if (result?.type === "failure") {
+                throw new Error(resolveMessage(result?.data, "刪除失敗"));
+            }
+            if (!response.ok || (result?.type && result.type !== "success")) {
+                throw new Error(resolveMessage(result?.data, "刪除失敗"));
+            }
+
+            toast.success("使用者已成功刪除");
+        } catch (e: any) {
+            // 復原本地狀態
+            users = [...users, previous].sort(
+                (a, b) =>
+                    new Date(b.created_at).getTime() -
+                    new Date(a.created_at).getTime(),
+            );
+            toast.error(e.message || "操作失敗");
         } finally {
             setPending(opKey, false);
         }
@@ -295,7 +362,9 @@
                                                 "is_finance",
                                                 user.is_finance,
                                             )}
-                                        disabled={pendingOps[`perm:${user.id}:is_finance`]}
+                                        disabled={pendingOps[
+                                            `perm:${user.id}:is_finance`
+                                        ]}
                                     >
                                         {user.is_finance
                                             ? "取消財務"
@@ -313,11 +382,25 @@
                                                 "is_admin",
                                                 user.is_admin,
                                             )}
-                                        disabled={pendingOps[`perm:${user.id}:is_admin`]}
+                                        disabled={pendingOps[
+                                            `perm:${user.id}:is_admin`
+                                        ]}
                                     >
                                         {user.is_admin
                                             ? "取消管理"
                                             : "設為管理"}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                        onclick={() =>
+                                            removeUser(user.id, user.full_name)}
+                                        disabled={pendingOps[
+                                            `delete:${user.id}`
+                                        ]}
+                                    >
+                                        <Trash2 class="h-4 w-4" />
                                     </Button>
                                 </div>
                             </Table.Cell>
