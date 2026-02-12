@@ -78,9 +78,6 @@
      * 依序排列，部分項目需要特定權限才會顯示
      */
     const navItems: NavItem[] = [
-        // 儀表板：所有使用者可見
-        { label: "儀表板", href: "/", icon: Home },
-
         // 我的請款：所有使用者可見
         { label: "我的請款", href: "/claims", icon: FileText },
 
