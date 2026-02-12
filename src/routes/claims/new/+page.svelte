@@ -6,6 +6,7 @@
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
+    import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import * as Card from "$lib/components/ui/card";
     import * as Select from "$lib/components/ui/select";
     import {
@@ -319,13 +320,12 @@
                                                 <Label for="bank_code"
                                                     >銀行代碼 (必填)</Label
                                                 >
-                                                <Input
+                                                <BankCodeCombobox
                                                     id="bank_code"
                                                     name="bank_code"
                                                     bind:value={bankCode}
                                                     placeholder="例如：004"
                                                     required
-                                                    maxlength={3}
                                                 />
                                             </div>
                                             <div class="space-y-2">

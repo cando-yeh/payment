@@ -9,6 +9,7 @@
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Card from "$lib/components/ui/card";
+    import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import { toast } from "svelte-sonner";
     import { ArrowLeft, LoaderCircle } from "lucide-svelte";
     import { goto } from "$app/navigation";
@@ -274,12 +275,11 @@
                                     >*</span
                                 ></Label
                             >
-                            <Input
+                            <BankCodeCombobox
                                 id="bank_code"
                                 name="bank_code"
                                 value={payee.bank || ""}
                                 placeholder="004"
-                                maxlength={3}
                                 required
                             />
                         </div>

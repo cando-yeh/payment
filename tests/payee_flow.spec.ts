@@ -55,7 +55,7 @@ test.describe('Payee Management Flow', () => {
         const vendorName = 'Test E2E Vendor ' + Date.now();
         await page.fill('input[name="name"]', vendorName);
         await page.fill('input[name="tax_id"]', '12345678');
-        await page.fill('input[name="bank_code"]', '004');
+        await page.fill('#bank_code', '004');
         await page.fill('input[name="bank_account"]', '1234567890');
 
         // 提交並等待回應

@@ -73,7 +73,7 @@ test.describe('Payee Management Extended Flow', () => {
         const updatedName = testPayeeName + ' (Updated)';
         await page.fill('input[name="name"]', updatedName);
         await page.fill('input[name="tax_id"]', '12345678');
-        await page.fill('input[name="bank_code"]', '004');
+        await page.fill('#bank_code', '004');
         await page.fill('input[name="bank_account"]', '987654321');
         await page.fill('textarea[name="reason"]', 'Testing update flow');
 

@@ -31,6 +31,7 @@
     import { untrack } from "svelte";
     import { timedFetch } from "$lib/client/timed-fetch";
     import { cn } from "$lib/utils.js";
+    import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
 
     // Props 定義
     let {
@@ -358,12 +359,13 @@
                             <Building2
                                 class="absolute left-3 top-3 h-4 w-4 text-muted-foreground"
                             />
-                            <Input
+                            <BankCodeCombobox
                                 id="bank"
-                                name="bank"
+                                name={isManagementMode ? "bankName" : "bank"}
                                 bind:value={bankName}
-                                class="pl-9"
+                                inputClass="pl-9"
                                 placeholder="例如：004-臺灣銀行"
+                                submitMode="code-name"
                             />
                         </div>
                     </div>
