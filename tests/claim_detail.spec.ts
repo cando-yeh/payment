@@ -83,9 +83,6 @@ test.describe.serial('Claim Detail Page', () => {
         // Verify type badge
         await expect(page.locator('text=員工報銷')).toBeVisible();
 
-        // Verify description
-        await expect(page.locator('text=Detail Test Claim')).toBeVisible();
-
         // Verify status badge (should be draft)
         await expect(page.locator('[data-slot="badge"]').filter({ hasText: '草稿' }).first()).toBeVisible();
 

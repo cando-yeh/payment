@@ -1,7 +1,58 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { env } from '$env/dynamic/private';
 
-export const load: PageServerLoad = async ({ locals }) => {
+function getServiceRoleClient() {
+    if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY 未設定');
+    }
+    return createClient(PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function getUserReferenceSummary(userId: string) {
+    const serviceRoleClient = getServiceRoleClient();
+    const [
+        claimsRes,
+        paymentsRes,
+        historyRes,
+        requestedRes,
+        reviewedRes,
+        subordinateRes
+    ] = await Promise.all([
+        serviceRoleClient.from('claims').select('*', { count: 'exact', head: true }).eq('applicant_id', userId),
+        serviceRoleClient.from('payments').select('*', { count: 'exact', head: true }).eq('paid_by', userId),
+        serviceRoleClient.from('claim_history').select('*', { count: 'exact', head: true }).eq('actor_id', userId),
+        serviceRoleClient.from('payee_change_requests').select('*', { count: 'exact', head: true }).eq('requested_by', userId),
+        serviceRoleClient.from('payee_change_requests').select('*', { count: 'exact', head: true }).eq('reviewed_by', userId),
+        serviceRoleClient.from('profiles').select('*', { count: 'exact', head: true }).eq('approver_id', userId)
+    ]);
+
+    const firstError = [
+        claimsRes.error,
+        paymentsRes.error,
+        historyRes.error,
+        requestedRes.error,
+        reviewedRes.error,
+        subordinateRes.error
+    ].find(Boolean);
+
+    if (firstError) {
+        throw firstError;
+    }
+
+    return {
+        claims: claimsRes.count || 0,
+        payments: paymentsRes.count || 0,
+        claimHistory: historyRes.count || 0,
+        payeeRequested: requestedRes.count || 0,
+        payeeReviewed: reviewedRes.count || 0,
+        subordinateUsers: subordinateRes.count || 0
+    };
+}
+
+export const load: PageServerLoad = async ({ locals, url }) => {
     const session = await locals.getSession();
     if (!session) throw redirect(303, '/auth');
 
@@ -20,9 +71,14 @@ export const load: PageServerLoad = async ({ locals }) => {
         console.error('Error fetching users:', error);
     }
 
+    const status = url.searchParams.get('status');
+    const defaultTab = status === 'inactive' ? 'inactive' : 'active';
+
     return {
         users: users || [],
-        approverOptions: (users || []).map((u: any) => ({ id: u.id, full_name: u.full_name }))
+        approverOptions: (users || []).map((u: any) => ({ id: u.id, full_name: u.full_name })),
+        defaultTab,
+        currentUserId: session.user.id
     };
 };
 
@@ -44,6 +100,15 @@ export const actions: Actions = {
         const allowedFields = ['is_admin', 'is_finance'];
         if (!allowedFields.includes(field)) {
             return fail(400, { message: '不允許修改此欄位' });
+        }
+
+        const { data: profile } = await locals.supabase
+            .from('profiles')
+            .select('is_active')
+            .eq('id', userId)
+            .maybeSingle();
+        if (profile && profile.is_active === false) {
+            return fail(400, { message: '停用帳號不可調整權限，請先啟用。' });
         }
 
         const { error } = await locals.supabase
@@ -70,6 +135,26 @@ export const actions: Actions = {
 
         if (!userId) return fail(400, { message: '缺少必要參數' });
 
+        const { data: targetUser } = await locals.supabase
+            .from('profiles')
+            .select('is_active')
+            .eq('id', userId)
+            .maybeSingle();
+        if (targetUser && targetUser.is_active === false) {
+            return fail(400, { message: '停用帳號不可指派核准人，請先啟用。' });
+        }
+
+        if (approverId) {
+            const { data: approverUser } = await locals.supabase
+                .from('profiles')
+                .select('is_active')
+                .eq('id', approverId)
+                .maybeSingle();
+            if (approverUser && approverUser.is_active === false) {
+                return fail(400, { message: '不可指派停用中的核准人。' });
+            }
+        }
+
         const { error } = await locals.supabase
             .from('profiles')
             .update({ approver_id: approverId || null })
@@ -82,6 +167,79 @@ export const actions: Actions = {
         return { success: true };
     },
 
+    deactivateUser: async ({ request, locals }) => {
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const userId = formData.get('userId');
+        const reason = (formData.get('reason') as string | null)?.trim() || null;
+        if (typeof userId !== 'string' || !userId.trim()) {
+            return fail(400, { message: '缺少必要參數' });
+        }
+
+        const session = await locals.getSession();
+        if (session?.user?.id === userId) {
+            return fail(400, { message: '無法停用：您不能停用目前的登入帳號' });
+        }
+
+        const { error: clearApproverRefError } = await locals.supabase
+            .from('profiles')
+            .update({ approver_id: null })
+            .eq('approver_id', userId);
+        if (clearApproverRefError) {
+            return fail(500, { message: '停用失敗：無法清理核准人關聯', error: clearApproverRefError.message });
+        }
+
+        const { error } = await locals.supabase
+            .from('profiles')
+            .update({
+                is_active: false,
+                deactivated_at: new Date().toISOString(),
+                deactivated_by: session?.user?.id || null,
+                deactivate_reason: reason,
+                is_admin: false,
+                is_finance: false,
+                approver_id: null
+            })
+            .eq('id', userId);
+
+        if (error) {
+            return fail(500, { message: `停用失敗：${error.message}` });
+        }
+
+        return { success: true, message: '使用者已停用' };
+    },
+
+    reactivateUser: async ({ request, locals }) => {
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const userId = formData.get('userId');
+        if (typeof userId !== 'string' || !userId.trim()) {
+            return fail(400, { message: '缺少必要參數' });
+        }
+
+        const { error } = await locals.supabase
+            .from('profiles')
+            .update({
+                is_active: true,
+                deactivated_at: null,
+                deactivated_by: null,
+                deactivate_reason: null
+            })
+            .eq('id', userId);
+
+        if (error) {
+            return fail(500, { message: `啟用失敗：${error.message}` });
+        }
+
+        return { success: true, message: '使用者已重新啟用' };
+    },
+
     removeUser: async ({ request, locals }) => {
         // 🔒 權限驗證：僅管理員可刪除使用者
         if (!locals.user?.is_admin) {
@@ -89,14 +247,36 @@ export const actions: Actions = {
         }
 
         const formData = await request.formData();
-        const userId = formData.get('userId') as string;
+        const userId = formData.get('userId');
 
-        if (!userId) return fail(400, { message: '缺少必要參數' });
+        if (typeof userId !== 'string' || !userId.trim()) {
+            return fail(400, { message: '缺少必要參數' });
+        }
 
         // 🛡️ 禁止自刪 (防止管理員把自己關在門外)
         const session = await locals.getSession();
         if (session?.user?.id === userId) {
             return fail(400, { message: '無法刪除：您不能刪除目前的登入帳號' });
+        }
+
+        let refSummary: Awaited<ReturnType<typeof getUserReferenceSummary>>;
+        try {
+            refSummary = await getUserReferenceSummary(userId);
+        } catch (e: any) {
+            return fail(500, { message: `刪除失敗：無法檢查使用者關聯 (${e?.message || '未知錯誤'})` });
+        }
+
+        const hasAnyReference = Object.values(refSummary).some((v) => v > 0);
+        if (hasAnyReference) {
+            if (refSummary.claims > 0 || refSummary.payments > 0) {
+                return fail(409, {
+                    message: '此使用者已有歷史請款/付款紀錄，僅可停用以保留稽核軌跡。'
+                });
+            }
+
+            return fail(409, {
+                message: '此使用者仍有系統關聯資料，請先清理關聯或改用停用。'
+            });
         }
 
         const { data: deletedRows, error } = await locals.supabase
@@ -140,6 +320,92 @@ export const actions: Actions = {
             });
         }
 
+        let serviceRoleClient;
+        try {
+            serviceRoleClient = getServiceRoleClient();
+        } catch (e: any) {
+            return fail(500, { message: `永久刪除失敗：${e?.message || '缺少 Service Role 設定'}` });
+        }
+
+        const { error: authDeleteError } = await serviceRoleClient.auth.admin.deleteUser(userId);
+        if (authDeleteError) {
+            return fail(500, {
+                message: `已刪除系統資料，但無法刪除登入帳號：${authDeleteError.message}`
+            });
+        }
+
+        return { success: true, message: '使用者已永久刪除' };
+    },
+
+    updateUserProfile: async ({ request, locals }) => {
+        // 🔒 權限驗證
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const userId = formData.get('userId') as string;
+        const fullName = formData.get('fullName') as string;
+        const bankName = formData.get('bankName') as string;
+        const bankAccount = formData.get('bankAccount') as string;
+        const isAdmin = formData.get('isAdminValue') === 'true';
+        const isFinance = formData.get('isFinanceValue') === 'true';
+        const approverId = formData.get('approverId') as string;
+
+        if (!userId) return fail(400, { message: '缺少使用者 ID' });
+
+        // 1. 更新基本資料與權限
+        const { error: updateError } = await locals.supabase
+            .from('profiles')
+            .update({
+                full_name: fullName,
+                bank_name: bankName,
+                is_admin: isAdmin,
+                is_finance: isFinance,
+                approver_id: approverId || null
+            })
+            .eq('id', userId);
+
+        if (updateError) {
+            return fail(500, { message: '更新基本資料失敗', error: updateError.message });
+        }
+
+        // 2. 處理銀行帳號更新 (敏感資料加密路徑)
+        if (bankAccount) {
+            const { error: cryptoError } = await locals.supabase.rpc('update_profile_bank_account', {
+                target_id: userId,
+                raw_account: bankAccount
+            });
+
+            if (cryptoError) {
+                console.error('Crypto error:', cryptoError);
+                return fail(500, { message: '銀行帳號加密儲存失敗', error: cryptoError.message });
+            }
+        }
+
         return { success: true };
+    },
+
+    revealUserBankAccount: async ({ request, locals }) => {
+        // 🔒 權限驗證
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const targetId = formData.get('targetId') as string;
+
+        if (!targetId) return fail(400, { message: '缺少目標使用者 ID' });
+
+        const { data, error } = await locals.supabase.rpc('reveal_profile_bank_account', {
+            target_id: targetId
+        });
+
+        if (error) {
+            console.error('Reveal error:', error);
+            return fail(500, { message: '無法讀取帳號資訊', error: error.message });
+        }
+
+        return { success: true, decryptedAccount: data };
     }
 };

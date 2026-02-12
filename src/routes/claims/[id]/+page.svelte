@@ -86,7 +86,13 @@
         onSuccess?: () => void;
         onFinally?: () => void;
     } = {}) {
-        return async ({ result, update }: { result: any; update: () => Promise<void> }) => {
+        return async ({
+            result,
+            update,
+        }: {
+            result: any;
+            update: () => Promise<void>;
+        }) => {
             if (result.type === "success" && successMessage) {
                 toast.success(successMessage);
             } else if (result.type === "failure") {
@@ -445,17 +451,6 @@
                                         "本人"}
                                 </div>
                             </div>
-                            <div class="p-6">
-                                <Label
-                                    class="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3 block"
-                                    >說明描述</Label
-                                >
-                                <div
-                                    class="text-[14px] font-medium text-foreground/80 leading-relaxed bg-secondary/20 p-5 rounded-2xl border border-border/20"
-                                >
-                                    {claim.description}
-                                </div>
-                            </div>
                         </div>
                     </Card.Content>
                 </Card.Root>
@@ -793,7 +788,10 @@
                                     })}
                                 class="w-full"
                                 onsubmit={(event) =>
-                                    confirmSubmit(event, "確定要永久移除此附件嗎？")}
+                                    confirmSubmit(
+                                        event,
+                                        "確定要永久移除此附件嗎？",
+                                    )}
                             >
                                 <input
                                     type="hidden"
@@ -974,9 +972,10 @@
                     use:enhance={() => {
                         isPrimaryActionSubmitting = true;
                         return enhanceAction({
-                            successMessage: pendingAction === "approve"
-                                ? "核准成功"
-                                : "已送出審核",
+                            successMessage:
+                                pendingAction === "approve"
+                                    ? "核准成功"
+                                    : "已送出審核",
                             onSuccess: () => {
                                 isDuplicateModalOpen = false;
                             },

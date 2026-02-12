@@ -3,7 +3,6 @@
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import * as Table from "$lib/components/ui/table";
-    import * as Tabs from "$lib/components/ui/tabs";
     import { Badge } from "$lib/components/ui/badge";
     import {
         Plus,
@@ -121,9 +120,11 @@
             }
             if (currentTab === "processing") {
                 return data.claims.filter((claim) =>
-                    ["pending_manager", "pending_finance", "pending_payment"].includes(
-                        claim.status,
-                    ),
+                    [
+                        "pending_manager",
+                        "pending_finance",
+                        "pending_payment",
+                    ].includes(claim.status),
                 );
             }
             if (currentTab === "action_required") {
@@ -145,11 +146,9 @@
 
         return tabFiltered.filter((claim) => {
             const id = String(claim.id || "").toLowerCase();
-            const description = String(claim.description || "").toLowerCase();
             const payeeName = String(claim.payee?.name || "").toLowerCase();
             return (
                 id.includes(normalizedSearch) ||
-                description.includes(normalizedSearch) ||
                 payeeName.includes(normalizedSearch)
             );
         });
@@ -181,36 +180,60 @@
     <div
         class="bg-background border border-border/50 rounded-3xl shadow-sm overflow-hidden"
     >
-        <Tabs.Root
-            value={currentTab}
-            onValueChange={handleTabChange}
-            class="w-full"
-        >
+        <div class="w-full">
             <div
                 class="p-6 border-b border-border/30 flex flex-col md:flex-row md:items-center justify-between gap-6"
             >
-                <Tabs.List class="bg-secondary/40 p-1 rounded-xl h-auto">
-                    <Tabs.Trigger
-                        value="drafts"
-                        class="rounded-lg px-5 py-2 font-bold text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >草稿/退回</Tabs.Trigger
+                <div class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={currentTab === "drafts"}
+                        class={cn(
+                            "rounded-lg px-5 py-2 font-bold text-xs",
+                            currentTab === "drafts"
+                                ? "bg-background shadow-sm"
+                                : "",
+                        )}
+                        onclick={() => handleTabChange("drafts")}>草稿/退回</button
                     >
-                    <Tabs.Trigger
-                        value="processing"
-                        class="rounded-lg px-5 py-2 font-bold text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >審核中</Tabs.Trigger
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={currentTab === "processing"}
+                        class={cn(
+                            "rounded-lg px-5 py-2 font-bold text-xs",
+                            currentTab === "processing"
+                                ? "bg-background shadow-sm"
+                                : "",
+                        )}
+                        onclick={() => handleTabChange("processing")}>審核中</button
                     >
-                    <Tabs.Trigger
-                        value="action_required"
-                        class="rounded-lg px-5 py-2 font-bold text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >待補件</Tabs.Trigger
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={currentTab === "action_required"}
+                        class={cn(
+                            "rounded-lg px-5 py-2 font-bold text-xs",
+                            currentTab === "action_required"
+                                ? "bg-background shadow-sm"
+                                : "",
+                        )}
+                        onclick={() => handleTabChange("action_required")}>待補件</button
                     >
-                    <Tabs.Trigger
-                        value="history"
-                        class="rounded-lg px-5 py-2 font-bold text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >歷史紀錄</Tabs.Trigger
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={currentTab === "history"}
+                        class={cn(
+                            "rounded-lg px-5 py-2 font-bold text-xs",
+                            currentTab === "history"
+                                ? "bg-background shadow-sm"
+                                : "",
+                        )}
+                        onclick={() => handleTabChange("history")}>歷史紀錄</button
                     >
-                </Tabs.List>
+                </div>
 
                 <div class="relative group">
                     <Search
@@ -218,7 +241,7 @@
                     />
                     <Input
                         type="search"
-                        placeholder="搜尋單號或描述..."
+                        placeholder="搜尋單號或受款人..."
                         class="pl-10 pr-4 h-10 w-full md:w-[280px] rounded-xl bg-secondary/30 border-none focus:ring-primary/10 transition-all text-xs font-medium"
                         value={searchTerm}
                         oninput={handleSearch}
@@ -226,7 +249,7 @@
                 </div>
             </div>
 
-            <Tabs.Content value={currentTab} class="m-0">
+            <div class="m-0">
                 <Table.Root>
                     <Table.Header class="bg-secondary/20">
                         <Table.Row class="hover:bg-transparent border-none">
@@ -237,10 +260,6 @@
                             <Table.Head
                                 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
                                 >類別</Table.Head
-                            >
-                            <Table.Head
-                                class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
-                                >案件描述</Table.Head
                             >
                             <Table.Head
                                 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
@@ -286,12 +305,6 @@
                                         </Badge>
                                     </Table.Cell>
                                     <Table.Cell class="max-w-[250px]">
-                                        <div
-                                            class="font-bold text-foreground text-sm truncate"
-                                            title={claim.description}
-                                        >
-                                            {claim.description}
-                                        </div>
                                         {#if claim.items && claim.items[0]?.count > 0}
                                             <div
                                                 class="text-[10px] text-muted-foreground font-medium mt-1 flex items-center gap-1 opacity-60"
@@ -395,7 +408,7 @@
                         {/if}
                     </Table.Body>
                 </Table.Root>
-            </Tabs.Content>
-        </Tabs.Root>
+            </div>
+        </div>
     </div>
 </div>

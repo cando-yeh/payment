@@ -23,7 +23,6 @@
     interface Claim {
         id: string;
         claim_type: string;
-        description: string;
         payee_id: string;
         total_amount: number;
         status: string;
@@ -46,7 +45,6 @@
 
     // Initialize State from Data using untrack to avoid reactive warnings
     let claimType = $state(untrack(() => data.claim.claim_type));
-    let description = $state(untrack(() => data.claim.description));
     let payeeId = $state(untrack(() => data.claim.payee_id));
 
     // Parse items and ensure at least one empty item if empty
@@ -80,7 +78,6 @@
     // Sync state when data changes (e.g. navigation)
     $effect(() => {
         claimType = data.claim.claim_type;
-        description = data.claim.description;
         payeeId = data.claim.payee_id;
 
         let newItems = Array.isArray(data.claim.items)
@@ -336,18 +333,6 @@
                             </div>
                         {/if}
                     {/if}
-
-                    <div class="grid gap-2">
-                        <Label
-                            >請款說明 <span class="text-red-500">*</span></Label
-                        >
-                        <Input
-                            name="description"
-                            placeholder="例如：1月份辦公用品採購、台北出差交通費"
-                            required
-                            bind:value={description}
-                        />
-                    </div>
                 </Card.Content>
             </Card.Root>
 

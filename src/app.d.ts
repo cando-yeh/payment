@@ -29,6 +29,7 @@ declare global {
 			user: (Session['user'] & {
 				is_admin: boolean;
 				is_finance: boolean;
+				is_active: boolean;
 			}) | null;
 		}
 
@@ -41,6 +42,7 @@ declare global {
 			approver_id: string | null;
 			is_approver: boolean;
 			bank: string | null;
+			is_active?: boolean;
 		}
 
 		/** 

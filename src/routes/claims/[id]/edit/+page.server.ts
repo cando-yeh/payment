@@ -80,7 +80,6 @@ export const actions: Actions = {
         }
 
         const formData = await request.formData();
-        const description = String(formData.get('description') || '').trim();
         const payee_id = String(formData.get('payee_id') || '');
         const is_floating = formData.get('is_floating') === 'on';
         const bank_code = is_floating ? String(formData.get('bank_code') || '').trim() : null;
@@ -89,9 +88,6 @@ export const actions: Actions = {
         const account_name = is_floating ? String(formData.get('account_name') || '').trim() : null;
         const itemsJson = String(formData.get('items') || '[]');
 
-        if (!description) {
-            return fail(400, { error: 'Description is required' });
-        }
 
         if (claimRow.claim_type !== 'employee' && !payee_id) {
             return fail(400, { error: 'Payee is required' });
@@ -132,7 +128,6 @@ export const actions: Actions = {
 
         const { error: updateClaimError } = await supabase.rpc('update_claim', {
             _claim_id: params.id,
-            _description: description,
             _payee_id: claimRow.claim_type === 'employee' ? null : payee_id,
             _total_amount: totalAmount,
             _bank_code: is_floating ? bank_code : null,

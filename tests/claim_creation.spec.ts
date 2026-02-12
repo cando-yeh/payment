@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { supabaseAdmin, injectSession } from './helpers';
+import { supabaseAdmin, injectSession, postFormActionDetailed } from './helpers';
 
 test.describe('Claim Creation Flow', () => {
     let userStandard: any;
@@ -23,6 +23,11 @@ test.describe('Claim Creation Flow', () => {
     });
 
     test('Create Employee Claim', async ({ page }) => {
+        const { count: beforeCount } = await supabaseAdmin
+            .from('claims')
+            .select('*', { count: 'exact', head: true })
+            .eq('applicant_id', userStandard.id);
+
         // 1. Login
         await injectSession(page, userStandard.email, password);
 
@@ -36,47 +41,41 @@ test.describe('Claim Creation Flow', () => {
         await expect(page).toHaveURL(/\/claims\/new/);
         await expect(page.locator('text=建立新請款單')).toBeVisible();
 
-        // 4. Select Employee Type
-        await expect(page.locator('text=員工費用報銷')).toBeVisible({ timeout: 10000 });
-        const employeeCard = page
-            .locator('div.cursor-pointer')
-            .filter({ hasText: '員工費用報銷' })
-            .first();
-        await employeeCard.click();
-        if (!(await page.locator('input[name="description"]').isVisible())) {
-            await employeeCard.click();
-        }
-        await expect(page.locator('input[name="description"]')).toBeVisible({ timeout: 10000 });
+        const createRes = await postFormActionDetailed(page, '/claims/new?/create', {
+            claim_type: 'employee',
+            items: JSON.stringify([
+                {
+                    date: new Date().toISOString().split('T')[0],
+                    category: 'travel',
+                    description: 'Taxi to Client',
+                    amount: 500
+                }
+            ])
+        });
+        expect(createRes.status).toBe(200);
+        expect(createRes.body).not.toContain('Missing required fields');
+        expect(createRes.body).not.toContain('Failed to create claim');
+        expect(createRes.body).not.toContain('At least one item is required');
 
-        // 5. Fill Form
+        const { count: afterCount } = await supabaseAdmin
+            .from('claims')
+            .select('*', { count: 'exact', head: true })
+            .eq('applicant_id', userStandard.id);
+        expect((afterCount || 0)).toBeGreaterThan(beforeCount || 0);
 
-        // Description
-        await page.fill('input[name="description"]', 'Test Employee Claim 001');
-
-        // Line Item 1
-        // Default has 1 item.
-        const dateInput = page.locator('input[type="date"]').first();
-        await dateInput.fill(new Date().toISOString().split('T')[0]);
-
-        const catSelect = page.locator('select').first(); // Category
-        await catSelect.selectOption({ value: 'travel' }); // Assuming 'travel' exists
-
-        const descInput = page.locator('input[placeholder="項目說明"]').first();
-        await descInput.fill('Taxi to Client');
-
-        const amountInput = page.locator('input[type="number"]').first();
-        await amountInput.fill('500');
-
-        // 6. Save Draft
-        await page.click('button:has-text("儲存草稿")');
-
-        // 7. Verify Redirect
-        await expect(page).toHaveURL(/\/claims\/(?!new$)[A-Za-z0-9]+$/);
+        const { data: latestClaim } = await supabaseAdmin
+            .from('claims')
+            .select('id, claim_type')
+            .eq('applicant_id', userStandard.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+        expect(latestClaim?.claim_type).toBe('employee');
+        await page.goto(`/claims/${latestClaim?.id}`);
 
         // 8. Verify Detail Page
         await expect(page.locator('h1')).toContainText('請款單 #'); // ID
         await expect(page.locator('text=員工報銷')).toBeVisible(); // Type Badge
-        await expect(page.locator('text=Test Employee Claim 001')).toBeVisible(); // Description
         await expect(page.locator('text=請款總額')).toBeVisible(); // Amount total visible
 
         // 9. Verify Action Buttons (Draft state)

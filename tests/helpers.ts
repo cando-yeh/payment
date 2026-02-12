@@ -23,6 +23,36 @@ export const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
 // Service Role Admin Client
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export async function authSignInWithRetry(
+    client: SupabaseClient,
+    email: string,
+    password: string,
+    maxAttempts = 5
+) {
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const { data: { session }, error } = await client.auth.signInWithPassword({
+            email,
+            password,
+        });
+        if (!error && session) return session;
+
+        lastError = error;
+        const isRateLimit =
+            error?.status === 429 ||
+            /rate limit/i.test(String(error?.message || ''));
+        if (!isRateLimit || attempt === maxAttempts) {
+            throw error ?? new Error('Sign in failed');
+        }
+
+        await sleep(350 * attempt);
+    }
+
+    throw lastError ?? new Error('Sign in failed');
+}
+
 /**
  * 將 Supabase Session 注入到 Playwright Page 中
  * 
@@ -38,11 +68,7 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
  */
 export async function injectSession(page: Page, email: string, password: string) {
     const client = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { session }, error } = await client.auth.signInWithPassword({
-        email,
-        password,
-    });
-    if (error) throw error;
+    const session = await authSignInWithRetry(client, email, password);
 
     const storageKey = `sb-${projectRef}-auth-token`;
 
@@ -95,7 +121,11 @@ export async function postFormAction(
                     fd.append(k, v);
                 }
             }
-            const res = await fetch(targetUrl, { method: 'POST', body: fd });
+            const res = await fetch(targetUrl, {
+                method: 'POST',
+                body: fd,
+                headers: { 'x-sveltekit-action': 'true' },
+            });
             return res.text();
         },
         { targetUrl: url, payload: form }
@@ -117,7 +147,11 @@ export async function postFormActionDetailed(
                     fd.append(k, v);
                 }
             }
-            const res = await fetch(targetUrl, { method: 'POST', body: fd });
+            const res = await fetch(targetUrl, {
+                method: 'POST',
+                body: fd,
+                headers: { 'x-sveltekit-action': 'true' },
+            });
             return { url: res.url, body: await res.text(), status: res.status };
         },
         { targetUrl: url, payload: form }

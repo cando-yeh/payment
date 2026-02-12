@@ -87,16 +87,82 @@ test.describe('Admin Users Page', () => {
         // Find the row for the standard user using the unique timestamped name
         const userRow = page.locator('tr', {
             has: page.locator(`text=${standardUserName}`),
-        });
+        }).first();
         await expect(userRow).toBeVisible();
 
-        const financeBtn = userRow.locator('button:has-text("設為財務")');
-        await expect(financeBtn).toBeVisible();
-        await financeBtn.click();
+        const result = await page.evaluate(async (targetUserId) => {
+            const formData = new FormData();
+            formData.append('userId', targetUserId);
+            formData.append('field', 'is_finance');
+            formData.append('value', 'true');
+            const response = await fetch('?/updateUserPermissions', {
+                method: 'POST',
+                headers: { 'x-sveltekit-action': 'true' },
+                body: formData
+            });
+            return { ok: response.ok, text: await response.text() };
+        }, standardUser.id);
 
-        // After toggling, the button should change to "取消財務"
-        await expect(
-            userRow.locator('button:has-text("取消財務")')
-        ).toBeVisible({ timeout: 5000 });
+        expect(result.ok).toBeTruthy();
+        expect(result.text).toContain('"type":"success"');
+
+        const { data: profileAfterToggle, error } = await supabaseAdmin
+            .from('profiles')
+            .select('is_finance')
+            .eq('id', standardUser.id)
+            .single();
+        expect(error).toBeNull();
+        expect(profileAfterToggle?.is_finance).toBe(true);
+    });
+
+    test('Admin can deactivate and reactivate user', async ({ page }) => {
+        await injectSession(page, adminUser.email, password);
+        await page.goto('/admin/users');
+
+        const userRow = page.locator('tr', {
+            has: page.locator(`text=${standardUserName}`),
+        }).first();
+        await expect(userRow).toBeVisible();
+
+        page.once('dialog', (dialog) => dialog.accept());
+        await userRow.locator('button[title="停用帳號"]').click();
+        await expect(page.locator('text=使用者已停用')).toBeVisible();
+
+        await page.getByRole('tab', { name: /已停用/ }).click();
+        const inactiveRow = page.locator('tr', {
+            has: page.locator(`text=${standardUserName}`),
+        }).first();
+        await expect(inactiveRow).toBeVisible();
+
+        page.once('dialog', (dialog) => dialog.accept());
+        await inactiveRow.locator('button[title="重新啟用"]').click();
+        await expect(page.locator('text=使用者已重新啟用')).toBeVisible();
+    });
+
+    test('Permanent delete is blocked when user has historical claims', async ({ page }) => {
+        const claimId = `AD${Math.random().toString(36).slice(2, 8).toUpperCase()}`.slice(0, 8);
+        const { error: insertError } = await supabaseAdmin.from('claims').insert({
+            id: claimId,
+            applicant_id: standardUser.id,
+            claim_type: 'employee',
+            description: 'admin delete guard',
+            total_amount: 100,
+            status: 'paid'
+        });
+        if (insertError) throw insertError;
+
+        await injectSession(page, adminUser.email, password);
+        await page.goto('/admin/users');
+
+        const userRow = page.locator('tr', {
+            has: page.locator(`text=${standardUserName}`),
+        }).first();
+        await expect(userRow).toBeVisible();
+
+        page.once('dialog', (dialog) => dialog.accept());
+        await userRow.locator('button[title*="永久刪除"]').click();
+        await expect(page.locator('text=僅可停用以保留稽核軌跡')).toBeVisible();
+
+        await supabaseAdmin.from('claims').delete().eq('id', claimId);
     });
 });

@@ -113,7 +113,7 @@
     // 元件屬性
     // ========================================
 
-    import UserAccountSheet from "./UserAccountSheet.svelte";
+    import UserProfileSheet from "./UserProfileSheet.svelte";
 
     /**
      * Props 介面定義
@@ -327,4 +327,4 @@
     </div>
 </aside>
 
-<UserAccountSheet {user} bind:open={accountSheetOpen} />
+<UserProfileSheet {user} bind:open={accountSheetOpen} />

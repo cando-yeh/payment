@@ -1,6 +1,7 @@
 <script lang="ts">
     import { createBrowserSupabaseClient } from "$lib";
     import { Button } from "$lib/components/ui/button";
+    import { onMount } from "svelte";
     import {
         Card,
         CardContent,
@@ -11,6 +12,18 @@
 
     // 初始化瀏覽器端 Supabase Client
     const supabase = createBrowserSupabaseClient();
+    let authNotice = $state("");
+
+    onMount(() => {
+        const reason = new URLSearchParams(window.location.search).get(
+            "reason",
+        );
+        if (reason === "inactive") {
+            authNotice = "此帳號已停用，請聯絡管理員協助重新啟用。";
+        } else if (reason === "profile_missing") {
+            authNotice = "帳號資料異常，請重新登入或聯絡管理員。";
+        }
+    });
 
     /**
      * 執行 Google OAuth 登入
@@ -50,6 +63,13 @@
                 <CardDescription>
                     請使用您的 Google 帳號登入系統
                 </CardDescription>
+                {#if authNotice}
+                    <p
+                        class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700"
+                    >
+                        {authNotice}
+                    </p>
+                {/if}
             </CardHeader>
             <CardContent class="grid gap-4 pt-4">
                 <Button

@@ -32,7 +32,6 @@
             invoice_number: "",
         },
     ]);
-    let description = $state("");
     let payeeId = $state("");
     let isSubmitting = $state(false);
 
@@ -263,8 +262,9 @@
                                     }}
                                 >
                                     <Select.Trigger class="w-full">
-                                        {vendorPayees.find((p) => p.id === payeeId)
-                                            ?.name ||
+                                        {vendorPayees.find(
+                                            (p) => p.id === payeeId,
+                                        )?.name ||
                                             personalPayees.find(
                                                 (p) => p.id === payeeId,
                                             )?.name ||
@@ -374,19 +374,6 @@
                                 </div>
                             {/if}
                         {/if}
-
-                        <div class="grid gap-2">
-                            <Label
-                                >請款說明 <span class="text-red-500">*</span
-                                ></Label
-                            >
-                            <Input
-                                name="description"
-                                placeholder="例如：1月份辦公用品採購、台北出差交通費"
-                                required
-                                bind:value={description}
-                            />
-                        </div>
                     </Card.Content>
                 </Card.Root>
 

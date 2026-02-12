@@ -49,7 +49,6 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const claimType = String(formData.get('claim_type') || '');
-        const description = String(formData.get('description') || '').trim();
         const payeeId = String(formData.get('payee_id') || '');
         const itemsJson = String(formData.get('items') || '');
 
@@ -59,7 +58,7 @@ export const actions: Actions = {
         const accountName = String(formData.get('account_name') || '').trim();
         const bankAccount = String(formData.get('bank_account') || '').trim();
 
-        if (!claimType || !description || !itemsJson) {
+        if (!claimType || !itemsJson) {
             return fail(400, { message: 'Missing required fields' });
         }
 
@@ -113,7 +112,6 @@ export const actions: Actions = {
 
         const { data: claimId, error: claimError } = await supabase.rpc('create_claim', {
             _claim_type: claimType,
-            _description: description,
             _applicant_id: session.user.id,
             _payee_id: normalizedPayeeId,
             _total_amount: totalAmount,

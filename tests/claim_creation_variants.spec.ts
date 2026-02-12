@@ -69,6 +69,11 @@ test.describe.serial('Claim Creation Variants', () => {
         await injectSession(page, user.email, password);
         await page.goto('/claims/new');
 
+        const { count: beforeCount } = await supabaseAdmin
+            .from('claims')
+            .select('*', { count: 'exact', head: true })
+            .eq('applicant_id', user.id);
+
         const vendorDesc = `variant vendor ${Date.now()}`;
         const vendorRes = await postFormActionDetailed(page, '/claims/new?/create', {
             claim_type: 'vendor',
@@ -76,15 +81,19 @@ test.describe.serial('Claim Creation Variants', () => {
             payee_id: vendorPayeeId,
             items: buildItems(1200)
         });
-        expect(vendorRes.url).toContain('/claims/');
+        expect(vendorRes.status).toBe(200);
+        expect(vendorRes.body).not.toContain('Payee is required for this claim type');
+        expect(vendorRes.body).not.toContain('Failed to create claim');
 
         const { data: vendorClaim } = await supabaseAdmin
             .from('claims')
             .select('id, claim_type, payee_id')
             .eq('applicant_id', user.id)
-            .eq('description', vendorDesc)
+            .eq('claim_type', 'vendor')
+            .order('created_at', { ascending: false })
+            .limit(1)
             .single();
-        expect(vendorClaim?.claim_type).toBe('vendor');
+        expect(vendorClaim?.id).toBeTruthy();
         expect(vendorClaim?.payee_id).toBe(vendorPayeeId);
 
         const personalDesc = `variant personal ${Date.now()}`;
@@ -94,16 +103,26 @@ test.describe.serial('Claim Creation Variants', () => {
             payee_id: personalPayeeId,
             items: buildItems(800)
         });
-        expect(personalRes.url).toContain('/claims/');
+        expect(personalRes.status).toBe(200);
+        expect(personalRes.body).not.toContain('Payee is required for this claim type');
+        expect(personalRes.body).not.toContain('Failed to create claim');
 
         const { data: personalClaim } = await supabaseAdmin
             .from('claims')
             .select('id, claim_type, payee_id')
             .eq('applicant_id', user.id)
-            .eq('description', personalDesc)
+            .eq('claim_type', 'personal_service')
+            .order('created_at', { ascending: false })
+            .limit(1)
             .single();
-        expect(personalClaim?.claim_type).toBe('personal_service');
+        expect(personalClaim?.id).toBeTruthy();
         expect(personalClaim?.payee_id).toBe(personalPayeeId);
+
+        const { count: afterCount } = await supabaseAdmin
+            .from('claims')
+            .select('*', { count: 'exact', head: true })
+            .eq('applicant_id', user.id);
+        expect((afterCount || 0)).toBeGreaterThan((beforeCount || 0) + 1);
     });
 
     test('vendor claim requires payee_id', async ({ page }) => {

@@ -9,7 +9,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import { supabaseUrl, supabaseAnonKey, supabaseAdmin } from './helpers';
+import { supabaseUrl, supabaseAnonKey, supabaseAdmin, authSignInWithRetry } from './helpers';
 
 test.describe('Payee RLS Security', () => {
     let userStandard: any;
@@ -48,7 +48,7 @@ test.describe('Payee RLS Security', () => {
 
     test('Standard User CANNOT insert into payees directly', async () => {
         const client = createClient(supabaseUrl, supabaseAnonKey);
-        await client.auth.signInWithPassword({ email: userStandard.email, password });
+        await authSignInWithRetry(client, userStandard.email, password);
 
         const { error } = await client.from('payees').insert({
             name: 'Hacker Payee',
@@ -62,7 +62,7 @@ test.describe('Payee RLS Security', () => {
 
     test('Standard User CANNOT insert into payee_change_requests directly (must use RPC)', async () => {
         const client = createClient(supabaseUrl, supabaseAnonKey);
-        await client.auth.signInWithPassword({ email: userStandard.email, password });
+        await authSignInWithRetry(client, userStandard.email, password);
 
         const { error } = await client.from('payee_change_requests').insert({
             change_type: 'create',
@@ -78,7 +78,7 @@ test.describe('Payee RLS Security', () => {
 
     test('Standard User CAN submit payee_change_requests via RPC', async () => {
         const client = createClient(supabaseUrl, supabaseAnonKey);
-        await client.auth.signInWithPassword({ email: userStandard.email, password });
+        await authSignInWithRetry(client, userStandard.email, password);
 
         const { data, error } = await client.rpc('submit_payee_change_request', {
             _change_type: 'create',
@@ -95,7 +95,7 @@ test.describe('Payee RLS Security', () => {
 
     test('All Users CAN read payees', async () => {
         const client = createClient(supabaseUrl, supabaseAnonKey);
-        await client.auth.signInWithPassword({ email: userStandard.email, password });
+        await authSignInWithRetry(client, userStandard.email, password);
 
         const { error } = await client.from('payees').select('*');
         expect(error).toBeNull();

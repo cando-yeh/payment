@@ -44,24 +44,41 @@ const authHandle: Handle = async ({ event, resolve }) => {
         throw redirect(303, `/auth?next=${pathname}`);
     }
 
-    // 2. 已登入使用者不應存取登入頁 (避免重複登入)
-    if (session && pathname === '/auth') {
-        throw redirect(303, '/');
-    }
-
-    // 3. 獲取使用者角色 (RBAC)
+    // 2. 獲取使用者角色 (RBAC)
     if (session) {
         const { data: profile } = await event.locals.supabase
             .from('profiles')
-            .select('is_admin, is_finance')
+            .select('is_admin, is_finance, is_active')
             .eq('id', session.user.id)
             .single();
+
+        if (!profile) {
+            await event.locals.supabase.auth.signOut();
+            if (!pathname.startsWith('/auth')) {
+                throw redirect(303, '/auth?reason=profile_missing');
+            }
+            return resolve(event);
+        }
+
+        if (profile.is_active === false) {
+            await event.locals.supabase.auth.signOut();
+            if (!pathname.startsWith('/auth')) {
+                throw redirect(303, '/auth?reason=inactive');
+            }
+            return resolve(event);
+        }
+
+        // 2-1. 已登入且啟用中的使用者不應存取登入頁
+        if (pathname === '/auth') {
+            throw redirect(303, '/');
+        }
 
         // 注入到 event.locals 供各頁面輕易存取
         event.locals.user = {
             ...session.user,
             is_admin: profile?.is_admin ?? false,
-            is_finance: profile?.is_finance ?? false
+            is_finance: profile?.is_finance ?? false,
+            is_active: profile?.is_active ?? true
         };
 
         // 3. 行政/管理路由保護
