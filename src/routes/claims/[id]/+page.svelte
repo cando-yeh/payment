@@ -14,14 +14,11 @@
         Upload,
         Trash2,
         Send,
-        Save,
         Paperclip,
         Eye,
-        ExternalLink,
         Undo2,
         CheckCircle2,
         XCircle,
-        History,
         Landmark,
         AlertCircle,
         ReceiptText,
@@ -31,7 +28,7 @@
     } from "lucide-svelte";
     import * as Dialog from "$lib/components/ui/dialog";
     import AuditTimeline from "$lib/components/shared/AuditTimeline.svelte";
-    import { fade, fly } from "svelte/transition";
+    import { fade } from "svelte/transition";
     import { cn } from "$lib/utils";
     import { compressImageFile } from "$lib/client/image-compression";
     import { toast } from "svelte-sonner";
