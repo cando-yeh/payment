@@ -69,15 +69,15 @@ test.describe('Payee Direct Actions (Finance)', () => {
         await page.goto('/payees');
 
         // Find the payee row
-        const row = page.locator('tr').filter({ hasText: testPayeeName }).first();
+        const row = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(row).toBeVisible();
 
         // Try UI confirm flow first; if hydration timing causes flake, fallback to direct action post.
-        const disableBtn = row.locator('button[title="停用收款人"]').first();
+        const disableBtn = page.getByTestId(`payee-toggle-${testPayeeId}`);
         await disableBtn.click();
-        const dialog = page.locator('[role="dialog"]').filter({ hasText: '確認停用收款人' });
+        const dialog = page.getByTestId('system-confirm-submit');
         if (await dialog.isVisible({ timeout: 1500 }).catch(() => false)) {
-            await dialog.getByRole('button', { name: '停用收款人', exact: true }).click();
+            await dialog.click();
         } else {
             const result = await postPayeeAction(page, 'toggleStatus', {
                 payeeId: testPayeeId,
@@ -100,7 +100,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
 
         await page.reload();
         await expect(
-            page.locator('tr').filter({ hasText: testPayeeName }).first().getByText('已停用')
+            page.getByTestId(`payee-row-${testPayeeId}`).getByText('已停用')
         ).toBeVisible();
     });
 
@@ -108,14 +108,14 @@ test.describe('Payee Direct Actions (Finance)', () => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
 
-        const row = page.locator('tr').filter({ hasText: testPayeeName }).first();
+        const row = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(row).toBeVisible();
 
-        const enableBtn = row.locator('button[title="啟用收款人"]').first();
+        const enableBtn = page.getByTestId(`payee-toggle-${testPayeeId}`);
         await enableBtn.click();
-        const dialog = page.locator('[role="dialog"]').filter({ hasText: '確認啟用收款人' });
+        const dialog = page.getByTestId('system-confirm-submit');
         if (await dialog.isVisible({ timeout: 1500 }).catch(() => false)) {
-            await dialog.getByRole('button', { name: '啟用收款人', exact: true }).click();
+            await dialog.click();
         } else {
             const result = await postPayeeAction(page, 'toggleStatus', {
                 payeeId: testPayeeId,
@@ -138,7 +138,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
 
         await page.reload();
         await expect(
-            page.locator('tr').filter({ hasText: testPayeeName }).first().getByText('已啟用')
+            page.getByTestId(`payee-row-${testPayeeId}`).getByText('已啟用')
         ).toBeVisible();
     });
 
@@ -146,14 +146,14 @@ test.describe('Payee Direct Actions (Finance)', () => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
 
-        const row = page.locator('tr').filter({ hasText: testPayeeName }).first();
+        const row = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(row).toBeVisible();
 
-        const deleteBtn = row.locator('button[title="永久刪除"]').first();
+        const deleteBtn = page.getByTestId(`payee-delete-${testPayeeId}`);
         await deleteBtn.click();
-        const dialog = page.locator('[role="dialog"]').filter({ hasText: '確認永久刪除' });
+        const dialog = page.getByTestId('system-confirm-submit');
         if (await dialog.isVisible({ timeout: 1500 }).catch(() => false)) {
-            await dialog.getByRole('button', { name: '永久刪除', exact: true }).click();
+            await dialog.click();
         } else {
             const result = await postPayeeAction(page, 'removePayee', {
                 payeeId: testPayeeId
@@ -172,9 +172,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
             })
             .toBeNull();
         await page.reload();
-        await expect(
-            page.locator('tr').filter({ hasText: testPayeeName }).first()
-        ).toHaveCount(0);
+        await expect(page.getByTestId(`payee-row-${testPayeeId}`)).toHaveCount(0);
         testPayeeId = ''; // Prevent afterAll from failing if already deleted
     });
 
@@ -206,7 +204,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
 
-        const row = page.locator('tr').filter({ hasText: associateName }).first();
+        const row = page.getByTestId(`payee-row-${p.id}`);
         await expect(row).toBeVisible();
 
         // Directly post action to avoid UI timing flake on confirm dialog,

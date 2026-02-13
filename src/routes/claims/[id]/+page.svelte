@@ -250,6 +250,7 @@
                 <form
                     action="?/delete"
                     method="POST"
+                    data-testid="claim-delete-form"
                     use:enhance={() =>
                         enhanceAction({
                             successMessage: "草稿已刪除",
@@ -266,6 +267,7 @@
                         variant="ghost"
                         type="submit"
                         size="sm"
+                        data-testid="claim-delete-button"
                         class="text-destructive hover:text-destructive hover:bg-destructive/5 font-bold rounded-lg h-9 px-4"
                     >
                         <Trash2 class="mr-1.5 h-3.5 w-3.5" /> 刪除草稿
@@ -274,6 +276,7 @@
                 <form
                     action="?/submit"
                     method="POST"
+                    data-testid="claim-submit-form"
                     use:enhance={() => {
                         isPrimaryActionSubmitting = true;
                         return enhanceAction({
@@ -286,6 +289,7 @@
                 >
                     <Button
                         type="submit"
+                        data-testid="claim-submit-button"
                         class="rounded-lg shadow-md shadow-primary/10 font-bold px-6 h-9"
                         onclick={() => (pendingAction = "submit")}
                         disabled={isPrimaryActionSubmitting}
@@ -319,6 +323,7 @@
                 <form
                     action="?/withdraw"
                     method="POST"
+                    data-testid="claim-withdraw-form"
                     use:enhance={() =>
                         enhanceAction({
                             successMessage: "已撤回為草稿",
@@ -334,6 +339,7 @@
                     <Button
                         variant="outline"
                         type="submit"
+                        data-testid="claim-withdraw-button"
                         class="rounded-lg font-bold h-9 px-4 border-border/50"
                     >
                         <Undo2 class="mr-1.5 h-3.5 w-3.5" /> 撤回草稿
@@ -1052,17 +1058,21 @@
     </Dialog.Root>
 
     <Dialog.Root bind:open={isConfirmModalOpen}>
-        <Dialog.Content class="max-w-md rounded-2xl">
+        <Dialog.Content class="max-w-md rounded-2xl" data-testid="claim-confirm-dialog">
             <Dialog.Header>
                 <Dialog.Title>{confirmTitle}</Dialog.Title>
                 <Dialog.Description>{confirmMessage}</Dialog.Description>
             </Dialog.Header>
             <Dialog.Footer>
-                <Button variant="outline" onclick={cancelConfirmedSubmit}
+                <Button
+                    variant="outline"
+                    data-testid="claim-confirm-cancel"
+                    onclick={cancelConfirmedSubmit}
                     >取消</Button
                 >
                 <Button
                     variant={confirmButtonVariant}
+                    data-testid="claim-confirm-submit"
                     onclick={executeConfirmedSubmit}
                 >
                     {confirmButtonLabel}

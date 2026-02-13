@@ -310,6 +310,7 @@
                 {#each filteredPayees as payee}
                     <Table.Row
                         class="cursor-pointer hover:bg-muted/50 transition-colors"
+                        data-testid={`payee-row-${payee.id}`}
                         onclick={() => openDetail(payee)}
                     >
                         <Table.Cell class="font-medium">{payee.name}</Table.Cell
@@ -337,6 +338,7 @@
                                     <Button
                                         variant="ghost"
                                         size="icon"
+                                        data-testid={`payee-toggle-${payee.id}`}
                                         class="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
                                         onclick={(e) => {
                                             e.stopPropagation();
@@ -356,6 +358,7 @@
                                     <Button
                                         variant="ghost"
                                         size="icon"
+                                        data-testid={`payee-delete-${payee.id}`}
                                         class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
                                         onclick={(e) => {
                                             e.stopPropagation();
@@ -521,6 +524,7 @@
                                     type="submit"
                                     variant="destructive"
                                     size="sm"
+                                    data-testid="payee-submit-disable-request"
                                     disabled={isActionSubmitting}
                                 >
                                     {#if isActionSubmitting}
@@ -608,11 +612,15 @@
             <Dialog.Description>{confirmDescription}</Dialog.Description>
         </Dialog.Header>
         <Dialog.Footer>
-            <Button variant="outline" onclick={() => (isConfirmOpen = false)}
+            <Button
+                variant="outline"
+                data-testid="system-confirm-cancel"
+                onclick={() => (isConfirmOpen = false)}
                 >取消</Button
             >
             <Button
                 variant={confirmButtonVariant}
+                data-testid="system-confirm-submit"
                 onclick={runConfirmedAction}
                 disabled={!confirmAction}
             >

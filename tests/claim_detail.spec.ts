@@ -94,8 +94,8 @@ test.describe.serial('Claim Detail Page', () => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await expect(page.locator('button:has-text("提交審核")')).toBeVisible();
-        await expect(page.locator('button:has-text("刪除")')).toBeVisible();
+        await expect(page.getByTestId('claim-submit-button')).toBeVisible();
+        await expect(page.getByTestId('claim-delete-button')).toBeVisible();
     });
 
     test('Delete draft claim redirects to list', async ({ page }) => {
@@ -107,11 +107,8 @@ test.describe.serial('Claim Detail Page', () => {
         // Click delete. Depending on hydration timing, it may:
         // 1) open app confirm dialog, or
         // 2) submit directly and redirect.
-        await page.getByRole('button', { name: '刪除草稿' }).click();
-        const confirmBtn = page
-            .getByRole('dialog')
-            .filter({ hasText: '確認刪除草稿' })
-            .getByRole('button', { name: '刪除草稿', exact: true });
+        await page.getByTestId('claim-delete-button').click();
+        const confirmBtn = page.getByTestId('claim-confirm-submit');
         if (await confirmBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
             await confirmBtn.click();
         }
