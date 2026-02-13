@@ -82,7 +82,7 @@
                     aria-expanded={open}
                     class={cn(
                         "w-full justify-start font-normal hover:bg-background px-3",
-                        !selectedBank && "text-muted-foreground",
+                        !selectedBank && "text-muted-foreground/60",
                         inputClass,
                     )}
                 >
@@ -118,7 +118,7 @@
             <div class="flex items-center border-b px-3 h-10">
                 <Search class="mr-2 h-4 w-4 shrink-0 opacity-50" />
                 <input
-                    class="flex h-full w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    class="flex h-full w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50"
                     placeholder="搜尋代碼或名稱..."
                     bind:value={searchQuery}
                 />

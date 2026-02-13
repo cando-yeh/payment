@@ -57,9 +57,6 @@ export const actions: Actions = {
                 return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
             }
         }
-        if (!/^\d{3}$/.test(bank_code)) {
-            return fail(400, { message: '銀行代碼需為3碼數字' });
-        }
         if (!bank_account) {
             return fail(400, { message: '銀行帳號為必填' });
         }

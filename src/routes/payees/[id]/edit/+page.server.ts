@@ -107,10 +107,6 @@ export const actions: Actions = {
         if (type === 'personal' && tax_id && !/^[A-Z][0-9]{9}$/.test(tax_id)) {
             return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
         }
-        if (bank_code && !/^\d{3}$/.test(bank_code)) {
-            return fail(400, { message: '銀行代碼需為3碼數字' });
-        }
-
         // --- Handle Attachments for Personal Payees ---
         let attachments: Record<string, any> = {};
 

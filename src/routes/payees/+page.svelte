@@ -21,6 +21,7 @@
     import { goto, invalidateAll } from "$app/navigation";
     import { enhance, deserialize } from "$app/forms";
     import { toast } from "svelte-sonner";
+    import PayeeSheet from "$lib/components/layout/PayeeSheet.svelte";
 
     let { data } = $props();
 
@@ -82,9 +83,13 @@
     let typeFilter = $state("all");
     let isActionSubmitting = $state(false);
 
-    // Detail Dialog State
+    // Detail Dialog State (for requests)
     let selectedPayee = $state<any>(null);
     let isDetailOpen = $state(false);
+
+    // Edit Sheet State (for active payees)
+    let editingPayee = $state<any>(null);
+    let isSheetOpen = $state(false);
 
     // Confirmation Dialog State
     let isConfirmOpen = $state(false);
@@ -137,6 +142,11 @@
     function openDetail(payee: any) {
         selectedPayee = payee;
         isDetailOpen = true;
+    }
+
+    function openEditSheet(payee: any) {
+        editingPayee = payee;
+        isSheetOpen = true;
     }
 
     function openSystemConfirm(options: {
@@ -311,7 +321,13 @@
                     <Table.Row
                         class="cursor-pointer hover:bg-muted/50 transition-colors"
                         data-testid={`payee-row-${payee.id}`}
-                        onclick={() => openDetail(payee)}
+                        onclick={() => {
+                            if (payee.source === "active") {
+                                openEditSheet(payee);
+                            } else {
+                                openDetail(payee);
+                            }
+                        }}
                     >
                         <Table.Cell class="font-medium">{payee.name}</Table.Cell
                         >
@@ -605,6 +621,12 @@
     </Dialog.Content>
 </Dialog.Root>
 
+<PayeeSheet
+    bind:open={isSheetOpen}
+    payee={editingPayee}
+    isFinance={data.is_finance}
+/>
+
 <Dialog.Root bind:open={isConfirmOpen}>
     <Dialog.Content class="max-w-md">
         <Dialog.Header>
@@ -615,8 +637,7 @@
             <Button
                 variant="outline"
                 data-testid="system-confirm-cancel"
-                onclick={() => (isConfirmOpen = false)}
-                >取消</Button
+                onclick={() => (isConfirmOpen = false)}>取消</Button
             >
             <Button
                 variant={confirmButtonVariant}

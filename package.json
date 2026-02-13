@@ -15,7 +15,8 @@
 		"test:e2e": "playwright test",
 		"test:preflight": "bash scripts/test-preflight.sh",
 		"test:e2e:stable": "playwright test --workers=2",
-		"test:all:stable": "npm run test:preflight && npm run test:run && npm run test:e2e:stable"
+  "test:all:stable": "npm run test:preflight && npm run test:run && npm run test:e2e:stable",
+  "test:cleanup": "node scripts/cleanup-test-data.mjs"
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.11.0",

@@ -8,6 +8,12 @@ Run this for daily/local verification:
 npm run test:all:stable
 ```
 
+For database cleanup only:
+
+```bash
+npm run test:cleanup
+```
+
 This command does:
 1. `test:preflight`: check `.env` and Supabase DNS reachability
 2. `test:run`: run Vitest tests
@@ -17,6 +23,14 @@ This command does:
 
 E2E tests create users and sign in many times. High parallelism can trigger Supabase Auth rate limits.
 Using `--workers=2` reduces flaky failures while keeping acceptable speed.
+
+## Test data policy (required)
+
+1. Test users must use `@example.com` email suffix.
+2. Test payee/claim names should include `E2E` or `Test`.
+3. Never create test data without a recognizable marker.
+4. Playwright now runs global teardown (`tests/global-teardown.ts`) and always executes `cleanup-test-data` after suite completion.
+5. If a run is interrupted, manually run `npm run test:cleanup`.
 
 ## Common failures and handling
 
