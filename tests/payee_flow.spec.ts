@@ -38,7 +38,7 @@ test.describe('Payee Management Flow', () => {
         await expect(page).toHaveURL(/\/payees\/new/);
 
         // 驗證表單元素
-        await expect(page.locator('text=受款書類型')).toBeVisible();
+        await expect(page.locator('text=收款人類型')).toBeVisible();
         await expect(page.locator('input[name="name"]')).toBeVisible();
         await expect(page.locator('input[name="bank_account"]')).toBeVisible();
     });

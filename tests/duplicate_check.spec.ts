@@ -106,8 +106,6 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
         await page.goto(`/claims/${claim2.id}`);
 
         // Click "Submit" button
-        // Need to handle the window.confirm
-        page.once('dialog', dialog => dialog.accept());
         await page.click('button:has-text("提交審核")');
 
         // 4. Expect the Duplicate Warning Modal

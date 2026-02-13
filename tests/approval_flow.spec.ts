@@ -9,6 +9,30 @@ test.describe('Approval Flow E2E', () => {
     const ts = Date.now();
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+    async function createUserWithRetry(emailPrefix: string, fullName: string, maxAttempts = 5) {
+        let lastError: any = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const email = `${emailPrefix}_${Date.now()}_${attempt}@example.com`;
+            const { data, error } = await supabaseAdmin.auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: { full_name: fullName }
+            });
+            if (!error && data?.user) return data.user;
+
+            lastError = error || new Error('createUser returned empty user');
+            const isRetryable =
+                error?.status === 429 ||
+                /rate limit|already been registered/i.test(
+                    String(error?.message || '')
+                );
+            if (!isRetryable || attempt === maxAttempts) break;
+            await sleep(500 * attempt);
+        }
+        throw lastError ?? new Error('Failed to create user');
+    }
+
     async function waitForProfile(userId: string) {
         for (let i = 0; i < 20; i++) {
             const { data } = await supabaseAdmin
@@ -46,34 +70,26 @@ test.describe('Approval Flow E2E', () => {
 
     test.beforeAll(async () => {
         // 1. Create Manager
-        const { data: m } = await supabaseAdmin.auth.admin.createUser({
-            email: `manager_${ts}@example.com`,
-            password,
-            email_confirm: true,
-            user_metadata: { full_name: `Manager_${ts}` }
-        });
-        manager = m.user;
+        manager = await createUserWithRetry(
+            `manager_${ts}`,
+            `Manager_${ts}`
+        );
+        await waitForProfile(manager.id);
 
         // 2. Create Finance
-        const { data: f } = await supabaseAdmin.auth.admin.createUser({
-            email: `finance_${ts}@example.com`,
-            password,
-            email_confirm: true,
-            user_metadata: { full_name: `Finance_${ts}` }
-        });
-        finance = f.user;
+        finance = await createUserWithRetry(
+            `finance_${ts}`,
+            `Finance_${ts}`
+        );
         await waitForProfile(finance.id);
         await supabaseAdmin.from('profiles').update({ is_finance: true }).eq('id', finance.id);
         await waitForProfileFields(finance.id, { is_finance: true });
 
         // 3. Create Applicant
-        const { data: a } = await supabaseAdmin.auth.admin.createUser({
-            email: `applicant_${ts}@example.com`,
-            password,
-            email_confirm: true,
-            user_metadata: { full_name: `Applicant_${ts}` }
-        });
-        applicant = a.user;
+        applicant = await createUserWithRetry(
+            `applicant_${ts}`,
+            `Applicant_${ts}`
+        );
         await waitForProfile(applicant.id);
         await supabaseAdmin.from('profiles').update({ approver_id: manager.id }).eq('id', applicant.id);
         await waitForProfileFields(applicant.id, { approver_id: manager.id });
@@ -112,10 +128,6 @@ test.describe('Approval Flow E2E', () => {
 
         await page.goto(`/claims/${claimId}`);
         await expect(page.locator('text=提交審核')).toBeVisible();
-        await page.evaluate(() => {
-            // avoid native confirm flakiness in CI/headless
-            window.confirm = () => true;
-        });
         await page.click('text=提交審核');
 
         await expect(page.locator(`text=請款單 #${claimId}`)).toBeVisible();

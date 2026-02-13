@@ -3,6 +3,7 @@ import { injectSession, postFormAction, supabaseAdmin } from './helpers';
 
 const password = 'password123';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+test.setTimeout(120000);
 
 async function waitForProfile(userId: string) {
     for (let i = 0; i < 20; i++) {

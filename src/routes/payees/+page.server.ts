@@ -1,5 +1,15 @@
 import type { PageServerLoad, Actions } from './$types';
 import { error, redirect, fail } from '@sveltejs/kit';
+import { createClient } from '@supabase/supabase-js';
+import { env } from '$env/dynamic/private';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+
+function getServiceRoleClient() {
+    if (!env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY 未設定');
+    }
+    return createClient(PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
     const { supabase, getSession } = locals;
@@ -12,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     const [payeesResponse, requestsResponse] = await Promise.all([
         supabase
             .from('payees')
-            .select('id, name, type, status, bank, service_description, created_at, updated_at')
+            .select('id, name, type, status, bank, bank_account, service_description, created_at, updated_at')
             .order('created_at', { ascending: false }),
         supabase
             .from('payee_change_requests')
@@ -21,6 +31,7 @@ export const load: PageServerLoad = async ({ locals }) => {
                 change_type, 
                 status, 
                 proposed_data, 
+                proposed_bank_account,
                 reason, 
                 created_at, 
                 requested_by, 
@@ -174,5 +185,87 @@ export const actions: Actions = {
         }
 
         return { success: true, message: '停用申請已提交，請等待財務審核' };
+    },
+
+    /**
+     * 永久刪除收款人 (僅財務權限)
+     * 並處理資料庫 FK 限制驗證
+     */
+    removePayee: async ({ request, locals: { supabase, getSession, user } }) => {
+        const session = await getSession();
+        if (!session || !user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務人員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const payeeId = formData.get('payeeId') as string;
+
+        if (!payeeId) return fail(400, { message: '缺少收款人 ID' });
+
+        let serviceRoleClient;
+        try {
+            serviceRoleClient = getServiceRoleClient();
+        } catch (e: any) {
+            return fail(500, { message: `刪除失敗：${e?.message || '缺少 Service Role 設定'}` });
+        }
+
+        const { error: deleteError } = await serviceRoleClient
+            .from('payees')
+            .delete()
+            .eq('id', payeeId);
+
+        if (deleteError) {
+            console.error('Delete Payee Error:', deleteError);
+            // 處理 FK 衝突 (PostgreSQL error code 23503)
+            if (deleteError.code === '23503') {
+                return fail(400, {
+                    message: '無法刪除：此收款人已有關聯之報銷案件或申請記錄。請改成「停用」處理。'
+                });
+            }
+            return fail(500, { message: '刪除失敗：' + deleteError.message });
+        }
+
+        return { success: true, message: '收款人已永久刪除' };
+    },
+
+    /**
+     * 直接切換收款人狀態 (僅財務權限)
+     */
+    toggleStatus: async ({ request, locals: { getSession, user } }) => {
+        const session = await getSession();
+        if (!session || !user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務人員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const payeeId = formData.get('payeeId') as string;
+        const currentStatus = formData.get('currentStatus') as string;
+
+        if (!payeeId) return fail(400, { message: '缺少收款人 ID' });
+
+        const newStatus = currentStatus === 'available' ? 'disabled' : 'available';
+
+        let serviceRoleClient;
+        try {
+            serviceRoleClient = getServiceRoleClient();
+        } catch (e: any) {
+            return fail(500, { message: `更新狀態失敗：${e?.message || '缺少 Service Role 設定'}` });
+        }
+
+        const { data: updatedRows, error: updateError } = await serviceRoleClient
+            .from('payees')
+            .update({ status: newStatus })
+            .eq('id', payeeId)
+            .select('id');
+
+        if (updateError) {
+            console.error('Toggle Status Error:', updateError);
+            return fail(500, { message: '更新狀態失敗：' + updateError.message });
+        }
+        if (!updatedRows || updatedRows.length === 0) {
+            return fail(404, { message: '更新狀態失敗：找不到收款人或目前權限不足' });
+        }
+
+        return { success: true, message: `收款人已${newStatus === 'available' ? '啟用' : '停用'}` };
     }
 };

@@ -3,12 +3,14 @@
     import * as Table from "$lib/components/ui/table";
     import * as Avatar from "$lib/components/ui/avatar";
     import * as Tabs from "$lib/components/ui/tabs";
+    import * as Dialog from "$lib/components/ui/dialog";
     import { Badge } from "$lib/components/ui/badge";
     import { toast } from "svelte-sonner";
     import { Search, Users, Trash2, UserX, UserCheck } from "lucide-svelte";
     import { Input } from "$lib/components/ui/input";
     import { timedFetch } from "$lib/client/timed-fetch";
     import { deserialize } from "$app/forms";
+    import { invalidateAll } from "$app/navigation";
     import UserProfileSheet from "$lib/components/layout/UserProfileSheet.svelte";
 
     let { data } = $props();
@@ -17,6 +19,12 @@
     let searchTerm = $state("");
     let currentTab = $state<"active" | "inactive">("active");
     let pendingOps = $state<Record<string, boolean>>({});
+    let isConfirmOpen = $state(false);
+    let confirmTitle = $state("");
+    let confirmDescription = $state("");
+    let confirmButtonLabel = $state("確認");
+    let confirmButtonVariant = $state<"default" | "destructive">("default");
+    let confirmAction = $state<null | (() => Promise<void>)>(null);
 
     // 選中的使用者資料（用於開啟 Sheet）
     let selectedUser = $state<any>(null);
@@ -89,26 +97,31 @@
         return result;
     }
 
-    async function deactivateUser(userId: string, userName: string) {
-        if (!confirm(`確定要停用使用者「${userName}」？`)) return;
+    function openSystemConfirm(options: {
+        title: string;
+        description: string;
+        buttonLabel: string;
+        buttonVariant?: "default" | "destructive";
+        action: () => Promise<void>;
+    }) {
+        confirmTitle = options.title;
+        confirmDescription = options.description;
+        confirmButtonLabel = options.buttonLabel;
+        confirmButtonVariant = options.buttonVariant ?? "default";
+        confirmAction = options.action;
+        isConfirmOpen = true;
+    }
 
+    async function runConfirmedAction() {
+        const action = confirmAction;
+        isConfirmOpen = false;
+        confirmAction = null;
+        if (action) await action();
+    }
+
+    async function deactivateUser(userId: string) {
         const opKey = `deactivate:${userId}`;
         if (pendingOps[opKey]) return;
-
-        const index = users.findIndex((u) => u.id === userId);
-        if (index === -1) return;
-
-        const previous = users[index];
-        users[index] = {
-            ...previous,
-            is_active: false,
-            approver_id: null,
-            is_admin: false,
-            is_finance: false,
-        };
-        users = users.map((u) =>
-            u.approver_id === userId ? { ...u, approver_id: null } : u,
-        );
         setPending(opKey, true);
 
         const formData = new FormData();
@@ -121,32 +134,18 @@
                 headers: { "x-sveltekit-action": "true" },
             });
             await parseActionResponse(response, "停用失敗");
+            await invalidateAll();
             toast.success("使用者已停用");
         } catch (e: any) {
-            users[index] = previous;
             toast.error(e?.message || "停用失敗");
         } finally {
             setPending(opKey, false);
         }
     }
 
-    async function reactivateUser(userId: string, userName: string) {
-        if (!confirm(`確定要重新啟用使用者「${userName}」？`)) return;
-
+    async function reactivateUser(userId: string) {
         const opKey = `reactivate:${userId}`;
         if (pendingOps[opKey]) return;
-
-        const index = users.findIndex((u) => u.id === userId);
-        if (index === -1) return;
-
-        const previous = users[index];
-        users[index] = {
-            ...previous,
-            is_active: true,
-            deactivated_at: null,
-            deactivated_by: null,
-            deactivate_reason: null,
-        };
         setPending(opKey, true);
 
         const formData = new FormData();
@@ -159,28 +158,18 @@
                 headers: { "x-sveltekit-action": "true" },
             });
             await parseActionResponse(response, "重新啟用失敗");
+            await invalidateAll();
             toast.success("使用者已重新啟用");
         } catch (e: any) {
-            users[index] = previous;
             toast.error(e?.message || "重新啟用失敗");
         } finally {
             setPending(opKey, false);
         }
     }
 
-    async function removeUser(userId: string, userName: string) {
-        if (!confirm(`確定要永久刪除使用者「${userName}」？此操作無法復原。`)) {
-            return;
-        }
-
+    async function removeUser(userId: string) {
         const opKey = `delete:${userId}`;
         if (pendingOps[opKey]) return;
-
-        const index = users.findIndex((u) => u.id === userId);
-        if (index === -1) return;
-
-        const previous = users[index];
-        users = users.filter((u) => u.id !== userId);
         setPending(opKey, true);
 
         const formData = new FormData();
@@ -193,13 +182,9 @@
                 headers: { "x-sveltekit-action": "true" },
             });
             await parseActionResponse(response, "永久刪除失敗");
+            await invalidateAll();
             toast.success("使用者已永久刪除");
         } catch (e: any) {
-            users = [...users, previous].sort(
-                (a, b) =>
-                    new Date(b.created_at).getTime() -
-                    new Date(a.created_at).getTime(),
-            );
             toast.error(e?.message || "永久刪除失敗");
         } finally {
             setPending(opKey, false);
@@ -352,10 +337,17 @@
                                             class="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
                                             onclick={(e) => {
                                                 e.stopPropagation();
-                                                deactivateUser(
-                                                    user.id,
-                                                    user.full_name,
-                                                );
+                                                openSystemConfirm({
+                                                    title: "確認停用帳號",
+                                                    description: `確定要停用使用者「${user.full_name}」？`,
+                                                    buttonLabel: "停用帳號",
+                                                    buttonVariant:
+                                                        "destructive",
+                                                    action: () =>
+                                                        deactivateUser(
+                                                            user.id,
+                                                        ),
+                                                });
                                             }}
                                             title="停用帳號"
                                         >
@@ -368,10 +360,15 @@
                                             class="h-8 w-8 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
                                             onclick={(e) => {
                                                 e.stopPropagation();
-                                                reactivateUser(
-                                                    user.id,
-                                                    user.full_name,
-                                                );
+                                                openSystemConfirm({
+                                                    title: "確認重新啟用",
+                                                    description: `確定要重新啟用使用者「${user.full_name}」？`,
+                                                    buttonLabel: "重新啟用",
+                                                    action: () =>
+                                                        reactivateUser(
+                                                            user.id,
+                                                        ),
+                                                });
                                             }}
                                             title="重新啟用"
                                         >
@@ -384,7 +381,16 @@
                                         class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
                                         onclick={(e) => {
                                             e.stopPropagation();
-                                            removeUser(user.id, user.full_name);
+                                            openSystemConfirm({
+                                                title: "確認永久刪除",
+                                                description: `確定要永久刪除使用者「${user.full_name}」？此操作無法復原。`,
+                                                buttonLabel: "永久刪除",
+                                                buttonVariant: "destructive",
+                                                action: () =>
+                                                    removeUser(
+                                                        user.id,
+                                                    ),
+                                            });
                                         }}
                                         title="永久刪除"
                                     >
@@ -417,3 +423,24 @@
         approverOptions={data.approverOptions}
     />
 {/if}
+
+<Dialog.Root bind:open={isConfirmOpen}>
+    <Dialog.Content class="max-w-md">
+        <Dialog.Header>
+            <Dialog.Title>{confirmTitle}</Dialog.Title>
+            <Dialog.Description>{confirmDescription}</Dialog.Description>
+        </Dialog.Header>
+        <Dialog.Footer>
+            <Button variant="outline" onclick={() => (isConfirmOpen = false)}
+                >取消</Button
+            >
+            <Button
+                variant={confirmButtonVariant}
+                onclick={runConfirmedAction}
+                disabled={!confirmAction}
+            >
+                {confirmButtonLabel}
+            </Button>
+        </Dialog.Footer>
+    </Dialog.Content>
+</Dialog.Root>

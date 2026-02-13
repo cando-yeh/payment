@@ -29,7 +29,7 @@ export async function authSignInWithRetry(
     client: SupabaseClient,
     email: string,
     password: string,
-    maxAttempts = 5
+    maxAttempts = 8
 ) {
     let lastError: any = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -47,7 +47,9 @@ export async function authSignInWithRetry(
             throw error ?? new Error('Sign in failed');
         }
 
-        await sleep(350 * attempt);
+        const backoffMs = Math.min(12000, 600 * Math.pow(2, attempt - 1));
+        const jitterMs = Math.floor(Math.random() * 500);
+        await sleep(backoffMs + jitterMs);
     }
 
     throw lastError ?? new Error('Sign in failed');

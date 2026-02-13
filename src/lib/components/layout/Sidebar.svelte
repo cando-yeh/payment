@@ -30,7 +30,7 @@
   - 其他項目對所有使用者顯示
 -->
 <script lang="ts">
-    import { page } from "$app/stores";
+    import { page } from "$app/state";
     import { cn } from "$lib/utils";
     import * as Avatar from "$lib/components/ui/avatar";
     import * as Separator from "$lib/components/ui/separator";
@@ -38,13 +38,10 @@
 
     // Lucide 圖標：提供導航項目的視覺識別
     import {
-        Home, // 首頁/我的請款
         FileText, // Logo 圖標
-        CheckCircle, // 審核中心
         Building2, // 廠商管理
         User, // 個人帳戶
         Settings, // 使用者設定
-        Plus, // 新增按鈕
         LogOut, // 登出按鈕
         Landmark, // 付款歷史
     } from "lucide-svelte";
@@ -62,7 +59,7 @@
         /** 連結路徑 */
         href: string;
         /** 圖標元件 */
-        icon: typeof Home;
+        icon: any;
         /** 待辦數量徽章 (可選) */
         badge?: number;
         /** 需要的角色權限 (可選，未設定則所有人可見) */
@@ -85,12 +82,12 @@
         {
             label: "審核中心",
             href: "/approval",
-            icon: CheckCircle,
+            icon: FileText,
             requiredRoles: ["finance", "admin", "approver"],
         },
 
         // 受款人管理：所有使用者可見 (新增需審核)
-        { label: "受款人管理", href: "/payees", icon: Building2 },
+        { label: "收款人管理", href: "/payees", icon: Building2 },
 
         // 使用者管理：僅管理員可見
         {
@@ -181,7 +178,7 @@
         if (user.isApprover) roles.push("主管");
 
         // 若無任何特殊角色，顯示為一般申請人
-        if (roles.length === 0) return "申請人";
+        if (roles.length === 0) return "員工";
         return roles.join(" / ");
     }
 
@@ -192,7 +189,7 @@
      * @returns 是否為當前頁面
      */
     function isActive(href: string): boolean {
-        const currentPath = $page.url.pathname;
+        const currentPath = page.url.pathname;
 
         // 首頁需要精確匹配
         if (href === "/") return currentPath === "/";
@@ -293,7 +290,7 @@
             <button
                 class="flex-1 overflow-hidden appearance-none border-none bg-transparent p-0 text-left outline-none cursor-pointer group"
                 onclick={() => (accountSheetOpen = true)}
-                title="開啟個人帳戶設定"
+                title="個人帳戶設定"
             >
                 <div class="flex flex-col">
                     <p

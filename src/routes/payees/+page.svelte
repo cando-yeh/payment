@@ -10,15 +10,16 @@
         Undo2,
         Check,
         X,
-        ExternalLink,
         LoaderCircle,
         Building2,
         User,
-        Pencil,
         Ban,
+        Trash2,
+        UserX,
+        UserCheck,
     } from "lucide-svelte";
     import { goto, invalidateAll } from "$app/navigation";
-    import { enhance } from "$app/forms";
+    import { enhance, deserialize } from "$app/forms";
     import { toast } from "svelte-sonner";
 
     let { data } = $props();
@@ -51,6 +52,11 @@
                     req.change_type === "create"
                         ? req.proposed_data?.type || "unknown"
                         : linkedPayee?.type || "unknown",
+                bank_code:
+                    req.change_type === "create"
+                        ? req.proposed_data?.bank_code || "-"
+                        : linkedPayee?.bank || "-",
+                bank_account: req.proposed_bank_account ? "已加密" : "-",
                 status: `pending_${req.change_type}`,
                 source: "request",
                 payload: req, // Store full request for detail view
@@ -62,7 +68,14 @@
             (p) => !payeesWithPendingRequests.has(p.id),
         );
 
-        return [...pending, ...visibleActive];
+        return [
+            ...pending,
+            ...visibleActive.map((p) => ({
+                ...p,
+                bank_code: p.bank || "-",
+                bank_account: p.bank_account ? "已加密" : "-",
+            })),
+        ];
     });
 
     let searchTerm = $state("");
@@ -72,6 +85,14 @@
     // Detail Dialog State
     let selectedPayee = $state<any>(null);
     let isDetailOpen = $state(false);
+
+    // Confirmation Dialog State
+    let isConfirmOpen = $state(false);
+    let confirmTitle = $state("");
+    let confirmDescription = $state("");
+    let confirmButtonLabel = $state("確認");
+    let confirmButtonVariant = $state<"default" | "destructive">("default");
+    let confirmAction = $state<null | (() => Promise<void>)>(null);
 
     let filteredPayees = $derived(
         payees.filter((p) => {
@@ -118,6 +139,28 @@
         isDetailOpen = true;
     }
 
+    function openSystemConfirm(options: {
+        title: string;
+        description: string;
+        buttonLabel: string;
+        buttonVariant?: "default" | "destructive";
+        action: () => Promise<void>;
+    }) {
+        confirmTitle = options.title;
+        confirmDescription = options.description;
+        confirmButtonLabel = options.buttonLabel;
+        confirmButtonVariant = options.buttonVariant ?? "default";
+        confirmAction = options.action;
+        isConfirmOpen = true;
+    }
+
+    async function runConfirmedAction() {
+        const action = confirmAction;
+        isConfirmOpen = false;
+        confirmAction = null;
+        if (action) await action();
+    }
+
     /**
      * Common form submission handler for actions (Withdraw, Approve)
      */
@@ -136,19 +179,89 @@
             };
         };
     }
+
+    async function handleToggleStatus(payee: any) {
+        const action = payee.status === "available" ? "停用" : "啟用";
+        openSystemConfirm({
+            title: `確認${action}收款人`,
+            description: `確定要${action}收款人「${payee.name}」？`,
+            buttonLabel: `${action}收款人`,
+            buttonVariant:
+                payee.status === "available" ? "destructive" : "default",
+            action: async () => {
+                isActionSubmitting = true;
+                const formData = new FormData();
+                formData.append("payeeId", payee.id);
+                formData.append("currentStatus", payee.status);
+
+                try {
+                    const response = await fetch("?/toggleStatus", {
+                        method: "POST",
+                        body: formData,
+                        headers: { "x-sveltekit-action": "true" },
+                    });
+                    const result = deserialize(await response.text()) as any;
+                    if (result.type === "success") {
+                        toast.success(result.data?.message || `已${action}`);
+                        await invalidateAll();
+                    } else {
+                        toast.error(result.data?.message || `${action}失敗`);
+                    }
+                } catch (e) {
+                    toast.error("連線錯誤");
+                } finally {
+                    isActionSubmitting = false;
+                }
+            },
+        });
+    }
+
+    async function handleRemovePayee(payee: any) {
+        openSystemConfirm({
+            title: "確認永久刪除",
+            description: `確定要永久刪除收款人「${payee.name}」？此操作無法復原。`,
+            buttonLabel: "永久刪除",
+            buttonVariant: "destructive",
+            action: async () => {
+                isActionSubmitting = true;
+                const formData = new FormData();
+                formData.append("payeeId", payee.id);
+
+                try {
+                    const response = await fetch("?/removePayee", {
+                        method: "POST",
+                        body: formData,
+                        headers: { "x-sveltekit-action": "true" },
+                    });
+                    const result = deserialize(await response.text()) as any;
+                    if (result.type === "success") {
+                        toast.success("收款人已永久刪除");
+                        isDetailOpen = false;
+                        await invalidateAll();
+                    } else {
+                        toast.error(result.data?.message || "刪除失敗");
+                    }
+                } catch (e) {
+                    toast.error("連線錯誤");
+                } finally {
+                    isActionSubmitting = false;
+                }
+            },
+        });
+    }
 </script>
 
 <div class="flex flex-col gap-6 p-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-3xl font-bold tracking-tight">受款人管理</h1>
+            <h1 class="text-3xl font-bold tracking-tight">收款人管理</h1>
             <p class="text-muted-foreground mt-2">
-                管理所有廠商與個人受款對象。
+                管理所有廠商與個人收款對象。
             </p>
         </div>
         <Button onclick={() => goto("/payees/new")}>
             <Plus class="mr-2 h-4 w-4" />
-            新增受款人
+            新增收款人
         </Button>
     </div>
 
@@ -187,6 +300,8 @@
                 <Table.Row>
                     <Table.Head>名稱</Table.Head>
                     <Table.Head>類型</Table.Head>
+                    <Table.Head>銀行</Table.Head>
+                    <Table.Head>銀行帳號</Table.Head>
                     <Table.Head>狀態</Table.Head>
                     <Table.Head class="text-right">操作</Table.Head>
                 </Table.Row>
@@ -208,6 +323,8 @@
                                 {typeInfo.label}
                             </div>
                         </Table.Cell>
+                        <Table.Cell>{payee.bank_code}</Table.Cell>
+                        <Table.Cell>{payee.bank_account || "-"}</Table.Cell>
                         <Table.Cell>
                             {@const badge = getStatusBadge(payee.status)}
                             <Badge variant={badge.variant as any}
@@ -215,17 +332,48 @@
                             >
                         </Table.Cell>
                         <Table.Cell class="text-right">
-                            <Button variant="ghost" size="icon">
-                                <ExternalLink
-                                    class="h-4 w-4 text-muted-foreground"
-                                />
-                            </Button>
+                            <div class="flex items-center justify-end gap-1">
+                                {#if payee.source === "active" && data.is_finance}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="h-8 w-8 text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleStatus(payee);
+                                        }}
+                                        disabled={isActionSubmitting}
+                                        title={payee.status === "available"
+                                            ? "停用收款人"
+                                            : "啟用收款人"}
+                                    >
+                                        {#if payee.status === "available"}
+                                            <UserX class="h-4 w-4" />
+                                        {:else}
+                                            <UserCheck class="h-4 w-4" />
+                                        {/if}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemovePayee(payee);
+                                        }}
+                                        disabled={isActionSubmitting}
+                                        title="永久刪除"
+                                    >
+                                        <Trash2 class="h-4 w-4" />
+                                    </Button>
+                                {/if}
+                            </div>
                         </Table.Cell>
                     </Table.Row>
                 {:else}
                     <Table.Row>
                         <Table.Cell
-                            colspan={4}
+                            colspan={6}
                             class="h-24 text-center text-muted-foreground"
                             >無資料</Table.Cell
                         >
@@ -241,19 +389,11 @@
     <Dialog.Content class="max-w-md">
         <Dialog.Header>
             <Dialog.Title>{selectedPayee?.name}</Dialog.Title>
-            <Dialog.Description>受款人詳細資訊與狀態管理</Dialog.Description>
+            <Dialog.Description>收款人詳細資訊與狀態管理</Dialog.Description>
         </Dialog.Header>
 
         {#if selectedPayee}
             <div class="grid gap-4 py-4">
-                <div class="grid grid-cols-4 items-start gap-4">
-                    <span class="text-sm font-medium text-muted-foreground"
-                        >類型</span
-                    >
-                    <span class="col-span-3 text-sm"
-                        >{getTypeLabel(selectedPayee.type).label}</span
-                    >
-                </div>
                 <div class="grid grid-cols-4 items-start gap-4">
                     <span class="text-sm font-medium text-muted-foreground"
                         >狀態</span
@@ -263,6 +403,25 @@
                             variant={getStatusBadge(selectedPayee.status)
                                 .variant as any}
                             >{getStatusBadge(selectedPayee.status).label}</Badge
+                        >
+                    </div>
+                </div>
+
+                <div class="border-t pt-4 space-y-3">
+                    <div class="grid grid-cols-4 items-start gap-4">
+                        <span class="text-sm font-medium text-muted-foreground"
+                            >銀行代碼</span
+                        >
+                        <span class="col-span-3 text-sm"
+                            >{selectedPayee.bank_code || "-"}</span
+                        >
+                    </div>
+                    <div class="grid grid-cols-4 items-start gap-4">
+                        <span class="text-sm font-medium text-muted-foreground"
+                            >銀行帳號</span
+                        >
+                        <span class="col-span-3 text-sm"
+                            >{selectedPayee.bank_account || "-"}</span
                         >
                     </div>
                 </div>
@@ -347,16 +506,6 @@
 
                 <div class="flex gap-2">
                     {#if selectedPayee.source === "active"}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onclick={() =>
-                                goto(`/payees/${selectedPayee.id}/edit`)}
-                        >
-                            <Pencil class="mr-2 h-3 w-3" />
-                            編輯資料
-                        </Button>
-
                         {#if selectedPayee.status === "available"}
                             <form
                                 method="POST"
@@ -381,7 +530,7 @@
                                     {:else}
                                         <Ban class="mr-2 h-3 w-3" />
                                     {/if}
-                                    停用受款人
+                                    停用收款人
                                 </Button>
                             </form>
                         {/if}
@@ -449,5 +598,26 @@
                 </div>
             </Dialog.Footer>
         {/if}
+    </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={isConfirmOpen}>
+    <Dialog.Content class="max-w-md">
+        <Dialog.Header>
+            <Dialog.Title>{confirmTitle}</Dialog.Title>
+            <Dialog.Description>{confirmDescription}</Dialog.Description>
+        </Dialog.Header>
+        <Dialog.Footer>
+            <Button variant="outline" onclick={() => (isConfirmOpen = false)}
+                >取消</Button
+            >
+            <Button
+                variant={confirmButtonVariant}
+                onclick={runConfirmedAction}
+                disabled={!confirmAction}
+            >
+                {confirmButtonLabel}
+            </Button>
+        </Dialog.Footer>
     </Dialog.Content>
 </Dialog.Root>

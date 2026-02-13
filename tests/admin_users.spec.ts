@@ -167,8 +167,12 @@ test.describe('Admin Users Page', () => {
         }).first();
         await expect(userRow).toBeVisible();
 
-        page.once('dialog', (dialog) => dialog.accept());
         await userRow.locator('button[title="停用帳號"]').click();
+        await page
+            .getByRole('dialog')
+            .filter({ hasText: '確認停用帳號' })
+            .getByRole('button', { name: '停用帳號', exact: true })
+            .click();
         await expect(page.locator('text=使用者已停用')).toBeVisible();
 
         await page.getByRole('tab', { name: /已停用/ }).click();
@@ -177,8 +181,12 @@ test.describe('Admin Users Page', () => {
         }).first();
         await expect(inactiveRow).toBeVisible();
 
-        page.once('dialog', (dialog) => dialog.accept());
         await inactiveRow.locator('button[title="重新啟用"]').click();
+        await page
+            .getByRole('dialog')
+            .filter({ hasText: '確認重新啟用' })
+            .getByRole('button', { name: '重新啟用', exact: true })
+            .click();
         await expect(page.locator('text=使用者已重新啟用')).toBeVisible();
     });
 
@@ -202,8 +210,12 @@ test.describe('Admin Users Page', () => {
         }).first();
         await expect(userRow).toBeVisible();
 
-        page.once('dialog', (dialog) => dialog.accept());
         await userRow.locator('button[title*="永久刪除"]').click();
+        await page
+            .getByRole('dialog')
+            .filter({ hasText: '確認永久刪除' })
+            .getByRole('button', { name: '永久刪除', exact: true })
+            .click();
         await expect(page.locator('text=僅可停用以保留稽核軌跡')).toBeVisible();
 
         await supabaseAdmin.from('claims').delete().eq('id', claimId);

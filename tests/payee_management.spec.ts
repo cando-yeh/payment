@@ -143,8 +143,8 @@ test.describe('Payee Management Extended Flow', () => {
         const dialog = page.locator('[role="dialog"]');
         await expect(dialog).toBeVisible({ timeout: 5000 });
 
-        // 按下「停用受款人」按鈕 (button inside form with action ?/submitDisableRequest)
-        const disableBtn = dialog.getByRole('button', { name: '停用受款人' });
+        // 按下「停用收款人」按鈕 (button inside form with action ?/submitDisableRequest)
+        const disableBtn = dialog.getByRole('button', { name: '停用收款人' });
         await expect(disableBtn).toBeVisible({ timeout: 5000 });
 
         await disableBtn.click();

@@ -59,6 +59,13 @@
     let duplicates = $derived(form?.duplicates || []);
     let pendingAction = $state<"submit" | "approve" | null>(null);
     let isPrimaryActionSubmitting = $state(false);
+    let isConfirmModalOpen = $state(false);
+    let confirmTitle = $state("確認操作");
+    let confirmMessage = $state("");
+    let confirmButtonLabel = $state("確認");
+    let confirmButtonVariant = $state<"default" | "destructive">("default");
+    let pendingConfirmForm = $state<HTMLFormElement | null>(null);
+    let allowConfirmedSubmitFor = $state<HTMLFormElement | null>(null);
 
     $effect(() => {
         if (form?.duplicates?.length > 0) {
@@ -71,10 +78,41 @@
         isDrawerOpen = true;
     }
 
-    function confirmSubmit(event: SubmitEvent, message: string) {
-        if (!confirm(message)) {
-            event.preventDefault();
+    function requestConfirmSubmit(
+        event: SubmitEvent,
+        options: {
+            title?: string;
+            message: string;
+            confirmLabel?: string;
+            confirmVariant?: "default" | "destructive";
+        },
+    ) {
+        const form = event.currentTarget as HTMLFormElement;
+        if (allowConfirmedSubmitFor === form) {
+            allowConfirmedSubmitFor = null;
+            return;
         }
+        event.preventDefault();
+        pendingConfirmForm = form;
+        confirmTitle = options.title || "確認操作";
+        confirmMessage = options.message;
+        confirmButtonLabel = options.confirmLabel || "確認";
+        confirmButtonVariant = options.confirmVariant || "default";
+        isConfirmModalOpen = true;
+    }
+
+    function executeConfirmedSubmit() {
+        const form = pendingConfirmForm;
+        pendingConfirmForm = null;
+        isConfirmModalOpen = false;
+        if (!form || !form.isConnected) return;
+        allowConfirmedSubmitFor = form;
+        form.requestSubmit();
+    }
+
+    function cancelConfirmedSubmit() {
+        pendingConfirmForm = null;
+        isConfirmModalOpen = false;
     }
 
     function enhanceAction({
@@ -217,7 +255,12 @@
                             successMessage: "草稿已刪除",
                         })}
                     onsubmit={(event) =>
-                        confirmSubmit(event, "確定要刪除此草稿嗎？")}
+                        requestConfirmSubmit(event, {
+                            title: "確認刪除草稿",
+                            message: "確定要刪除此草稿嗎？",
+                            confirmLabel: "刪除草稿",
+                            confirmVariant: "destructive",
+                        })}
                 >
                     <Button
                         variant="ghost"
@@ -281,10 +324,12 @@
                             successMessage: "已撤回為草稿",
                         })}
                     onsubmit={(event) =>
-                        confirmSubmit(
-                            event,
-                            "確定要撤回此申請嗎？撤回後將變為草稿狀態。",
-                        )}
+                        requestConfirmSubmit(event, {
+                            title: "確認撤回草稿",
+                            message:
+                                "確定要撤回此申請嗎？撤回後將變為草稿狀態。",
+                            confirmLabel: "撤回草稿",
+                        })}
                 >
                     <Button
                         variant="outline"
@@ -788,10 +833,12 @@
                                     })}
                                 class="w-full"
                                 onsubmit={(event) =>
-                                    confirmSubmit(
-                                        event,
-                                        "確定要永久移除此附件嗎？",
-                                    )}
+                                    requestConfirmSubmit(event, {
+                                        title: "確認移除附件",
+                                        message: "確定要永久移除此附件嗎？",
+                                        confirmLabel: "永久移除",
+                                        confirmVariant: "destructive",
+                                    })}
                             >
                                 <input
                                     type="hidden"
@@ -1000,6 +1047,26 @@
                             : "仍要強制提交"}
                     </Button>
                 </form>
+            </Dialog.Footer>
+        </Dialog.Content>
+    </Dialog.Root>
+
+    <Dialog.Root bind:open={isConfirmModalOpen}>
+        <Dialog.Content class="max-w-md rounded-2xl">
+            <Dialog.Header>
+                <Dialog.Title>{confirmTitle}</Dialog.Title>
+                <Dialog.Description>{confirmMessage}</Dialog.Description>
+            </Dialog.Header>
+            <Dialog.Footer>
+                <Button variant="outline" onclick={cancelConfirmedSubmit}
+                    >取消</Button
+                >
+                <Button
+                    variant={confirmButtonVariant}
+                    onclick={executeConfirmedSubmit}
+                >
+                    {confirmButtonLabel}
+                </Button>
             </Dialog.Footer>
         </Dialog.Content>
     </Dialog.Root>

@@ -8,15 +8,10 @@
         Plus,
         Search,
         FileText,
-        Filter,
         ReceiptText,
-        Clock,
-        AlertCircle,
-        History,
-        Sparkles,
         ArrowRight,
     } from "lucide-svelte";
-    import { fade, fly } from "svelte/transition";
+    import { fade } from "svelte/transition";
     import { cn } from "$lib/utils";
     import type { PageData } from "./$types";
 
@@ -64,7 +59,7 @@
             color: "bg-emerald-100 text-emerald-700 border-emerald-200",
         },
         paid_pending_doc: {
-            label: "已付款(待補件)",
+            label: "已付款待補件",
             color: "bg-orange-100 text-orange-700 border-orange-200",
         },
         pending_doc_review: {
@@ -184,7 +179,9 @@
             <div
                 class="p-6 border-b border-border/30 flex flex-col md:flex-row md:items-center justify-between gap-6"
             >
-                <div class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1">
+                <div
+                    class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1"
+                >
                     <button
                         type="button"
                         role="tab"
@@ -195,7 +192,8 @@
                                 ? "bg-background shadow-sm"
                                 : "",
                         )}
-                        onclick={() => handleTabChange("drafts")}>草稿/退回</button
+                        onclick={() => handleTabChange("drafts")}
+                        >草稿/退回</button
                     >
                     <button
                         type="button"
@@ -207,7 +205,8 @@
                                 ? "bg-background shadow-sm"
                                 : "",
                         )}
-                        onclick={() => handleTabChange("processing")}>審核中</button
+                        onclick={() => handleTabChange("processing")}
+                        >審核中</button
                     >
                     <button
                         type="button"
@@ -219,7 +218,8 @@
                                 ? "bg-background shadow-sm"
                                 : "",
                         )}
-                        onclick={() => handleTabChange("action_required")}>待補件</button
+                        onclick={() => handleTabChange("action_required")}
+                        >待補件</button
                     >
                     <button
                         type="button"
@@ -231,7 +231,8 @@
                                 ? "bg-background shadow-sm"
                                 : "",
                         )}
-                        onclick={() => handleTabChange("history")}>歷史紀錄</button
+                        onclick={() => handleTabChange("history")}
+                        >歷史紀錄</button
                     >
                 </div>
 

@@ -23,7 +23,11 @@
      * Handles the form submission using SvelteKit's standard `enhance` action.
      * Manages loading state and displays toast notifications based on the result.
      */
-    async function handleSubmit({ formElement }: { formElement: HTMLFormElement }) {
+    async function handleSubmit({
+        formElement,
+    }: {
+        formElement: HTMLFormElement;
+    }) {
         isLoading = true;
         await compressFormImageInputs(formElement, [
             "attachment_id_front",
@@ -35,7 +39,7 @@
             isLoading = false;
 
             if (result.type === "success") {
-                toast.success("受款人申請已提交，請等待財務審核。");
+                toast.success("收款人申請已提交，請等待財務審核。");
                 goto("/payees");
             } else if (result.type === "redirect") {
                 goto(result.location);
@@ -57,9 +61,9 @@
     </Button>
 
     <div class="mb-8">
-        <h1 class="text-3xl font-bold tracking-tight">新增受款人</h1>
+        <h1 class="text-3xl font-bold tracking-tight">新增收款人</h1>
         <p class="text-muted-foreground mt-2">
-            提交新的受款對象資料。送出後需經財務審核才可正式啟用。
+            提交新的收款對象資料。送出後需經財務審核才可正式啟用。
         </p>
     </div>
 
@@ -74,7 +78,7 @@
             >
                 <!-- Type Selection -->
                 <div class="space-y-3">
-                    <Label>受款書類型</Label>
+                    <Label>收款人類型</Label>
                     <div class="flex gap-4">
                         <Button
                             type="button"
@@ -102,10 +106,10 @@
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
-                    <!-- Common Fields -->
-                    <div class="space-y-2 md:col-span-2">
+                    <!-- Row 1: Name and Tax ID / ID Number -->
+                    <div class="space-y-2">
                         <Label for="name"
-                            >受款人名稱 <span class="text-red-500">*</span
+                            >公司/個人名稱 <span class="text-red-500">*</span
                             ></Label
                         >
                         <Input
@@ -118,9 +122,8 @@
                         />
                     </div>
 
-                    <!-- Vendor Specific -->
-                    {#if payeeType === "vendor"}
-                        <div class="space-y-2">
+                    <div class="space-y-2">
+                        {#if payeeType === "vendor"}
                             <Label for="tax_id"
                                 >統一編號 (8碼) <span class="text-red-500"
                                     >*</span
@@ -133,21 +136,7 @@
                                 maxlength={8}
                                 required
                             />
-                        </div>
-                        <div class="space-y-2 md:col-span-2">
-                            <Label for="service_description">服務項目說明</Label
-                            >
-                            <Input
-                                id="service_description"
-                                name="service_description"
-                                placeholder="例：網站維護費、辦公室租賃..."
-                            />
-                        </div>
-                    {/if}
-
-                    <!-- Personal Specific -->
-                    {#if payeeType === "personal"}
-                        <div class="space-y-2">
+                        {:else}
                             <Label for="tax_id"
                                 >身分證字號 <span class="text-red-500">*</span
                                 ></Label
@@ -159,28 +148,92 @@
                                 maxlength={10}
                                 required
                             />
-                        </div>
+                        {/if}
+                    </div>
+
+                    <!-- Row 2: Email and Address (Personal Only) -->
+                    {#if payeeType === "personal"}
                         <div class="space-y-2">
-                            <Label for="email">電子郵件</Label>
+                            <Label for="email"
+                                >電子郵件 <span class="text-red-500">*</span
+                                ></Label
+                            >
                             <Input
                                 id="email"
                                 name="email"
                                 type="email"
                                 placeholder="example@email.com"
+                                required
                             />
                         </div>
-                        <div class="space-y-2 md:col-span-2">
-                            <Label for="address">戶籍/通訊地址</Label>
+                        <div class="space-y-2">
+                            <Label for="address"
+                                >戶籍/通訊地址 <span class="text-red-500"
+                                    >*</span
+                                ></Label
+                            >
                             <Input
                                 id="address"
                                 name="address"
                                 placeholder="請填寫完整地址"
+                                required
                             />
                         </div>
+                    {/if}
 
-                        <!-- Attachments for Personal -->
-                        <div class="md:col-span-2 border-t pt-4 mt-2">
-                            <h3 class="font-semibold mb-4">必要附件</h3>
+                    <!-- Row 3: Shared Service Description -->
+                    <div class="space-y-2 md:col-span-2">
+                        <Label for="service_description"
+                            >服務項目說明 <span class="text-red-500">*</span
+                            ></Label
+                        >
+                        <Input
+                            id="service_description"
+                            name="service_description"
+                            placeholder="例：網站維護費、辦公室租賃、勞務報酬..."
+                            required
+                        />
+                    </div>
+
+                    <!-- Bank Information Section -->
+                    <div class="md:col-span-2 border-t pt-6 mt-2">
+                        <h3 class="font-semibold mb-4 text-lg">銀行匯款資訊</h3>
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <div class="space-y-2">
+                                <Label for="bank_code"
+                                    >銀行代碼 <span class="text-red-500">*</span
+                                    ></Label
+                                >
+                                <BankCodeCombobox
+                                    id="bank_code"
+                                    name="bank_code"
+                                    placeholder="請選擇銀行"
+                                    required
+                                />
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="bank_account"
+                                    >銀行帳號 <span class="text-red-500">*</span
+                                    ></Label
+                                >
+                                <Input
+                                    id="bank_account"
+                                    name="bank_account"
+                                    type="password"
+                                    placeholder="請輸入帳號"
+                                    required
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    帳號將加密儲存，僅財務人員可查看。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Attachments Section (Personal Only) -->
+                    {#if payeeType === "personal"}
+                        <div class="md:col-span-2 border-t pt-6 mt-2">
+                            <h3 class="font-semibold mb-4 text-lg">必要附件</h3>
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div class="space-y-2">
                                     <Label for="attachment_id_front"
@@ -236,41 +289,6 @@
                             </div>
                         </div>
                     {/if}
-                </div>
-
-                <div class="border-t pt-4">
-                    <h3 class="font-semibold mb-4">銀行匯款資訊</h3>
-                    <div class="grid gap-4 md:grid-cols-2">
-                        <div class="space-y-2">
-                            <Label for="bank_code"
-                                >銀行代碼 (3碼) <span class="text-red-500"
-                                    >*</span
-                                ></Label
-                            >
-                            <BankCodeCombobox
-                                id="bank_code"
-                                name="bank_code"
-                                placeholder="004"
-                                required
-                            />
-                        </div>
-                        <div class="space-y-2">
-                            <Label for="bank_account"
-                                >銀行帳號 <span class="text-red-500">*</span
-                                ></Label
-                            >
-                            <Input
-                                id="bank_account"
-                                name="bank_account"
-                                type="password"
-                                placeholder="請輸入帳號"
-                                required
-                            />
-                            <p class="text-xs text-muted-foreground">
-                                帳號將加密儲存，僅財務人員可查看。
-                            </p>
-                        </div>
-                    </div>
                 </div>
 
                 <div class="flex justify-end pt-4">

@@ -39,8 +39,8 @@ test.describe.serial('Account Sheet', () => {
         await page.goto('/claims');
         await expect(page).toHaveURL(/\/claims/);
 
-        // Click the sidebar user button which has title="開啟個人帳戶設定"
-        const trigger = page.locator('button[title="開啟個人帳戶設定"]');
+        // Click the sidebar user button which has title="個人帳戶設定"
+        const trigger = page.locator('button[title="個人帳戶設定"]');
         await expect(trigger).toBeVisible({ timeout: 5000 });
         await trigger.click();
         // Trigger should be interactable; full sheet rendering is asserted in next test.
@@ -54,7 +54,7 @@ test.describe.serial('Account Sheet', () => {
         await expect(page).toHaveURL(/\/claims/);
 
         // Open the sheet via the sidebar trigger button
-        const trigger = page.locator('button[title="開啟個人帳戶設定"]');
+        const trigger = page.locator('button[title="個人帳戶設定"]');
         await expect(trigger).toBeVisible({ timeout: 5000 });
         for (let i = 0; i < 3; i++) {
             await trigger.click({ force: true });

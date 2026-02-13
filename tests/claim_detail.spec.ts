@@ -102,12 +102,19 @@ test.describe.serial('Claim Detail Page', () => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
+        await page.waitForLoadState('networkidle');
 
-        // Handle confirmation dialog before clicking delete
-        page.on('dialog', (dialog) => dialog.accept());
-
-        // Click delete
-        await page.click('button:has-text("刪除")');
+        // Click delete. Depending on hydration timing, it may:
+        // 1) open app confirm dialog, or
+        // 2) submit directly and redirect.
+        await page.getByRole('button', { name: '刪除草稿' }).click();
+        const confirmBtn = page
+            .getByRole('dialog')
+            .filter({ hasText: '確認刪除草稿' })
+            .getByRole('button', { name: '刪除草稿', exact: true });
+        if (await confirmBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
+            await confirmBtn.click();
+        }
 
         // Should redirect to claims list
         await expect(page).toHaveURL(/\/claims$/, { timeout: 10000 });
