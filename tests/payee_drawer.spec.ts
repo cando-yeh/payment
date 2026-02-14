@@ -160,4 +160,59 @@ test.describe('Payee Drawer Functionality', () => {
 
         await expect(bankInput).toBeVisible();
     });
+
+    test('Standard User can VIEW Pending Request in Drawer and WITHDRAW it', async ({ page }) => {
+        await injectSession(page, userStandard.email, password);
+        await page.goto('/payees');
+
+        // 1. Create a new pending request via New Payee Page
+        const newPayeeName = 'Pending Drawer Test ' + Date.now();
+        await page.getByRole('button', { name: '新增收款人' }).click();
+        await expect(page).toHaveURL(/\/payees\/new/);
+        await expect(page.getByRole('heading', { name: '新增收款人' })).toBeVisible();
+
+        // Fill form on the new page
+        await page.locator('input[name="name"]').fill(newPayeeName);
+        await page.locator('input[name="tax_id"]').fill('11223344');
+
+        // Select Bank
+        const bankCombobox = page.locator('button[role="combobox"]');
+        await bankCombobox.click();
+        await page.getByRole('button', { name: /004.*臺灣銀行/ }).click();
+
+        await page.locator('input[name="bank_account"]').fill('1234567890');
+        await page.locator('input[name="service_description"]').fill('Test Service');
+
+        // Submit
+        await page.getByRole('button', { name: '提交申請' }).click();
+
+        // Expect redirect back to list and success message
+        await expect(page).toHaveURL(/\/payees/);
+
+        // 2. Find the pending row
+        const row = page.getByRole('row', { name: newPayeeName }).first();
+        await expect(row).toBeVisible();
+        await expect(row).toContainText('待審核 (新增)');
+
+        // 3. Click to open Drawer
+        await row.click();
+        const requestDrawer = page.locator('[role="dialog"]').last();
+        await expect(requestDrawer).toBeVisible();
+        await expect(requestDrawer.getByRole('heading', { name: newPayeeName })).toBeVisible();
+
+        // 4. Check details
+        await expect(requestDrawer.getByText(newPayeeName)).toBeVisible();
+
+        // 5. Withdraw
+        // Need to scroll into view or ensure the button is visible
+        const withdrawBtn = requestDrawer.getByRole('button', { name: '撤銷申請' });
+        await withdrawBtn.scrollIntoViewIfNeeded();
+        await expect(withdrawBtn).toBeVisible();
+        await withdrawBtn.click();
+
+        // 6. Verify success
+        await expect(page.getByText('申請已撤銷')).toBeVisible();
+        await expect(requestDrawer).not.toBeVisible();
+        await expect(page.getByRole('row', { name: newPayeeName })).not.toBeVisible();
+    });
 });

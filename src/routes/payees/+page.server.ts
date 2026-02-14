@@ -26,7 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     const [payeesResponse, requestsResponse] = await Promise.all([
         supabase
             .from('payees')
-            .select('id, name, type, status, bank, bank_account, service_description, created_at, updated_at')
+            .select('id, name, type, status, bank, bank_account, bank_account_tail, service_description, created_at, updated_at')
             .order('created_at', { ascending: false }),
         supabase
             .from('payee_change_requests')
@@ -36,6 +36,7 @@ export const load: PageServerLoad = async ({ locals }) => {
                 status, 
                 proposed_data, 
                 proposed_bank_account,
+                proposed_bank_account_tail,
                 reason, 
                 created_at, 
                 requested_by, 

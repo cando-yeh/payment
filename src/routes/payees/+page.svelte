@@ -22,6 +22,7 @@
     import { enhance, deserialize } from "$app/forms";
     import { toast } from "svelte-sonner";
     import PayeeSheet from "$lib/components/layout/PayeeSheet.svelte";
+    import PayeeRequestSheet from "$lib/components/layout/PayeeRequestSheet.svelte";
 
     let { data } = $props();
 
@@ -57,7 +58,11 @@
                     req.change_type === "create"
                         ? req.proposed_data?.bank_code || "-"
                         : linkedPayee?.bank || "-",
-                bank_account: req.proposed_bank_account ? "已加密" : "-",
+                bank_account: req.proposed_bank_account_tail
+                    ? `*****${req.proposed_bank_account_tail}`
+                    : req.proposed_bank_account
+                      ? "已加密"
+                      : "-",
                 status: `pending_${req.change_type}`,
                 source: "request",
                 payload: req, // Store full request for detail view
@@ -74,7 +79,11 @@
             ...visibleActive.map((p) => ({
                 ...p,
                 bank_code: p.bank || "-",
-                bank_account: p.bank_account ? "已加密" : "-",
+                bank_account: p.bank_account_tail
+                    ? `*****${p.bank_account_tail}`
+                    : p.bank_account
+                      ? "已加密"
+                      : "-",
             })),
         ];
     });
@@ -403,223 +412,13 @@
     </div>
 </div>
 
-<!-- Detail Dialog -->
-<Dialog.Root bind:open={isDetailOpen}>
-    <Dialog.Content class="max-w-md">
-        <Dialog.Header>
-            <Dialog.Title>{selectedPayee?.name}</Dialog.Title>
-            <Dialog.Description>收款人詳細資訊與狀態管理</Dialog.Description>
-        </Dialog.Header>
-
-        {#if selectedPayee}
-            <div class="grid gap-4 py-4">
-                <div class="grid grid-cols-4 items-start gap-4">
-                    <span class="text-sm font-medium text-muted-foreground"
-                        >狀態</span
-                    >
-                    <div class="col-span-3">
-                        <Badge
-                            variant={getStatusBadge(selectedPayee.status)
-                                .variant as any}
-                            >{getStatusBadge(selectedPayee.status).label}</Badge
-                        >
-                    </div>
-                </div>
-
-                <div class="border-t pt-4 space-y-3">
-                    <div class="grid grid-cols-4 items-start gap-4">
-                        <span class="text-sm font-medium text-muted-foreground"
-                            >銀行代碼</span
-                        >
-                        <span class="col-span-3 text-sm"
-                            >{selectedPayee.bank_code || "-"}</span
-                        >
-                    </div>
-                    <div class="grid grid-cols-4 items-start gap-4">
-                        <span class="text-sm font-medium text-muted-foreground"
-                            >銀行帳號</span
-                        >
-                        <span class="col-span-3 text-sm"
-                            >{selectedPayee.bank_account || "-"}</span
-                        >
-                    </div>
-                </div>
-
-                <!-- Fields for Request -->
-                {#if selectedPayee.source === "request"}
-                    {@const data = selectedPayee.payload.proposed_data}
-                    <div class="border-t pt-4 space-y-3">
-                        <div class="grid grid-cols-4 items-start gap-4">
-                            <span
-                                class="text-sm font-medium text-muted-foreground"
-                                >銀行代碼</span
-                            >
-                            <span class="col-span-3 text-sm"
-                                >{data?.bank_code || "-"}</span
-                            >
-                        </div>
-                        <div class="grid grid-cols-4 items-start gap-4">
-                            <span
-                                class="text-sm font-medium text-muted-foreground"
-                                >服務項目</span
-                            >
-                            <span class="col-span-3 text-sm"
-                                >{data?.service_description || "-"}</span
-                            >
-                        </div>
-                        {#if data?.type === "personal"}
-                            <div class="grid grid-cols-4 items-start gap-4">
-                                <span
-                                    class="text-sm font-medium text-muted-foreground"
-                                    >電子郵件</span
-                                >
-                                <span class="col-span-3 text-sm"
-                                    >{data?.email || "-"}</span
-                                >
-                            </div>
-                            <div class="grid grid-cols-4 items-start gap-4">
-                                <span
-                                    class="text-sm font-medium text-muted-foreground"
-                                    >通訊地址</span
-                                >
-                                <span class="col-span-3 text-sm"
-                                    >{data?.address || "-"}</span
-                                >
-                            </div>
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-
-            <Dialog.Footer class="flex sm:justify-between items-center gap-2">
-                <div>
-                    {#if selectedPayee.source === "request" && selectedPayee.payload.requested_by === data.user?.id}
-                        <form
-                            method="POST"
-                            action="?/withdrawRequest"
-                            use:enhance={handleAction("申請已撤銷")}
-                        >
-                            <input
-                                type="hidden"
-                                name="requestId"
-                                value={selectedPayee.id}
-                            />
-                            <Button
-                                type="submit"
-                                variant="outline"
-                                size="sm"
-                                disabled={isActionSubmitting}
-                            >
-                                {#if isActionSubmitting}
-                                    <LoaderCircle
-                                        class="mr-2 h-3 w-3 animate-spin"
-                                    />
-                                {:else}
-                                    <Undo2 class="mr-2 h-3 w-3" />
-                                {/if}
-                                撤銷申請
-                            </Button>
-                        </form>
-                    {/if}
-                </div>
-
-                <div class="flex gap-2">
-                    {#if selectedPayee.source === "active"}
-                        {#if selectedPayee.status === "available"}
-                            <form
-                                method="POST"
-                                action="?/submitDisableRequest"
-                                use:enhance={handleAction("停用申請已提交")}
-                            >
-                                <input
-                                    type="hidden"
-                                    name="payeeId"
-                                    value={selectedPayee.id}
-                                />
-                                <Button
-                                    type="submit"
-                                    variant="destructive"
-                                    size="sm"
-                                    data-testid="payee-submit-disable-request"
-                                    disabled={isActionSubmitting}
-                                >
-                                    {#if isActionSubmitting}
-                                        <LoaderCircle
-                                            class="mr-2 h-3 w-3 animate-spin"
-                                        />
-                                    {:else}
-                                        <Ban class="mr-2 h-3 w-3" />
-                                    {/if}
-                                    停用收款人
-                                </Button>
-                            </form>
-                        {/if}
-                    {/if}
-
-                    {#if selectedPayee.source === "request" && data.is_finance}
-                        <form
-                            method="POST"
-                            action="?/rejectPayeeRequest"
-                            use:enhance={handleAction("申請已駁回")}
-                        >
-                            <input
-                                type="hidden"
-                                name="requestId"
-                                value={selectedPayee.id}
-                            />
-                            <Button
-                                type="submit"
-                                variant="destructive"
-                                size="sm"
-                                disabled={isActionSubmitting}
-                            >
-                                {#if isActionSubmitting}
-                                    <LoaderCircle
-                                        class="mr-2 h-3 w-3 animate-spin"
-                                    />
-                                {:else}
-                                    <X class="mr-2 h-3 w-3" />
-                                {/if}
-                                駁回
-                            </Button>
-                        </form>
-                        <form
-                            method="POST"
-                            action="?/approvePayeeRequest"
-                            use:enhance={handleAction("申請已核准")}
-                        >
-                            <input
-                                type="hidden"
-                                name="requestId"
-                                value={selectedPayee.id}
-                            />
-                            <Button
-                                type="submit"
-                                variant="default"
-                                size="sm"
-                                disabled={isActionSubmitting}
-                            >
-                                {#if isActionSubmitting}
-                                    <LoaderCircle
-                                        class="mr-2 h-3 w-3 animate-spin"
-                                    />
-                                {:else}
-                                    <Check class="mr-2 h-3 w-3" />
-                                {/if}
-                                核准
-                            </Button>
-                        </form>
-                    {/if}
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onclick={() => (isDetailOpen = false)}>關閉</Button
-                    >
-                </div>
-            </Dialog.Footer>
-        {/if}
-    </Dialog.Content>
-</Dialog.Root>
+<!-- Request Drawer -->
+<PayeeRequestSheet
+    bind:open={isDetailOpen}
+    request={selectedPayee}
+    isFinance={data.is_finance}
+    currentUserId={data.user?.id}
+/>
 
 <PayeeSheet
     bind:open={isSheetOpen}
