@@ -7,6 +7,26 @@ import { fail, redirect, type Actions, type RequestEvent } from '@sveltejs/kit';
  * 這些 Action 負責處理來自 UserAccountSheet.svelte 的後端請求。
  */
 export const actions: Actions = {
+    /**
+     * 取得目前登入者最新個人資料快照
+     */
+    getMyProfileSnapshot: async ({ locals }: RequestEvent) => {
+        const session = await locals.getSession();
+        if (!session) throw redirect(303, '/auth');
+
+        const { data, error } = await locals.supabase
+            .from('profiles')
+            .select('id, full_name, email, avatar_url, is_admin, is_finance, approver_id, bank, bank_account_tail')
+            .eq('id', session.user.id)
+            .single();
+
+        if (error || !data) {
+            return fail(500, { message: '讀取個人資料失敗', error: error?.message });
+        }
+
+        return { success: true, profile: data };
+    },
+
     /** 
      * 揭露銀行帳號 
      * 

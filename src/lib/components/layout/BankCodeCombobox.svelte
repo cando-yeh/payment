@@ -81,7 +81,10 @@
                     role="combobox"
                     aria-expanded={open}
                     class={cn(
-                        "w-full justify-start font-normal hover:bg-background px-3",
+                        "w-full justify-start font-normal px-3",
+                        !disabled && "hover:bg-background",
+                        disabled &&
+                            "pointer-events-none hover:bg-transparent dark:hover:bg-transparent transition-none",
                         !selectedBank && "text-muted-foreground/60",
                         inputClass,
                     )}

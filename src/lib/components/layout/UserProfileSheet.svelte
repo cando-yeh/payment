@@ -63,6 +63,7 @@
     let isAdmin = $state(false);
     let isFinance = $state(false);
     let approverId = $state("");
+    let initializedUserId = $state<string | null>(null);
 
     function resetFormFromUser() {
         fullName = user?.full_name || user?.name || "";
@@ -73,6 +74,42 @@
         approverId = user?.approver_id || "";
         showAccountValue = false;
         decryptedAccount = null;
+    }
+
+    async function refreshUserSnapshot() {
+        if (!open || !user?.id) return;
+
+        try {
+            const formData = new FormData();
+            if (isManagementMode) {
+                formData.append("targetId", user.id);
+            }
+
+            const actionPath = isManagementMode
+                ? "/admin/users?/getUserProfileSnapshot"
+                : "/account?/getMyProfileSnapshot";
+
+            const response = await timedFetch(actionPath, {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const text = await response.text();
+            const result = deserialize(text) as any;
+
+            if (
+                response.ok &&
+                result?.type === "success" &&
+                result?.data?.profile
+            ) {
+                user = { ...user, ...result.data.profile };
+                if (!isEditing) {
+                    resetFormFromUser();
+                }
+            }
+        } catch {
+            // 保持目前畫面資料，不中斷使用者操作
+        }
     }
 
     // 從應用程式狀態獲取當前登入者 ID
@@ -96,11 +133,19 @@
         return `*****${rawTail.slice(-5)}`;
     });
 
-    // 監聽 user prop 變化並同步狀態
+    // 僅在切換「不同使用者」時重置編輯狀態，避免同一使用者快照更新把編輯模式關掉。
     $effect(() => {
-        if (user) {
+        if (!user?.id) return;
+
+        if (initializedUserId !== user.id) {
+            initializedUserId = user.id;
             resetFormFromUser();
-            isEditing = false; // 切換使用者時強制退出編輯模式
+            isEditing = false;
+            return;
+        }
+
+        if (!isEditing) {
+            resetFormFromUser();
         }
     });
 
@@ -109,6 +154,13 @@
         if (!open && user) {
             resetFormFromUser();
             isEditing = false;
+        }
+    });
+
+    // 每次打開 Drawer 時，主動讀取最新 profile，避免不同入口看到舊快照。
+    $effect(() => {
+        if (open) {
+            void untrack(() => refreshUserSnapshot());
         }
     });
 
@@ -366,7 +418,11 @@
                                 >
                                     <Select.Trigger
                                         id="approverId"
-                                        class="w-full h-10"
+                                        class={cn(
+                                            "w-full h-10",
+                                            !isEditing &&
+                                                "pointer-events-none hover:bg-transparent dark:hover:bg-transparent transition-none",
+                                        )}
                                     >
                                         <div
                                             class="flex items-center gap-2 truncate"
@@ -438,42 +494,62 @@
                         <div class="flex-[3] space-y-2 min-w-0">
                             <Label for="bankAccount">銀行帳號</Label>
                             <div class="relative">
-                                <Input
-                                    id="bankAccount"
-                                    name="bankAccount"
-                                    type={showAccountValue
-                                        ? "text"
-                                        : "password"}
-                                    bind:value={inputBankAccount}
-                                    placeholder={showAccountValue
-                                        ? decryptedAccount || "請輸入新帳號..."
-                                        : isEditing
-                                          ? "••••••••••••"
-                                          : maskedAccountTail ||
+                                {#if isEditing}
+                                    <Input
+                                        id="bankAccount"
+                                        name="bankAccount"
+                                        type={showAccountValue
+                                            ? "text"
+                                            : "password"}
+                                        bind:value={inputBankAccount}
+                                        placeholder={showAccountValue
+                                            ? decryptedAccount ||
+                                              "請輸入新帳號..."
+                                            : "••••••••••••"}
+                                        disabled={revealing}
+                                    />
+                                {:else}
+                                    <Input
+                                        id="bankAccount"
+                                        type="text"
+                                        value={maskedAccountTail ||
                                             "••••••••••••"}
-                                    disabled={revealing || !isEditing}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    class="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                                    onclick={toggleReveal}
-                                >
-                                    {#if revealing}
-                                        <span
-                                            class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
-                                        ></span>
-                                    {:else if showAccountValue}
-                                        <Eye
-                                            class="h-4 w-4 text-muted-foreground"
-                                        />
-                                    {:else}
-                                        <EyeOff
-                                            class="h-4 w-4 text-muted-foreground"
-                                        />
-                                    {/if}
-                                </Button>
+                                        readonly
+                                        disabled
+                                        class="pointer-events-none"
+                                    />
+                                {/if}
+                                {#if isEditing}
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        class="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                        onclick={toggleReveal}
+                                        disabled={revealing}
+                                    >
+                                        {#if revealing}
+                                            <span
+                                                class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
+                                            ></span>
+                                        {:else if showAccountValue}
+                                            <Eye
+                                                class="h-4 w-4 text-muted-foreground"
+                                            />
+                                        {:else}
+                                            <EyeOff
+                                                class="h-4 w-4 text-muted-foreground"
+                                            />
+                                        {/if}
+                                    </Button>
+                                {:else}
+                                    <span
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
+                                        aria-hidden="true"
+                                    >
+                                        <EyeOff class="h-4 w-4" />
+                                    </span>
+                                {/if}
                             </div>
                         </div>
                     </div>

@@ -102,6 +102,12 @@ export const actions: Actions = {
             return fail(400, { message: '不允許修改此欄位' });
         }
 
+        const session = await locals.getSession();
+        const currentUserId = session?.user?.id;
+        if (field === 'is_admin' && userId === currentUserId && value === false) {
+            return fail(400, { message: '不可移除自己的管理員權限' });
+        }
+
         const { data: profile } = await locals.supabase
             .from('profiles')
             .select('is_active')
@@ -367,6 +373,10 @@ export const actions: Actions = {
         // 🔒 姓名權限防範：僅限本人修改
         const session = await locals.getSession();
         const currentUserId = session?.user?.id;
+        if (userId === currentUserId && !isAdmin) {
+            return fail(400, { message: '不可移除自己的管理員權限' });
+        }
+
         if (fullName) {
             if (userId === currentUserId) {
                 updatePayload.full_name = fullName;
@@ -431,5 +441,27 @@ export const actions: Actions = {
         }
 
         return { success: true, decryptedAccount: data };
+    },
+
+    getUserProfileSnapshot: async ({ request, locals }) => {
+        if (!locals.user?.is_admin) {
+            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        }
+
+        const formData = await request.formData();
+        const targetId = formData.get('targetId') as string;
+        if (!targetId) return fail(400, { message: '缺少目標使用者 ID' });
+
+        const { data, error } = await locals.supabase
+            .from('profiles')
+            .select('id, full_name, email, avatar_url, is_admin, is_finance, approver_id, bank, bank_account_tail')
+            .eq('id', targetId)
+            .single();
+
+        if (error || !data) {
+            return fail(500, { message: '讀取使用者資料失敗', error: error?.message });
+        }
+
+        return { success: true, profile: data };
     }
 };
