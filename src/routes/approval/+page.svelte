@@ -244,7 +244,7 @@
                                 <Table.Head
                                     class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
                                     >{tabValue === "payment"
-                                        ? "受款人"
+                                        ? "收款人"
                                         : "提交日期"}</Table.Head
                                 >
                                 <Table.Head class="pr-8 py-4"></Table.Head>

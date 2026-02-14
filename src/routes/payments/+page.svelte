@@ -64,7 +64,7 @@
                     <Table.Header>
                         <Table.Row>
                             <Table.Head>付款單 ID</Table.Head>
-                            <Table.Head>受款人</Table.Head>
+                            <Table.Head>收款人</Table.Head>
                             <Table.Head>總金額</Table.Head>
                             <Table.Head>撥款時間</Table.Head>
                             <Table.Head>經辦人</Table.Head>

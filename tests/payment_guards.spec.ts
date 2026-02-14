@@ -107,7 +107,7 @@ test.describe.serial('Payment Guards', () => {
         await page.goto('/approval');
 
         const mixedBody = await postFormAction(page, '/approval?/batchPay', { claimIds: [mixed1, mixed2] });
-        expect(mixedBody).toContain('批次付款僅限同一收款人');
+        expect(mixedBody).toMatch(/批次付款僅限同一收款人/);
 
         const badStatusBody = await postFormAction(page, '/approval?/batchPay', { claimIds: [mixed1, badStatus] });
         expect(badStatusBody).toContain('部分選取單據狀態非待撥款');

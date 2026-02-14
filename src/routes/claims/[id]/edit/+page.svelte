@@ -203,7 +203,7 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
                 <Card.Content class="grid gap-4">
                     {#if claimType !== "employee"}
                         <div class="space-y-2">
-                            <Label for="payee">受款人</Label>
+                            <Label for="payee">收款人</Label>
                             <!-- We use hidden input for form submission, Select for UI -->
                             <input
                                 type="hidden"
@@ -229,7 +229,7 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
                                         personalPayees.find(
                                             (p) => p.id === payeeId,
                                         )?.name ||
-                                        "選擇受款人"}
+                                        "選擇收款人"}
                                 </Select.Trigger>
                                 <Select.Content>
                                     {#if claimType === "vendor"}

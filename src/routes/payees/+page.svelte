@@ -48,7 +48,7 @@
                 id: req.id, // Request ID
                 name:
                     req.change_type === "create"
-                        ? req.proposed_data?.name || "未知受款人"
+                        ? req.proposed_data?.name || "未知收款人"
                         : `[${req.change_type === "update" ? "更新" : "停用"}] ${linkedPayee?.name || req.payee_id}`,
                 type:
                     req.change_type === "create"

@@ -489,7 +489,7 @@
                             >
                                 <Label
                                     class="text-xs font-bold text-muted-foreground uppercase tracking-widest self-center"
-                                    >受款對象</Label
+                                    >收款對象</Label
                                 >
                                 <div
                                     class="text-sm font-bold text-foreground text-right"

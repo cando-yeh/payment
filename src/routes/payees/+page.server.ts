@@ -22,28 +22,39 @@ export const load: PageServerLoad = async ({ locals }) => {
         throw redirect(303, '/auth');
     }
 
+    const isFinanceOrAdmin = Boolean(
+        locals.user?.is_finance || locals.user?.is_admin
+    );
+    const serviceRoleClient = getServiceRoleClient();
+
+    let pendingRequestsQuery = serviceRoleClient
+        .from('payee_change_requests')
+        .select(`
+            id, 
+            change_type, 
+            status, 
+            proposed_data, 
+            proposed_bank_account,
+            proposed_bank_account_tail,
+            reason, 
+            created_at, 
+            requested_by, 
+            payee_id
+        `)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+    if (!isFinanceOrAdmin) {
+        pendingRequestsQuery = pendingRequestsQuery.eq('requested_by', session.user.id);
+    }
+
     // 1. Fetch data in parallel
     const [payeesResponse, requestsResponse] = await Promise.all([
         supabase
             .from('payees')
             .select('id, name, type, status, bank, bank_account, bank_account_tail, service_description, created_at, updated_at')
             .order('created_at', { ascending: false }),
-        supabase
-            .from('payee_change_requests')
-            .select(`
-                id, 
-                change_type, 
-                status, 
-                proposed_data, 
-                proposed_bank_account,
-                proposed_bank_account_tail,
-                reason, 
-                created_at, 
-                requested_by, 
-                payee_id
-            `)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
+        pendingRequestsQuery
     ]);
 
     if (payeesResponse.error) {
@@ -322,7 +333,7 @@ export const actions: Actions = {
     },
 
     /**
-     * 提交停用受款人申請
+     * 提交停用收款人申請
      */
     submitDisableRequest: async ({ request, locals: { supabase, getSession } }) => {
         const session = await getSession();

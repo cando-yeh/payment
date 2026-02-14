@@ -211,7 +211,7 @@
                         {#if claimType !== "employee"}
                             <div class="grid gap-2">
                                 <Label
-                                    >受款對象 <span class="text-red-500">*</span
+                                    >收款對象 <span class="text-red-500">*</span
                                     ></Label
                                 >
                                 <select
@@ -221,7 +221,7 @@
                                     bind:value={payeeId}
                                 >
                                     <option value="" disabled selected
-                                        >請選擇受款人...</option
+                                        >請選擇收款人...</option
                                     >
                                     {#if claimType === "vendor"}
                                         {#each vendorPayees as payee}
@@ -240,16 +240,16 @@
                                     {/if}
                                 </select>
                                 <p class="text-xs text-muted-foreground">
-                                    找不到受款人？前往 <a
+                                    找不到收款人？前往 <a
                                         href="/payees/new"
                                         target="_blank"
                                         class="underline text-primary"
-                                        >新增受款人</a
+                                        >新增收款人</a
                                     > (完成後請重新整理)
                                 </p>
                             </div>
                             <div class="space-y-2">
-                                <Label for="payee">受款人</Label>
+                                <Label for="payee">收款人</Label>
                                 <Select.Root
                                     type="single"
                                     bind:value={payeeId}
@@ -269,7 +269,7 @@
                                             personalPayees.find(
                                                 (p) => p.id === payeeId,
                                             )?.name ||
-                                            "選擇受款人"}
+                                            "選擇收款人"}
                                     </Select.Trigger>
                                     <Select.Content>
                                         {#if claimType === "vendor"}

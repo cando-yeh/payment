@@ -80,11 +80,11 @@
     <div class="grid gap-6 md:grid-cols-3">
         <Card.Root class="md:col-span-1">
             <Card.Header>
-                <Card.Title>受款資訊</Card.Title>
+                <Card.Title>收款資訊</Card.Title>
             </Card.Header>
             <Card.Content class="space-y-4">
                 <div>
-                    <div class="text-sm text-muted-foreground">受款人</div>
+                    <div class="text-sm text-muted-foreground">收款人</div>
                     <div class="font-medium text-lg">{payment.payee_name}</div>
                 </div>
                 <div>

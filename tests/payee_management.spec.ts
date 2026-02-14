@@ -2,8 +2,8 @@
  * Payee Management Extended Flow - E2E 測試
  *
  * 涵蓋功能：
- * 1. 編輯受款人申請 (Update Request)
- * 2. 停用受款人申請 (Disable Request)
+ * 1. 編輯收款人申請 (Update Request)
+ * 2. 停用收款人申請 (Disable Request)
  * 3. 財務審核流程 (Approve/Reject)
  */
 import { test, expect } from '@playwright/test';
@@ -46,7 +46,7 @@ test.describe('Payee Management Extended Flow', () => {
         userFinance = u2.user;
         await supabaseAdmin.from('profiles').update({ is_finance: true }).eq('id', userFinance.id);
 
-        // 3. 建立一個初始的 'available' 受款人用於測試
+        // 3. 建立一個初始的 'available' 收款人用於測試
         const { data: p, error: pe } = await supabaseAdmin.from('payees').insert({
             name: testPayeeName,
             type: 'vendor',

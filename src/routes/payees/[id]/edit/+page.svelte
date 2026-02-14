@@ -57,9 +57,9 @@
     </Button>
 
     <div class="mb-8">
-        <h1 class="text-3xl font-bold tracking-tight">編輯受款人</h1>
+        <h1 class="text-3xl font-bold tracking-tight">編輯收款人</h1>
         <p class="text-muted-foreground mt-2">
-            修改受款對象資料。送出後將建立異動申請，需經財務審核通過後才會更新正式資料。
+            修改收款對象資料。送出後將建立異動申請，需經財務審核通過後才會更新正式資料。
         </p>
     </div>
 
@@ -74,7 +74,7 @@
             >
                 <!-- Type (Locked in edit usually, but showing as info) -->
                 <div class="space-y-3">
-                    <Label>受款書類型</Label>
+                    <Label>收款書類型</Label>
                     <div class="flex gap-4">
                         <Button
                             type="button"
@@ -104,7 +104,7 @@
                     <!-- Common Fields -->
                     <div class="space-y-2 md:col-span-2">
                         <Label for="name"
-                            >受款人名稱 <span class="text-red-500">*</span
+                            >收款人名稱 <span class="text-red-500">*</span
                             ></Label
                         >
                         <Input

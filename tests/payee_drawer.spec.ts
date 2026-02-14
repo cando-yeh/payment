@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 import {
     supabaseAdmin,
-    injectSession
+    injectSession,
+    supabaseUrl,
+    supabaseAnonKey,
+    authSignInWithRetry
 } from './helpers';
 
 test.describe('Payee Drawer Functionality', () => {
@@ -13,8 +17,8 @@ test.describe('Payee Drawer Functionality', () => {
     const password = 'password123';
     let testPayeeId: string;
     let testPayeeName: string;
-    let revealPayeeId: string;
-    let revealPayeeName: string;
+    let revealPayeeId: string | null = null;
+    let revealPayeeName: string | null = null;
     async function openPayeeEditDrawer(page: any, row: any) {
         const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
         for (let i = 0; i < 4; i++) {
@@ -64,16 +68,61 @@ test.describe('Payee Drawer Functionality', () => {
         if (pe) throw pe;
         testPayeeId = p.id;
 
-        // 4. Create reveal payee
-        revealPayeeName = 'Drawer Reveal Payee ' + timestamp;
-        const { data: rp, error: rpe } = await supabaseAdmin.from('payees').insert({
-            name: revealPayeeName,
-            type: 'vendor',
-            bank: '004',
-            status: 'available'
-        }).select('id').single();
-        if (rpe) throw rpe;
-        revealPayeeId = rp.id;
+        // 4. Reuse an existing payee that already has encrypted bank account.
+        const { data: revealCandidate } = await supabaseAdmin
+            .from('payees')
+            .select('id, name')
+            .not('bank_account_tail', 'is', null)
+            .not('bank_account', 'is', null)
+            .eq('status', 'available')
+            .limit(1)
+            .maybeSingle();
+        if (revealCandidate?.id) {
+            revealPayeeId = revealCandidate.id;
+            revealPayeeName = revealCandidate.name;
+        } else {
+            // 5. Create a deterministic reveal candidate (submit + approve) so this test is never skipped.
+            const revealName = `Drawer Reveal Payee ${timestamp}`;
+
+            const standardClient = createClient(supabaseUrl, supabaseAnonKey);
+            const financeClient = createClient(supabaseUrl, supabaseAnonKey);
+            await authSignInWithRetry(standardClient, userStandard.email, password);
+            await authSignInWithRetry(financeClient, userFinance.email, password);
+
+            const { data: requestId, error: submitError } = await standardClient.rpc('submit_payee_change_request', {
+                _change_type: 'create',
+                _payee_id: null,
+                _proposed_data: {
+                    name: revealName,
+                    type: 'vendor',
+                    bank_code: '004',
+                    service_description: 'Reveal setup'
+                },
+                _proposed_tax_id: '87654321',
+                _proposed_bank_account: '1234512345',
+                _reason: 'E2E reveal setup',
+                _proposed_attachments: {}
+            });
+            if (submitError) throw submitError;
+
+            const { error: approveError } = await financeClient.rpc('approve_payee_change_request', {
+                _request_id: requestId
+            });
+            if (approveError) throw approveError;
+
+            const { data: createdRevealPayee, error: createdRevealPayeeError } = await supabaseAdmin
+                .from('payees')
+                .select('id, name')
+                .eq('name', revealName)
+                .eq('status', 'available')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (createdRevealPayeeError) throw createdRevealPayeeError;
+            revealPayeeId = createdRevealPayee.id;
+            revealPayeeName = createdRevealPayee.name;
+        }
     });
 
     test.afterAll(async () => {
@@ -84,7 +133,7 @@ test.describe('Payee Drawer Functionality', () => {
             await supabaseAdmin.from('payee_change_requests').delete().eq('payee_id', testPayeeId);
             await supabaseAdmin.from('payees').delete().eq('id', testPayeeId);
         }
-        if (revealPayeeId) {
+        if (revealPayeeId && revealPayeeName?.startsWith('Drawer Reveal Payee ')) {
             await supabaseAdmin.from('payee_change_requests').delete().eq('payee_id', revealPayeeId);
             await supabaseAdmin.from('payees').delete().eq('id', revealPayeeId);
         }
@@ -134,11 +183,13 @@ test.describe('Payee Drawer Functionality', () => {
     });
 
     test('Finance User can REVEAL bank account in Drawer', async ({ page }) => {
+        expect(revealPayeeId).toBeTruthy();
+
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
 
         // Open Drawer
-        const financeRow = page.getByTestId(`payee-row-${revealPayeeId}`);
+        const financeRow = page.getByTestId(`payee-row-${revealPayeeId!}`);
         await expect(financeRow).toBeVisible();
         const drawer = await openPayeeEditDrawer(page, financeRow);
 

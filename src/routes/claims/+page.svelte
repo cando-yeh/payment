@@ -242,7 +242,7 @@
                     />
                     <Input
                         type="search"
-                        placeholder="搜尋單號或受款人..."
+                        placeholder="搜尋單號或收款人..."
                         class="pl-10 pr-4 h-10 w-full md:w-[280px] rounded-xl bg-secondary/30 border-none focus:ring-primary/10 transition-all text-xs font-medium"
                         value={searchTerm}
                         oninput={handleSearch}
@@ -264,7 +264,7 @@
                             >
                             <Table.Head
                                 class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
-                                >受款對象</Table.Head
+                                >收款對象</Table.Head
                             >
                             <Table.Head
                                 class="text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"

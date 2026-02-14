@@ -215,7 +215,7 @@ test.describe.serial('Payment Module E2E', () => {
 
         // 5. Verify status change
         await waitForPaymentCancelled(paymentId);
-        await page.reload();
+        await page.goto(page.url(), { waitUntil: 'domcontentloaded' });
         await expect(page.locator('text=已沖帳')).toBeVisible();
 
         // 6. Check claims status - should be back to 'pending_payment'
