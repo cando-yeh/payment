@@ -107,7 +107,7 @@ export const actions: Actions = {
         const firstPayeeId = first.payee_id || first.applicant_id;
 
         if (claims.some((c: any) => (c.payee_id || c.applicant_id) !== firstPayeeId)) {
-            return fail(400, { message: '批次付款僅限同一受款人' });
+            return fail(400, { message: '批次付款僅限同一收款人' });
         }
 
         // 3. 準備付款單資料 (Snapshot)

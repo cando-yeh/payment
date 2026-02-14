@@ -63,26 +63,38 @@ export const actions: Actions = {
         if (!session) throw redirect(303, '/auth');
 
         const formData = await request.formData();
-        const fullName = formData.get('fullName') as string;
-        const bank = formData.get('bank') as string;
-        const bankAccount = formData.get('bankAccount') as string;
+        const fullNameRaw = formData.get('fullName');
+        const bankRaw = formData.get('bank');
+        const bankAccountRaw = formData.get('bankAccount');
+
+        const fullName = typeof fullNameRaw === 'string' ? fullNameRaw.trim() : '';
+        const bank = typeof bankRaw === 'string' ? bankRaw.trim() : '';
+        const bankAccount = typeof bankAccountRaw === 'string' ? bankAccountRaw.trim() : '';
 
         /**
          * 1. 更新基本非敏感資料
          */
-        const updates = {
-            full_name: fullName,
-            bank: bank,
+        const updates: Record<string, string | null> = {
             updated_at: new Date().toISOString()
         };
 
-        const { error } = await locals.supabase
-            .from('profiles')
-            .update(updates)
-            .eq('id', session.user.id);
+        if (fullName) {
+            updates.full_name = fullName;
+        }
 
-        if (error) {
-            return fail(500, { message: '個人基本資料更新失敗', error: error.message });
+        if (typeof bankRaw === 'string') {
+            updates.bank = bank || null;
+        }
+
+        if (Object.keys(updates).length > 1) {
+            const { error } = await locals.supabase
+                .from('profiles')
+                .update(updates)
+                .eq('id', session.user.id);
+
+            if (error) {
+                return fail(500, { message: '個人基本資料更新失敗', error: error.message });
+            }
         }
 
         /**

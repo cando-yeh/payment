@@ -137,9 +137,11 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const userId = formData.get('userId') as string;
-        const approverId = formData.get('approverId') as string;
+        const approverIdRaw = formData.get('approverId');
+        const approverId = typeof approverIdRaw === 'string' ? approverIdRaw.trim() : '';
 
         if (!userId) return fail(400, { message: '缺少必要參數' });
+        if (!approverId) return fail(400, { message: '核准人為必填，不能為空' });
 
         const { data: targetUser } = await locals.supabase
             .from('profiles')
@@ -163,7 +165,7 @@ export const actions: Actions = {
 
         const { error } = await locals.supabase
             .from('profiles')
-            .update({ approver_id: approverId || null })
+            .update({ approver_id: approverId })
             .eq('id', userId);
 
         if (error) {
@@ -356,7 +358,8 @@ export const actions: Actions = {
         const bankAccountRaw = formData.get('bankAccount');
         const isAdmin = formData.get('isAdminValue') === 'true';
         const isFinance = formData.get('isFinanceValue') === 'true';
-        const approverId = formData.get('approverId') as string;
+        const approverIdRaw = formData.get('approverId');
+        const approverId = typeof approverIdRaw === 'string' ? approverIdRaw.trim() : '';
 
         if (!userId) return fail(400, { message: '缺少使用者 ID' });
 
@@ -364,10 +367,14 @@ export const actions: Actions = {
         const bankName = typeof bankNameRaw === 'string' ? bankNameRaw.trim() : '';
         const bankAccount = typeof bankAccountRaw === 'string' ? bankAccountRaw.trim() : '';
 
+        if (!approverId) {
+            return fail(400, { message: '核准人為必填，不能為空' });
+        }
+
         const updatePayload: Record<string, any> = {
             is_admin: isAdmin,
             is_finance: isFinance,
-            approver_id: approverId || null
+            approver_id: approverId
         };
 
         // 🔒 姓名權限防範：僅限本人修改

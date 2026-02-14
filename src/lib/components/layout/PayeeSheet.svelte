@@ -159,7 +159,7 @@
         try {
             const formData = new FormData();
             formData.append("payeeId", payee.id);
-            formData.append("reason", "停用受款人申請");
+            formData.append("reason", "停用收款人申請");
 
             const response = await timedFetch("?/submitDisableRequest", {
                 method: "POST",
@@ -238,7 +238,7 @@
                     <div class="space-y-4">
                         <div class="space-y-2">
                             <Label for="name"
-                                >受款人名稱 <span class="text-red-500">*</span
+                                >收款人名稱 <span class="text-red-500">*</span
                                 ></Label
                             >
                             <Input

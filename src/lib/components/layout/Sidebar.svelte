@@ -87,7 +87,7 @@
             requiredRoles: ["finance", "admin", "approver"],
         },
 
-        // 受款人管理：所有使用者可見 (新增需審核)
+        // 收款人管理：所有使用者可見 (新增需審核)
         { label: "收款人管理", href: "/payees", icon: Building2 },
 
         // 使用者管理：僅管理員可見
@@ -128,6 +128,8 @@
             isFinance?: boolean;
             isAdmin?: boolean;
             isApprover?: boolean;
+            approver_id?: string;
+            approver_name?: string;
             bank?: string;
             bankAccountTail?: string;
         };
@@ -167,22 +169,6 @@
             if (role === "approver") return user.isApprover;
             return false;
         });
-    }
-
-    /**
-     * 取得使用者角色的中文標籤
-     * 用於使用者資訊卡片顯示
-     * @returns 角色標籤字串
-     */
-    function getRoleLabel(): string {
-        const roles: string[] = [];
-        if (user.isAdmin) roles.push("管理員");
-        if (user.isFinance) roles.push("財務");
-        if (user.isApprover) roles.push("主管");
-
-        // 若無任何特殊角色，顯示為一般申請人
-        if (roles.length === 0) return "員工";
-        return roles.join(" / ");
     }
 
     /**
@@ -326,9 +312,29 @@
                     >
                         {user.name}
                     </p>
-                    <p class="truncate text-xs text-sidebar-foreground/60">
-                        {getRoleLabel()}
-                    </p>
+                    <div class="mt-0.5 flex flex-wrap gap-1">
+                        {#if user.isAdmin}
+                            <span
+                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold bg-blue-50 text-blue-700 border-blue-200"
+                            >
+                                管理員
+                            </span>
+                        {/if}
+                        {#if user.isFinance}
+                            <span
+                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-700 border-amber-200"
+                            >
+                                財務
+                            </span>
+                        {/if}
+                        {#if !user.isAdmin && !user.isFinance}
+                            <span
+                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold border-input text-foreground"
+                            >
+                                員工
+                            </span>
+                        {/if}
+                    </div>
                 </div>
             </button>
 

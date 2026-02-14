@@ -141,7 +141,7 @@
                         <!-- 基本資料 -->
                         <div class="space-y-4">
                             <div class="space-y-2">
-                                <Label>受款人名稱</Label>
+                                <Label>收款人名稱</Label>
                                 <Input value={displayName} readonly />
                             </div>
 

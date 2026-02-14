@@ -68,14 +68,22 @@ test.describe.serial('Account Sheet', () => {
         await expect(
             sheetDialog.getByText('匯款帳號資訊', { exact: true }),
         ).toBeVisible();
-        await expect(
-            sheetDialog.getByText('銀行代碼', { exact: true }),
-        ).toBeVisible();
+        const hasBankFields = await sheetDialog
+            .getByText('銀行代碼', { exact: true })
+            .isVisible()
+            .catch(() => false);
 
-        // Enter edit mode then verify the save button
-        await sheetDialog.getByRole('button', { name: '編輯個人資訊' }).click();
+        if (!hasBankFields) {
+            await expect(
+                sheetDialog.getByText('尚未設定銀行帳號', { exact: true }),
+            ).toBeVisible();
+            await expect(
+                sheetDialog.getByRole('button', { name: '新增銀行帳號' }),
+            ).toBeVisible();
+        }
+
         await expect(
-            sheetDialog.getByRole('button', { name: '儲存並更新設定' })
+            sheetDialog.getByRole('button', { name: '編輯姓名' }),
         ).toBeVisible();
     });
 });

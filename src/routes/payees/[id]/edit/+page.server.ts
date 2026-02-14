@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
         .single();
 
     if (fetchError || !payee) {
-        throw error(404, '找不到此受款人');
+        throw error(404, '找不到此收款人');
     }
 
     let decryptedTaxId = null;
@@ -99,7 +99,7 @@ export const actions: Actions = {
         const reason = (formData.get('reason') as string || '').trim() || '資料更新申請';
 
         // --- Basic Validation ---
-        if (!name) return fail(400, { message: '受款人名稱為必填' });
+        if (!name) return fail(400, { message: '收款人名稱為必填' });
 
         if (type === 'vendor' && tax_id && !/^\d{8}$/.test(tax_id)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });

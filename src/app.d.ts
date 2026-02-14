@@ -40,8 +40,10 @@ declare global {
 			is_admin: boolean;
 			is_finance: boolean;
 			approver_id: string | null;
+			approver_name?: string | null;
 			is_approver: boolean;
 			bank: string | null;
+			bank_account_tail?: string | null;
 			is_active?: boolean;
 		}
 

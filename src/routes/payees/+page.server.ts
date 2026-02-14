@@ -65,7 +65,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
     /**
-     * 更新受款人資料申請
+     * 更新收款人資料申請
      */
     updatePayeeRequest: async ({ request, locals: { supabase, getSession } }) => {
         const session = await getSession();
@@ -77,7 +77,7 @@ export const actions: Actions = {
         const payeeId = formData.get('id') as string;
 
         if (!payeeId) {
-            return fail(400, { message: '缺少受款人 ID' });
+            return fail(400, { message: '缺少收款人 ID' });
         }
 
         // Extract fields
@@ -92,7 +92,7 @@ export const actions: Actions = {
         const reason = (formData.get('reason') as string || '').trim() || '資料更新申請';
 
         // --- Basic Validation ---
-        if (!name) return fail(400, { message: '受款人名稱為必填' });
+        if (!name) return fail(400, { message: '收款人名稱為必填' });
 
         if (type === 'vendor' && tax_id && !/^\d{8}$/.test(tax_id)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });
@@ -225,7 +225,7 @@ export const actions: Actions = {
         return { success: true, decryptedAccount: data };
     },
     /**
-     * 核准受款人申請 (僅財務權限)
+     * 核准收款人申請 (僅財務權限)
      */
     approvePayeeRequest: async ({ request, locals: { supabase, getSession, user } }) => {
         const session = await getSession();
@@ -251,7 +251,7 @@ export const actions: Actions = {
     },
 
     /**
-     * 駁回受款人申請 (僅財務權限)
+     * 駁回收款人申請 (僅財務權限)
      */
     rejectPayeeRequest: async ({ request, locals: { supabase, getSession, user } }) => {
         const session = await getSession();
@@ -277,7 +277,7 @@ export const actions: Actions = {
     },
 
     /**
-     * 撤銷受款人新增申請
+     * 撤銷收款人新增申請
      * 僅允許申請人撤銷自己的 pending 申請
      */
     withdrawRequest: async ({ request, locals: { supabase, getSession } }) => {
@@ -330,10 +330,10 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
-        const reason = formData.get('reason') as string || '停用受款人申請';
+        const reason = formData.get('reason') as string || '停用收款人申請';
 
 
-        if (!payeeId) return fail(400, { message: '缺少受款人 ID' });
+        if (!payeeId) return fail(400, { message: '缺少收款人 ID' });
 
         const { error: rpcError } = await supabase.rpc('submit_payee_change_request', {
             _change_type: 'disable',

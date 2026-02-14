@@ -58,6 +58,8 @@
 					isFinance: data.profile?.is_finance ?? false,
 					isAdmin: data.profile?.is_admin ?? false,
 					isApprover: data.profile?.is_approver ?? false,
+					approver_id: data.profile?.approver_id || "",
+					approver_name: data.profile?.approver_name || "",
 					bank: data.profile?.bank || "",
 					bankAccountTail: data.profile?.bank_account_tail || "",
 				}

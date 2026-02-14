@@ -43,10 +43,10 @@ export const actions: Actions = {
 
         // --- Input Validation ---
         if (!name) {
-            return fail(400, { message: '受款人名稱為必填' });
+            return fail(400, { message: '收款人名稱為必填' });
         }
         if (!['vendor', 'personal'].includes(type)) {
-            return fail(400, { message: '無效的受款人類型' });
+            return fail(400, { message: '無效的收款人類型' });
         }
         if (type === 'vendor' && !/^\d{8}$/.test(tax_id)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });

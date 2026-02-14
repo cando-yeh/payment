@@ -586,9 +586,7 @@
                                 {:else}
                                     <Save class="h-4 w-4" />
                                 {/if}
-                                {isManagementMode
-                                    ? "確認儲存變更"
-                                    : "儲存並更新設定"}
+                                {isManagementMode ? "儲存變更" : "更新設定"}
                             </Button>
                         </div>
                     {:else}
