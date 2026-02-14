@@ -601,7 +601,7 @@ export const actions: Actions = {
      * 永久刪除收款人 (僅財務權限)
      * 並處理資料庫 FK 限制驗證
      */
-    removePayee: async ({ request, locals: { supabase, getSession, user } }) => {
+    removePayee: async ({ request, locals: { getSession, user } }) => {
         const session = await getSession();
         if (!session || (!user?.is_finance && !user?.is_admin)) {
             return fail(403, { message: '權限不足：僅財務或管理員可執行此操作' });

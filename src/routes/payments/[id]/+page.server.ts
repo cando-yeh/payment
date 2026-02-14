@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
     }
 
     // Fetch related claims
-    const { data: claims, error: claimsError } = await supabase
+    const { data: claims } = await supabase
         .from('claims')
         .select(`
             *,

@@ -345,7 +345,7 @@
                 class="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground"
                 onclick={async () => {
                     const { createBrowserSupabaseClient } = await import(
-                        "$lib"
+                        "$lib/supabase"
                     );
                     const supabase = createBrowserSupabaseClient();
                     await supabase.auth.signOut();

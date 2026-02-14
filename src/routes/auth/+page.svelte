@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createBrowserSupabaseClient } from "$lib";
+    import { createBrowserSupabaseClient } from "$lib/supabase";
     import { Button } from "$lib/components/ui/button";
     import { onMount } from "svelte";
     import {

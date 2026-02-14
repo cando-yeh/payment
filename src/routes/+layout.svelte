@@ -11,7 +11,7 @@
 	// 引入全域 CSS (Tailwind, shadcn 變數)
 	import "../app.css";
 	import { invalidate } from "$app/navigation";
-	import { createBrowserSupabaseClient } from "$lib";
+	import { createBrowserSupabaseClient } from "$lib/supabase";
 	import { onMount } from "svelte";
 	import { page } from "$app/state";
 	import { Toaster } from "svelte-sonner";
