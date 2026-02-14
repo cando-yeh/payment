@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     const [payeesResponse, requestsResponse] = await Promise.all([
         supabase
             .from('payees')
-            .select('id, name, type, status, bank, bank_account, bank_account_tail, service_description, created_at, updated_at')
+            .select('id, name, type, status, bank, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at')
             .order('created_at', { ascending: false }),
         pendingRequestsQuery
     ]);
@@ -66,11 +66,48 @@ export const load: PageServerLoad = async ({ locals }) => {
         console.error('Error fetching pending requests:', requestsResponse.error);
     }
 
+    const payeesWithAttachmentUrls = await Promise.all(
+        (payeesResponse.data || []).map(async (payee: any) => {
+            const attachments = payee.attachments || {};
+            const signedUrls: Record<string, string | null> = {
+                id_card_front: null,
+                id_card_back: null,
+                bank_passbook: null
+            };
+
+            const getSignedUrl = async (path?: string) => {
+                if (!path) return null;
+                const { data } = await serviceRoleClient.storage
+                    .from('payees')
+                    .createSignedUrl(path, 3600);
+                return data?.signedUrl || null;
+            };
+
+            if (attachments.id_card_front || attachments.id_card_back || attachments.bank_passbook) {
+                const [front, back, bank] = await Promise.all([
+                    getSignedUrl(attachments.id_card_front),
+                    getSignedUrl(attachments.id_card_back),
+                    getSignedUrl(attachments.bank_passbook)
+                ]);
+
+                signedUrls.id_card_front = front;
+                signedUrls.id_card_back = back;
+                signedUrls.bank_passbook = bank;
+            }
+
+            return {
+                ...payee,
+                attachment_urls: signedUrls
+            };
+        })
+    );
+
     return {
-        payees: payeesResponse.data || [],
+        payees: payeesWithAttachmentUrls,
         pendingRequests: requestsResponse.data || [],
         user: session.user,
-        is_finance: locals.user?.is_finance ?? false
+        is_finance: locals.user?.is_finance ?? false,
+        is_admin: locals.user?.is_admin ?? false
     };
 };
 
@@ -101,6 +138,9 @@ export const actions: Actions = {
         const address = (formData.get('address') as string || '').trim();
         const service_description = (formData.get('service_description') as string || '').trim();
         const reason = (formData.get('reason') as string || '').trim() || '資料更新申請';
+        const removeIdFront = (formData.get('remove_attachment_id_front') as string) === 'true';
+        const removeIdBack = (formData.get('remove_attachment_id_back') as string) === 'true';
+        const removeBankCover = (formData.get('remove_attachment_bank_cover') as string) === 'true';
 
         // --- Basic Validation ---
         if (!name) return fail(400, { message: '收款人名稱為必填' });
@@ -158,12 +198,18 @@ export const actions: Actions = {
                 const newPaths = {
                     id_card_front: (files.id_front && files.id_front.size > 0)
                         ? await uploadFileToStorage(supabase, files.id_front, { bucket: 'payees', prefix: 'id_front' })
+                        : removeIdFront
+                            ? null
                         : currentAttachments.id_card_front,
                     id_card_back: (files.id_back && files.id_back.size > 0)
                         ? await uploadFileToStorage(supabase, files.id_back, { bucket: 'payees', prefix: 'id_back' })
+                        : removeIdBack
+                            ? null
                         : currentAttachments.id_card_back,
                     bank_passbook: (files.bank_cover && files.bank_cover.size > 0)
                         ? await uploadFileToStorage(supabase, files.bank_cover, { bucket: 'payees', prefix: 'bank_cover' })
+                        : removeBankCover
+                            ? null
                         : currentAttachments.bank_passbook
                 };
 
@@ -208,16 +254,11 @@ export const actions: Actions = {
     },
 
     /**
-     * 解密收款人銀行帳號 (僅財務/管理員)
+     * 解密收款人銀行帳號 (所有已登入使用者可查看)
      */
-    revealPayeeAccount: async ({ request, locals: { supabase, getSession, user } }) => {
+    revealPayeeAccount: async ({ request, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: '未登入' });
-
-        // 財務或管理員才可解密
-        if (!user?.is_finance && !user?.is_admin) {
-            return fail(403, { message: '權限不足' });
-        }
 
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
@@ -234,6 +275,25 @@ export const actions: Actions = {
         }
 
         return { success: true, decryptedAccount: data };
+    },
+    revealPayeeTaxId: async ({ request, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: '未登入' });
+
+        const formData = await request.formData();
+        const payeeId = formData.get('payeeId') as string;
+        if (!payeeId) return fail(400, { message: 'Missing payeeId' });
+
+        const { data, error } = await supabase.rpc('reveal_payee_tax_id', {
+            _payee_id: payeeId
+        });
+
+        if (error) {
+            console.error('Reveal Tax ID Error:', error);
+            return fail(500, { message: '讀取統編失敗' });
+        }
+
+        return { success: true, taxId: data };
     },
     /**
      * 核准收款人申請 (僅財務權限)
@@ -369,8 +429,8 @@ export const actions: Actions = {
      */
     removePayee: async ({ request, locals: { supabase, getSession, user } }) => {
         const session = await getSession();
-        if (!session || !user?.is_finance) {
-            return fail(403, { message: '權限不足：僅財務人員可執行此操作' });
+        if (!session || (!user?.is_finance && !user?.is_admin)) {
+            return fail(403, { message: '權限不足：僅財務或管理員可執行此操作' });
         }
 
         const formData = await request.formData();
@@ -409,8 +469,8 @@ export const actions: Actions = {
      */
     toggleStatus: async ({ request, locals: { getSession, user } }) => {
         const session = await getSession();
-        if (!session || !user?.is_finance) {
-            return fail(403, { message: '權限不足：僅財務人員可執行此操作' });
+        if (!session || (!user?.is_finance && !user?.is_admin)) {
+            return fail(403, { message: '權限不足：僅財務或管理員可執行此操作' });
         }
 
         const formData = await request.formData();

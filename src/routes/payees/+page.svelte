@@ -10,6 +10,8 @@
         Undo2,
         Check,
         X,
+        Eye,
+        EyeOff,
         LoaderCircle,
         Building2,
         User,
@@ -59,9 +61,9 @@
                         ? req.proposed_data?.bank_code || "-"
                         : linkedPayee?.bank || "-",
                 bank_account: req.proposed_bank_account_tail
-                    ? `*****${req.proposed_bank_account_tail}`
+                    ? `*******${String(req.proposed_bank_account_tail).slice(-5)}`
                     : req.proposed_bank_account
-                      ? "已加密"
+                      ? "*******"
                       : "-",
                 status: `pending_${req.change_type}`,
                 source: "request",
@@ -80,9 +82,9 @@
                 ...p,
                 bank_code: p.bank || "-",
                 bank_account: p.bank_account_tail
-                    ? `*****${p.bank_account_tail}`
+                    ? `*******${String(p.bank_account_tail).slice(-5)}`
                     : p.bank_account
-                      ? "已加密"
+                      ? "*******"
                       : "-",
             })),
         ];
@@ -91,6 +93,8 @@
     let searchTerm = $state("");
     let typeFilter = $state("all");
     let isActionSubmitting = $state(false);
+    let revealedAccounts = $state<Record<string, string>>({});
+    let revealingById = $state<Record<string, boolean>>({});
 
     // Detail Dialog State (for requests)
     let selectedPayee = $state<any>(null);
@@ -272,6 +276,85 @@
             },
         });
     }
+
+    async function handleSubmitDisableRequest(payee: any) {
+        openSystemConfirm({
+            title: "確認提交停用申請",
+            description: `確定要提交收款人「${payee.name}」的停用申請？`,
+            buttonLabel: "提交停用申請",
+            buttonVariant: "destructive",
+            action: async () => {
+                isActionSubmitting = true;
+                const formData = new FormData();
+                formData.append("payeeId", payee.id);
+                formData.append("reason", "停用收款人申請");
+
+                try {
+                    const response = await fetch("?/submitDisableRequest", {
+                        method: "POST",
+                        body: formData,
+                        headers: { "x-sveltekit-action": "true" },
+                    });
+                    const result = deserialize(await response.text()) as any;
+                    if (result.type === "success") {
+                        toast.success(
+                            result.data?.message ||
+                                "停用申請已提交，請等待財務審核",
+                        );
+                        await invalidateAll();
+                    } else {
+                        toast.error(result.data?.message || "提交停用申請失敗");
+                    }
+                } catch {
+                    toast.error("連線錯誤");
+                } finally {
+                    isActionSubmitting = false;
+                }
+            },
+        });
+    }
+
+    async function handleToggleRowBankAccount(payee: any, e: MouseEvent) {
+        e.stopPropagation();
+        if (!payee?.id || payee?.source !== "active") return;
+
+        if (revealedAccounts[payee.id]) {
+            const next = { ...revealedAccounts };
+            delete next[payee.id];
+            revealedAccounts = next;
+            return;
+        }
+
+        revealingById = { ...revealingById, [payee.id]: true };
+        try {
+            const formData = new FormData();
+            formData.append("payeeId", payee.id);
+            const response = await fetch("?/revealPayeeAccount", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const result = deserialize(await response.text()) as any;
+            if (
+                result?.type === "success" &&
+                result?.data &&
+                "decryptedAccount" in result.data
+            ) {
+                revealedAccounts = {
+                    ...revealedAccounts,
+                    [payee.id]: String(result.data.decryptedAccount),
+                };
+            } else {
+                toast.error(result?.data?.message || "無法讀取帳號資訊");
+            }
+        } catch {
+            toast.error("連線錯誤");
+        } finally {
+            const next = { ...revealingById };
+            delete next[payee.id];
+            revealingById = next;
+        }
+    }
 </script>
 
 <div class="flex flex-col gap-6 p-6">
@@ -354,7 +437,44 @@
                             </div>
                         </Table.Cell>
                         <Table.Cell>{payee.bank_code}</Table.Cell>
-                        <Table.Cell>{payee.bank_account || "-"}</Table.Cell>
+                        <Table.Cell>
+                            <div class="flex items-center w-full">
+                                <span class="flex-1 min-w-0 text-left truncate">
+                                    {payee.source === "active" &&
+                                    revealedAccounts[payee.id]
+                                        ? revealedAccounts[payee.id]
+                                        : payee.bank_account || "-"}
+                                </span>
+                                {#if payee.source === "active" && payee.bank_account && payee.bank_account !== "-"}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="h-7 w-7 ml-2 shrink-0 text-muted-foreground"
+                                        onclick={(e) =>
+                                            handleToggleRowBankAccount(
+                                                payee,
+                                                e,
+                                            )}
+                                        disabled={Boolean(
+                                            revealingById[payee.id],
+                                        )}
+                                        title={revealedAccounts[payee.id]
+                                            ? "隱藏帳號"
+                                            : "顯示帳號"}
+                                    >
+                                        {#if revealingById[payee.id]}
+                                            <LoaderCircle
+                                                class="h-3.5 w-3.5 animate-spin"
+                                            />
+                                        {:else if revealedAccounts[payee.id]}
+                                            <Eye class="h-3.5 w-3.5" />
+                                        {:else}
+                                            <EyeOff class="h-3.5 w-3.5" />
+                                        {/if}
+                                    </Button>
+                                {/if}
+                            </div>
+                        </Table.Cell>
                         <Table.Cell>
                             {@const badge = getStatusBadge(payee.status)}
                             <Badge variant={badge.variant as any}
@@ -363,7 +483,7 @@
                         </Table.Cell>
                         <Table.Cell class="text-right">
                             <div class="flex items-center justify-end gap-1">
-                                {#if payee.source === "active" && data.is_finance}
+                                {#if payee.source === "active" && (data.is_finance || data.is_admin)}
                                     <Button
                                         variant="ghost"
                                         size="icon"
@@ -397,6 +517,22 @@
                                         title="永久刪除"
                                     >
                                         <Trash2 class="h-4 w-4" />
+                                    </Button>
+                                {/if}
+                                {#if payee.source === "active" && !(data.is_finance || data.is_admin) && payee.status === "available"}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        data-testid={`payee-request-disable-${payee.id}`}
+                                        class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            handleSubmitDisableRequest(payee);
+                                        }}
+                                        disabled={isActionSubmitting}
+                                        title="提交停用申請"
+                                    >
+                                        <Ban class="h-4 w-4" />
                                     </Button>
                                 {/if}
                             </div>

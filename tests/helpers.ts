@@ -25,6 +25,55 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function isRetryableNetworkError(error: unknown) {
+    const text = String(
+        (error as any)?.message ||
+            (error as any)?.cause?.message ||
+            error ||
+            "",
+    ).toLowerCase();
+    return (
+        text.includes("enotfound") ||
+        text.includes("eai_again") ||
+        text.includes("fetch failed") ||
+        text.includes("network") ||
+        text.includes("timed out")
+    );
+}
+
+export async function withNetworkRetry<T>(
+    fn: () => Promise<T>,
+    maxAttempts = 5,
+) {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            if (!isRetryableNetworkError(error) || attempt === maxAttempts) {
+                throw error;
+            }
+            const backoffMs = Math.min(8000, 400 * Math.pow(2, attempt - 1));
+            const jitterMs = Math.floor(Math.random() * 300);
+            await sleep(backoffMs + jitterMs);
+        }
+    }
+    throw lastError;
+}
+
+const authAdmin = supabaseAdmin.auth.admin;
+const rawCreateUser = authAdmin.createUser.bind(authAdmin);
+const rawDeleteUser = authAdmin.deleteUser.bind(authAdmin);
+const rawListUsers = authAdmin.listUsers.bind(authAdmin);
+
+authAdmin.createUser = ((attributes: Parameters<typeof rawCreateUser>[0]) =>
+    withNetworkRetry(() => rawCreateUser(attributes))) as typeof authAdmin.createUser;
+authAdmin.deleteUser = ((id: Parameters<typeof rawDeleteUser>[0], shouldSoftDelete?: Parameters<typeof rawDeleteUser>[1]) =>
+    withNetworkRetry(() => rawDeleteUser(id, shouldSoftDelete))) as typeof authAdmin.deleteUser;
+authAdmin.listUsers = ((params?: Parameters<typeof rawListUsers>[0]) =>
+    withNetworkRetry(() => rawListUsers(params))) as typeof authAdmin.listUsers;
+
 export async function authSignInWithRetry(
     client: SupabaseClient,
     email: string,

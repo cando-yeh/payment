@@ -131,25 +131,17 @@ test.describe('Payee Management Extended Flow', () => {
         await page.goto('/payees');
         await page.waitForTimeout(1000);
 
-        // 找到原始 active payee row (不帶 [更新] 或 [停用] 前綴)
-        // 先確認 payee 出現在 table 中
-        const payeeCell = page.locator('td').filter({ hasText: testPayeeName }).first();
-        await expect(payeeCell).toBeVisible({ timeout: 15000 });
+        const disableActionBtn = page.getByTestId(`payee-request-disable-${testPayeeId}`);
+        await expect(disableActionBtn).toBeVisible({ timeout: 15000 });
+        await disableActionBtn.click();
 
-        // 點擊該行打開 detail dialog
-        await payeeCell.click();
+        // 確認對話框
+        await page
+            .getByRole('dialog')
+            .filter({ hasText: '確認提交停用申請' })
+            .getByRole('button', { name: '提交停用申請', exact: true })
+            .click();
 
-        // 等待 dialog 出現
-        const dialog = page.locator('[role="dialog"]');
-        await expect(dialog).toBeVisible({ timeout: 5000 });
-
-        // 按下「停用收款人」按鈕 (button inside form with action ?/submitDisableRequest)
-        const disableBtn = dialog.getByTestId('payee-submit-disable-request');
-        await expect(disableBtn).toBeVisible({ timeout: 5000 });
-
-        await disableBtn.click();
-
-        // 等待成功訊息 "停用申請已提交"
         await expect(page.getByText('停用申請已提交')).toBeVisible({ timeout: 10000 });
     });
 

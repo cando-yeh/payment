@@ -148,12 +148,12 @@ test.describe('Payee Drawer Functionality', () => {
         await expect(row).toBeVisible();
         const drawer = await openPayeeEditDrawer(page, row);
         await expect(drawer).toBeVisible();
-        await expect(page.getByRole('heading', { name: testPayeeName })).toBeVisible();
+        await expect(drawer.locator('input[name="name"]')).toHaveValue(testPayeeName);
 
-        // Check if sensitive bank account is MASKED in placeholder
-        const bankInput = drawer.locator('input[name="bank_account"]');
-        await expect(bankInput).toHaveAttribute('type', 'password');
-        await expect(bankInput).toHaveAttribute('placeholder', /••••••|點擊解密/);
+        // Check if sensitive bank account is MASKED in value
+        const bankInput = drawer.locator('input#bank_account');
+        await expect(bankInput).toHaveAttribute('type', 'text');
+        await expect(bankInput).toHaveValue(/[*•]/);
     });
 
     test('Standard User can EDIT payee details via Drawer and Submit Request', async ({ page }) => {
@@ -165,6 +165,8 @@ test.describe('Payee Drawer Functionality', () => {
         await expect(editRow).toBeVisible();
         const drawer = await openPayeeEditDrawer(page, editRow);
         await expect(drawer).toBeVisible();
+
+        await drawer.getByRole('button', { name: '編輯收款人資訊' }).click();
 
         // Modify a field
         const newService = 'E2E Service ' + Date.now();
@@ -193,23 +195,22 @@ test.describe('Payee Drawer Functionality', () => {
         await expect(financeRow).toBeVisible();
         const drawer = await openPayeeEditDrawer(page, financeRow);
 
-        const bankInput = drawer.locator('input[name="bank_account"]');
+        const bankInput = drawer.locator('input#bank_account');
         const revealBtn = drawer.locator('div:has(> input#bank_account) button').first();
 
         // Initial state
-        await expect(bankInput).toHaveAttribute('type', 'password');
+        await expect(bankInput).toHaveAttribute('type', 'text');
+        const beforeValue = await bankInput.inputValue();
 
         // Click reveal
-        // Note: The UI might use a specific button class or ID.
-        // Based on typical `lucide-svelte` usage, it might be the eye icon button.
-        // Let's try locating by the eye icon SVG if specific selector fails, but cleaner to assume it's near the input.
-        // In PayeeSheet.svelte, it's a Button with variant="ghost" size="icon" next to the input.
         await revealBtn.click();
 
-        // Expect value to be revealed (type="text")
-        await expect(bankInput).toHaveAttribute('type', 'text');
-
-        await expect(bankInput).toBeVisible();
+        await expect
+            .poll(async () => await bankInput.inputValue(), { timeout: 5000 })
+            .not.toBe(beforeValue);
+        await expect
+            .poll(async () => await bankInput.inputValue(), { timeout: 5000 })
+            .not.toMatch(/[*•]/);
     });
 
     test('Standard User can VIEW Pending Request in Drawer and WITHDRAW it', async ({ page }) => {

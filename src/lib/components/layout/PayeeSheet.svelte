@@ -14,30 +14,22 @@
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Sheet from "$lib/components/ui/sheet";
-    import * as Avatar from "$lib/components/ui/avatar";
     import { toast } from "svelte-sonner";
     import {
-        Building2,
-        User,
-        CreditCard,
         Save,
-        Eye,
-        EyeOff,
         LoaderCircle,
-        FileText,
-        Upload,
-        UserX,
     } from "lucide-svelte";
     import { compressFormImageInputs } from "$lib/client/image-compression";
     import { timedFetch } from "$lib/client/timed-fetch";
-    import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
+    import BankAccountSection from "$lib/components/layout/BankAccountSection.svelte";
+    import PayeeAttachmentTiles from "$lib/components/layout/PayeeAttachmentTiles.svelte";
+    import type { AttachmentKey } from "$lib/components/layout/PayeeAttachmentTiles.svelte";
     import { invalidateAll } from "$app/navigation";
 
     let { payee, open = $bindable(false), isFinance = false } = $props();
 
     // 狀態
     let isLoading = $state(false);
-    let isDisableSubmitting = $state(false);
 
     // 表單欄位
     let name = $state("");
@@ -49,6 +41,29 @@
     let bankCode = $state("");
     let bankAccount = $state("");
     let reason = $state("");
+    let isEditing = $state(false);
+    let taxIdCache = $state<Record<string, string>>({});
+    let attachmentFiles = $state<Record<AttachmentKey, File | null>>({
+        id_card_front: null,
+        id_card_back: null,
+        bank_passbook: null,
+    });
+    let removedAttachments = $state<Record<AttachmentKey, boolean>>({
+        id_card_front: false,
+        id_card_back: false,
+        bank_passbook: false,
+    });
+    let localPreviewUrls = $state<Record<AttachmentKey, string | null>>({
+        id_card_front: null,
+        id_card_back: null,
+        bank_passbook: null,
+    });
+    let lastSyncedPayeeToken = $state<string | null>(null);
+    let viewOnlyFieldClass = $derived(
+        !isEditing
+            ? "cursor-default pointer-events-none focus-visible:ring-0 focus-visible:border-input"
+            : "",
+    );
 
     // 敏感資料顯示
     let showAccountValue = $state(false);
@@ -59,11 +74,11 @@
     let attachmentUrls = $derived(payee?.attachment_urls || {});
 
     // 同步資料
-    $effect(() => {
+    function resetFormFromPayee() {
         if (payee) {
             name = payee.name || "";
             type = payee.type || "vendor";
-            taxId = payee.tax_id || "";
+            taxId = payee.tax_id || taxIdCache[payee.id] || "";
             serviceDescription = payee.service_description || "";
             email = payee.extra_info?.email || "";
             address = payee.extra_info?.address || "";
@@ -73,12 +88,168 @@
             showAccountValue = false;
             decryptedAccount = null;
             reason = ""; // 重設原因
+            attachmentFiles = {
+                id_card_front: null,
+                id_card_back: null,
+                bank_passbook: null,
+            };
+            removedAttachments = {
+                id_card_front: false,
+                id_card_back: false,
+                bank_passbook: false,
+            };
         }
+    }
+
+    $effect(() => {
+        const payeeToken = payee ? `${payee.id}:${payee.updated_at || ""}` : null;
+        if (payeeToken !== lastSyncedPayeeToken) {
+            resetFormFromPayee();
+            isEditing = false;
+            lastSyncedPayeeToken = payeeToken;
+        }
+    });
+
+    $effect(() => {
+        if (!open) {
+            isEditing = false;
+        }
+    });
+
+    function startEditing() {
+        isEditing = true;
+        void ensureTaxIdReady();
+    }
+
+    function cancelEditing() {
+        resetFormFromPayee();
+        isEditing = false;
+    }
+
+    function hasExistingAttachment(key: AttachmentKey) {
+        return Boolean(attachmentUrls?.[key] && !removedAttachments[key]);
+    }
+
+    function hasAttachment(key: AttachmentKey) {
+        return Boolean(hasExistingAttachment(key) || attachmentFiles[key]);
+    }
+
+    function canInteractWithAttachmentTile(key: AttachmentKey) {
+        return hasAttachment(key) || isEditing;
+    }
+
+    function handleAttachmentSelected(
+        key: AttachmentKey,
+        event: Event,
+    ) {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0] || null;
+        attachmentFiles = {
+            ...attachmentFiles,
+            [key]: file,
+        };
+        if (file) {
+            removedAttachments = {
+                ...removedAttachments,
+                [key]: false,
+            };
+        }
+    }
+
+    function removeAttachment(key: AttachmentKey) {
+        if (!isEditing) return;
+        attachmentFiles = {
+            ...attachmentFiles,
+            [key]: null,
+        };
+        removedAttachments = {
+            ...removedAttachments,
+            [key]: true,
+        };
+    }
+
+    function isImageUrl(url: string) {
+        return /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(url);
+    }
+
+    function isPdfUrl(url: string) {
+        return /\.pdf(\?.*)?$/i.test(url);
+    }
+
+    function isAttachmentImage(key: AttachmentKey) {
+        const file = attachmentFiles[key];
+        if (file) return file.type.startsWith("image/");
+        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || "") : "";
+        return Boolean(url && isImageUrl(url));
+    }
+
+    function isAttachmentPdf(key: AttachmentKey) {
+        const file = attachmentFiles[key];
+        if (file) return file.type === "application/pdf";
+        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || "") : "";
+        return Boolean(url && isPdfUrl(url));
+    }
+
+    function getAttachmentPreviewUrl(key: AttachmentKey) {
+        return localPreviewUrls[key] || (hasExistingAttachment(key) ? String(attachmentUrls[key]) : null);
+    }
+
+    $effect(() => {
+        const urls: Record<AttachmentKey, string | null> = {
+            id_card_front: null,
+            id_card_back: null,
+            bank_passbook: null,
+        };
+
+        (Object.keys(attachmentFiles) as AttachmentKey[]).forEach((key) => {
+            const file = attachmentFiles[key];
+            if (file && file.type.startsWith("image/")) {
+                urls[key] = URL.createObjectURL(file);
+            }
+        });
+
+        localPreviewUrls = urls;
+
+        return () => {
+            (Object.values(urls) as Array<string | null>).forEach((url) => {
+                if (url) URL.revokeObjectURL(url);
+            });
+        };
     });
 
     /**
      * 銀行帳號解密流程
      */
+    async function ensureTaxIdReady() {
+        if (!payee?.id || taxId.trim().length > 0) return;
+
+        try {
+            const formData = new FormData();
+            formData.append("payeeId", payee.id);
+            const response = await timedFetch("/payees?/revealPayeeTaxId", {
+                method: "POST",
+                body: formData,
+            });
+            const result = deserialize(await response.text()) as any;
+            if (
+                result.type === "success" &&
+                result.data &&
+                "taxId" in result.data
+            ) {
+                const nextTaxId = String(result.data.taxId || "").trim();
+                if (nextTaxId.length > 0) {
+                    taxId = nextTaxId;
+                    taxIdCache = {
+                        ...taxIdCache,
+                        [payee.id]: nextTaxId,
+                    };
+                }
+            }
+        } catch {
+            // 非阻斷流程：保持現有值，讓使用者可手動輸入
+        }
+    }
+
     async function toggleReveal() {
         if (!showAccountValue && !decryptedAccount) {
             revealing = true;
@@ -143,6 +314,13 @@
         return async ({ result }: { result: any }) => {
             isLoading = false;
             if (result.type === "success") {
+                if (payee?.id) {
+                    const nextTaxId = taxId.trim();
+                    taxIdCache = {
+                        ...taxIdCache,
+                        [payee.id]: nextTaxId,
+                    };
+                }
                 toast.success("更新申請已提交，請等待財務審核。");
                 await invalidateAll();
                 open = false;
@@ -152,79 +330,19 @@
         };
     }
 
-    async function submitDisableRequest() {
-        if (!payee?.id || isDisableSubmitting) return;
-
-        isDisableSubmitting = true;
-        try {
-            const formData = new FormData();
-            formData.append("payeeId", payee.id);
-            formData.append("reason", "停用收款人申請");
-
-            const response = await timedFetch("?/submitDisableRequest", {
-                method: "POST",
-                body: formData,
-                headers: { "x-sveltekit-action": "true" },
-            });
-            const text = await response.text();
-            const result = deserialize(text) as any;
-
-            if (result?.type === "success") {
-                toast.success(
-                    result.data?.message || "停用申請已提交，請等待財務審核",
-                );
-                await invalidateAll();
-                open = false;
-                return;
-            }
-
-            toast.error(result?.data?.message || "提交停用申請失敗");
-        } catch {
-            toast.error("提交停用申請失敗");
-        } finally {
-            isDisableSubmitting = false;
-        }
-    }
 </script>
 
 <Sheet.Root bind:open>
     <Sheet.Content class="sm:max-w-md overflow-y-auto">
         <Sheet.Header>
-            <Sheet.Title>編輯收款人</Sheet.Title>
-            <Sheet.Description>
+        <Sheet.Title>收款人資訊</Sheet.Title>
+        <Sheet.Description>
                 檢視或修改收款人資料。修改後將建立異動申請單。
-            </Sheet.Description>
+        </Sheet.Description>
         </Sheet.Header>
 
         {#if payee}
             <div class="mt-6 space-y-6 pb-8">
-                <!-- 基本資訊 Header -->
-                <div class="flex items-center gap-4">
-                    <Avatar.Root
-                        class="h-16 w-16 border-2 border-background shadow-sm"
-                    >
-                        <Avatar.Fallback
-                            class="bg-primary/5 text-xl font-bold text-primary"
-                        >
-                            {(name || "?").charAt(0).toUpperCase()}
-                        </Avatar.Fallback>
-                    </Avatar.Root>
-                    <div>
-                        <h3 class="font-semibold text-lg">{name}</h3>
-                        <div
-                            class="flex items-center gap-2 text-sm text-muted-foreground mt-1"
-                        >
-                            {#if type === "vendor"}
-                                <Building2 class="h-3.5 w-3.5" />
-                                <span>廠商統編：{taxId || "未設定"}</span>
-                            {:else}
-                                <User class="h-3.5 w-3.5" />
-                                <span>個人戶</span>
-                            {/if}
-                        </div>
-                    </div>
-                </div>
-
                 <form
                     method="POST"
                     action="/payees?/updatePayeeRequest"
@@ -238,7 +356,9 @@
                     <div class="space-y-4">
                         <div class="space-y-2">
                             <Label for="name"
-                                >收款人名稱 <span class="text-red-500">*</span
+                                >{type === "vendor"
+                                    ? "公司名稱"
+                                    : "姓名"} <span class="text-red-500">*</span
                                 ></Label
                             >
                             <Input
@@ -248,23 +368,31 @@
                                 placeholder={type === "vendor"
                                     ? "公司全名"
                                     : "真實姓名"}
+                                readonly={!isEditing}
+                                class={viewOnlyFieldClass}
                                 required
                             />
                         </div>
 
-                        {#if type === "vendor"}
+                        <div class="grid gap-4 md:grid-cols-2">
                             <div class="space-y-2">
                                 <Label for="tax_id"
-                                    >統一編號 (8碼) <span class="text-red-500"
-                                        >*</span
+                                    >{type === "vendor"
+                                        ? "統一編號 (8碼)"
+                                        : "身分證字號"} <span
+                                        class="text-red-500">*</span
                                     ></Label
                                 >
                                 <Input
                                     id="tax_id"
                                     name="tax_id"
                                     bind:value={taxId}
-                                    placeholder="12345678"
-                                    maxlength={8}
+                                    placeholder={type === "vendor"
+                                        ? "12345678"
+                                        : "A123456789"}
+                                    maxlength={type === "vendor" ? 8 : 10}
+                                    readonly={!isEditing}
+                                    class={viewOnlyFieldClass}
                                     required
                                 />
                             </div>
@@ -277,24 +405,13 @@
                                     name="service_description"
                                     bind:value={serviceDescription}
                                     placeholder="例：網站維護費..."
+                                    readonly={!isEditing}
+                                    class={viewOnlyFieldClass}
                                 />
                             </div>
-                        {:else}
-                            <div class="space-y-2">
-                                <Label for="tax_id"
-                                    >身分證字號 <span class="text-red-500"
-                                        >*</span
-                                    ></Label
-                                >
-                                <Input
-                                    id="tax_id"
-                                    name="tax_id"
-                                    bind:value={taxId}
-                                    placeholder="A123456789"
-                                    maxlength={10}
-                                    required
-                                />
-                            </div>
+                        </div>
+
+                        {#if type === "personal"}
                             <div class="space-y-2">
                                 <Label for="email">電子郵件</Label>
                                 <Input
@@ -303,6 +420,8 @@
                                     bind:value={email}
                                     type="email"
                                     placeholder="example@email.com"
+                                    readonly={!isEditing}
+                                    class={viewOnlyFieldClass}
                                 />
                             </div>
                             <div class="space-y-2">
@@ -312,225 +431,103 @@
                                     name="address"
                                     bind:value={address}
                                     placeholder="請填寫完整地址"
+                                    readonly={!isEditing}
+                                    class={viewOnlyFieldClass}
                                 />
-                            </div>
-
-                            <!-- 附件區塊 -->
-                            <div
-                                class="border rounded-md p-4 space-y-4 bg-muted/20"
-                            >
-                                <h4
-                                    class="font-medium text-sm flex items-center gap-2"
-                                >
-                                    <FileText class="h-4 w-4" />
-                                    證明文件
-                                </h4>
-
-                                <!-- 身分證正面 -->
-                                <div class="space-y-2">
-                                    <Label
-                                        for="attachment_id_front"
-                                        class="text-xs">身分證正面</Label
-                                    >
-                                    {#if attachmentUrls.id_card_front}
-                                        <div class="text-xs mb-1">
-                                            <a
-                                                href={attachmentUrls.id_card_front}
-                                                target="_blank"
-                                                class="text-blue-600 hover:underline flex items-center gap-1"
-                                            >
-                                                <Eye class="h-3 w-3" /> 查看目前檔案
-                                            </a>
-                                        </div>
-                                    {/if}
-                                    <Input
-                                        id="attachment_id_front"
-                                        name="attachment_id_front"
-                                        type="file"
-                                        accept="image/*,.pdf"
-                                        class="h-8 text-xs"
-                                    />
-                                </div>
-
-                                <!-- 身分證反面 -->
-                                <div class="space-y-2">
-                                    <Label
-                                        for="attachment_id_back"
-                                        class="text-xs">身分證反面</Label
-                                    >
-                                    {#if attachmentUrls.id_card_back}
-                                        <div class="text-xs mb-1">
-                                            <a
-                                                href={attachmentUrls.id_card_back}
-                                                target="_blank"
-                                                class="text-blue-600 hover:underline flex items-center gap-1"
-                                            >
-                                                <Eye class="h-3 w-3" /> 查看目前檔案
-                                            </a>
-                                        </div>
-                                    {/if}
-                                    <Input
-                                        id="attachment_id_back"
-                                        name="attachment_id_back"
-                                        type="file"
-                                        accept="image/*,.pdf"
-                                        class="h-8 text-xs"
-                                    />
-                                </div>
-
-                                <!-- 存摺封面 -->
-                                <div class="space-y-2">
-                                    <Label
-                                        for="attachment_bank_cover"
-                                        class="text-xs">存摺封面</Label
-                                    >
-                                    {#if attachmentUrls.bank_passbook}
-                                        <div class="text-xs mb-1">
-                                            <a
-                                                href={attachmentUrls.bank_passbook}
-                                                target="_blank"
-                                                class="text-blue-600 hover:underline flex items-center gap-1"
-                                            >
-                                                <Eye class="h-3 w-3" /> 查看目前檔案
-                                            </a>
-                                        </div>
-                                    {/if}
-                                    <Input
-                                        id="attachment_bank_cover"
-                                        name="attachment_bank_cover"
-                                        type="file"
-                                        accept="image/*,.pdf"
-                                        class="h-8 text-xs"
-                                    />
-                                </div>
                             </div>
                         {/if}
                     </div>
 
-                    <!-- 銀行帳號 -->
-                    <div class="space-y-4 pt-2">
-                        <div
-                            class="flex items-center gap-2 text-sm font-semibold text-primary"
-                        >
-                            <CreditCard class="h-4 w-4" />
-                            匯款帳號資訊
-                        </div>
-                        <div class="grid gap-4 grid-cols-5">
-                            <div class="col-span-2 space-y-2">
-                                <Label for="bank_code">銀行代碼</Label>
-                                <BankCodeCombobox
-                                    id="bank_code"
-                                    name="bank_code"
-                                    bind:value={bankCode}
-                                    submitMode="code-name"
-                                    required
-                                />
-                            </div>
-                            <div class="col-span-3 space-y-2">
-                                <Label for="bank_account">銀行帳號</Label>
-                                <div class="relative">
-                                    <Input
-                                        id="bank_account"
-                                        name="bank_account"
-                                        type={showAccountValue
-                                            ? "text"
-                                            : "password"}
-                                        bind:value={bankAccount}
-                                        placeholder={showAccountValue
-                                            ? decryptedAccount || "點擊解密..."
-                                            : payee.bank_account_tail
-                                              ? `*****${payee.bank_account_tail}`
-                                              : "••••••••••••"}
-                                        disabled={revealing}
-                                        required
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        data-testid="toggle-reveal-btn"
-                                        class="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                                        onclick={toggleReveal}
-                                    >
-                                        {#if revealing}
-                                            <span
-                                                class="animate-spin h-3.5 w-3.5 border-2 border-primary border-t-transparent rounded-full"
-                                            ></span>
-                                        {:else if showAccountValue}
-                                            <Eye
-                                                class="h-3.5 w-3.5 text-muted-foreground"
-                                            />
-                                        {:else}
-                                            <EyeOff
-                                                class="h-3.5 w-3.5 text-muted-foreground"
-                                            />
-                                        {/if}
-                                    </Button>
-                                </div>
-                                {#if !isFinance}
-                                    <p
-                                        class="text-[0.65rem] text-muted-foreground mt-1"
-                                    >
-                                        唯有財務人員可查看原始帳號。
-                                    </p>
-                                {/if}
-                            </div>
-                        </div>
-                    </div>
+                    <BankAccountSection
+                        mode="payee"
+                        {isEditing}
+                        {isFinance}
+                        hasBankInfo={true}
+                        showTitle={false}
+                        bind:bankName={bankCode}
+                        bind:inputBankAccount={bankAccount}
+                        maskedAccountTail={payee?.bank_account_tail
+                            ? `*****${payee.bank_account_tail}`
+                            : "••••••••••••"}
+                        {revealing}
+                        {showAccountValue}
+                        {decryptedAccount}
+                        viewOnlyFieldClass={viewOnlyFieldClass}
+                        onToggleReveal={toggleReveal}
+                    />
+
+                    {#if type === "personal"}
+                        <PayeeAttachmentTiles
+                            {isEditing}
+                            {attachmentFiles}
+                            {removedAttachments}
+                            {canInteractWithAttachmentTile}
+                            {hasAttachment}
+                            {hasExistingAttachment}
+                            {isAttachmentImage}
+                            {isAttachmentPdf}
+                            {getAttachmentPreviewUrl}
+                            onRemove={removeAttachment}
+                            onFileSelected={handleAttachmentSelected}
+                        />
+                    {/if}
 
                     <!-- 變更原因 -->
-                    <div class="pt-2 space-y-2">
-                        <Label for="reason"
-                            >變更原因 <span class="text-red-500">*</span></Label
-                        >
-                        <Textarea
-                            id="reason"
-                            name="reason"
-                            bind:value={reason}
-                            placeholder="請說明此次變更的原因..."
-                            class="resize-none"
-                            required
-                        />
-                    </div>
+                    {#if isEditing}
+                        <div class="pt-2 space-y-2">
+                            <Label for="reason"
+                                >變更原因 <span class="text-red-500">*</span
+                                ></Label
+                            >
+                            <Textarea
+                                id="reason"
+                                name="reason"
+                                bind:value={reason}
+                                placeholder="請說明此次變更的原因..."
+                                class="resize-none"
+                                required
+                            />
+                        </div>
+                    {/if}
 
                     <!-- 按鈕區 -->
                     <div
                         class="sticky bottom-0 bg-background/95 backdrop-blur pt-4 pb-4 border-t mt-4 flex gap-3"
                     >
-                        {#if !isFinance && payee.status === "available"}
+                        {#if isEditing}
                             <Button
                                 type="button"
-                                variant="destructive"
-                                data-testid="payee-submit-disable-request"
+                                variant="outline"
                                 class="flex-1"
-                                onclick={submitDisableRequest}
-                                disabled={isDisableSubmitting || isLoading}
+                                onclick={cancelEditing}
+                                disabled={isLoading}
                             >
-                                {#if isDisableSubmitting}
+                                取消編輯
+                            </Button>
+                            <Button
+                                type="submit"
+                                class="flex-1 shadow-lg"
+                                disabled={isLoading}
+                            >
+                                {#if isLoading}
                                     <LoaderCircle
                                         class="mr-2 h-4 w-4 animate-spin"
                                     />
+                                    資料傳送中...
                                 {:else}
-                                    <UserX class="mr-2 h-4 w-4" />
+                                    <Save class="mr-2 h-4 w-4" />
+                                    送出異動申請
                                 {/if}
-                                停用收款人
+                            </Button>
+                        {:else}
+                            <Button
+                                type="button"
+                                class="w-full shadow-lg"
+                                onclick={startEditing}
+                            >
+                                編輯收款人資訊
                             </Button>
                         {/if}
-                        <Button
-                            type="submit"
-                            class="flex-1 shadow-lg"
-                            disabled={isLoading}
-                        >
-                            {#if isLoading}
-                                <LoaderCircle
-                                    class="mr-2 h-4 w-4 animate-spin"
-                                />
-                                資料傳送中...
-                            {:else}
-                                <Save class="mr-2 h-4 w-4" />
-                                送出異動申請
-                            {/if}
-                        </Button>
                     </div>
                 </form>
             </div>

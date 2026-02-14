@@ -6,10 +6,13 @@
     import { Check, CreditCard, Eye, EyeOff, X } from "lucide-svelte";
 
     let {
-        mode = "management" as "management" | "self",
+        mode = "management" as "management" | "self" | "payee",
         isEditing = false,
+        isFinance = false,
         isAddingBankAccount = false,
         hasBankInfo = true,
+        showTitle = true,
+        viewOnlyFieldClass = "",
         bankName = $bindable(""),
         inputBankAccount = $bindable(""),
         maskedAccountTail = "",
@@ -24,35 +27,71 @@
     } = $props();
 
     const isManagement = mode === "management";
+    const isPayee = mode === "payee";
+    const canEdit = isManagement
+        ? isEditing
+        : isPayee
+          ? isEditing
+          : isAddingBankAccount;
+    const bankCodeFieldId = isManagement
+        ? "bank"
+        : isPayee
+          ? "bank_code"
+          : "self-bank";
+    const bankCodeFieldName = isManagement
+        ? "bankName"
+        : isPayee
+          ? "bank_code"
+          : "bank";
+    const bankAccountFieldId = isManagement
+        ? "bankAccount"
+        : isPayee
+          ? "bank_account"
+          : "self-bankAccount";
+    const bankAccountFieldName = isPayee ? "bank_account" : "bankAccount";
+    const canReveal = isManagement ? isEditing : isPayee ? isFinance : true;
+    const helperText = isPayee
+        ? "唯有財務人員可查看原始帳號。"
+        : "銀行資訊均經 AES-256 對稱加密儲存，除新增外僅管理員可修改銀行資訊。";
 </script>
 
 <div class="space-y-3">
-    <div class="flex items-center gap-2 text-sm font-semibold">
-        <CreditCard class="h-4 w-4 text-primary" />
-        匯款帳號資訊
-    </div>
+    {#if showTitle}
+        <div class="flex items-center gap-2 text-sm font-semibold">
+            <CreditCard class="h-4 w-4 text-primary" />
+            匯款帳號資訊
+        </div>
+    {/if}
 
     {#if isManagement || hasBankInfo || isAddingBankAccount}
         <div class="flex gap-4">
             <div class="flex-[2] space-y-2 min-w-0">
-                <Label for={isManagement ? "bank" : "self-bank"}>銀行代碼</Label>
-                <BankCodeCombobox
-                    id={isManagement ? "bank" : "self-bank"}
-                    name={isManagement ? "bankName" : "bank"}
-                    disabled={isManagement ? !isEditing : !isAddingBankAccount}
-                    bind:value={bankName}
-                    submitMode="code-name"
-                />
+                <Label for={bankCodeFieldId}>銀行代碼</Label>
+                {#if isPayee && !canEdit}
+                    <Input
+                        id={bankCodeFieldId}
+                        type="text"
+                        value={bankName}
+                        readonly
+                        class={viewOnlyFieldClass}
+                    />
+                {:else}
+                    <BankCodeCombobox
+                        id={bankCodeFieldId}
+                        name={bankCodeFieldName}
+                        disabled={!canEdit}
+                        bind:value={bankName}
+                        submitMode="code-name"
+                    />
+                {/if}
             </div>
             <div class="flex-[3] space-y-2 min-w-0">
-                <Label for={isManagement ? "bankAccount" : "self-bankAccount"}
-                    >銀行帳號</Label
-                >
+                <Label for={bankAccountFieldId}>銀行帳號</Label>
                 <div class="relative">
                     {#if isManagement && isEditing}
                         <Input
-                            id="bankAccount"
-                            name="bankAccount"
+                            id={bankAccountFieldId}
+                            name={bankAccountFieldName}
                             type={showAccountValue ? "text" : "password"}
                             bind:value={inputBankAccount}
                             placeholder={showAccountValue
@@ -60,10 +99,21 @@
                                 : "••••••••••••"}
                             disabled={revealing}
                         />
+                    {:else if isPayee && isEditing}
+                        <Input
+                            id={bankAccountFieldId}
+                            name={bankAccountFieldName}
+                            type={showAccountValue ? "text" : "password"}
+                            bind:value={inputBankAccount}
+                            placeholder={showAccountValue
+                                ? decryptedAccount || "請輸入新帳號..."
+                                : maskedAccountTail || "••••••••••••"}
+                            disabled={revealing}
+                        />
                     {:else if !isManagement && isAddingBankAccount}
                         <Input
-                            id="self-bankAccount"
-                            name="bankAccount"
+                            id={bankAccountFieldId}
+                            name={bankAccountFieldName}
                             type={showAccountValue ? "text" : "password"}
                             bind:value={inputBankAccount}
                             placeholder={showAccountValue
@@ -73,23 +123,27 @@
                         />
                     {:else}
                         <Input
-                            id={isManagement ? "bankAccount" : "self-bankAccount"}
-                            type={showAccountValue ? "text" : "password"}
+                            id={bankAccountFieldId}
+                            type={isPayee
+                                ? "text"
+                                : showAccountValue
+                                  ? "text"
+                                  : "password"}
                             value={showAccountValue
                                 ? decryptedAccount || maskedAccountTail
                                 : maskedAccountTail || "••••••••••••"}
                             readonly
-                            disabled
-                            class={isManagement ? "pointer-events-none" : ""}
+                            class={viewOnlyFieldClass ||
+                                (isManagement ? "pointer-events-none" : "")}
                         />
                     {/if}
 
-                    {#if isManagement && !isEditing}
+                    {#if !canReveal}
                         <span
                             class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
                             aria-hidden="true"
                         >
-                            <EyeOff class="h-4 w-4" />
+                            <Eye class="h-4 w-4" />
                         </span>
                     {:else}
                         <Button
@@ -108,13 +162,18 @@
                                     class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
                                 ></span>
                             {:else if showAccountValue}
-                                <EyeOff class="h-4 w-4 text-muted-foreground" />
-                            {:else}
                                 <Eye class="h-4 w-4 text-muted-foreground" />
+                            {:else}
+                                <EyeOff class="h-4 w-4 text-muted-foreground" />
                             {/if}
                         </Button>
                     {/if}
                 </div>
+                {#if isPayee && !isFinance}
+                    <p class="text-[0.65rem] text-muted-foreground mt-1">
+                        {helperText}
+                    </p>
+                {/if}
             </div>
         </div>
     {:else}
@@ -130,9 +189,11 @@
         </div>
     {/if}
 
-    <p class="text-[0.7rem] text-muted-foreground leading-relaxed">
-        銀行資訊均經 AES-256 對稱加密儲存，除新增外僅管理員可修改銀行資訊。
-    </p>
+    {#if !isPayee}
+        <p class="text-[0.7rem] text-muted-foreground leading-relaxed">
+            {helperText}
+        </p>
+    {/if}
 
     {#if !isManagement && isAddingBankAccount}
         <div class="flex items-center justify-end gap-2 pt-1">

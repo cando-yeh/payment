@@ -59,7 +59,9 @@
     disabled={revealing || !revealEnabled}
   >
     {#if revealing}
-      <span class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></span>
+      <span
+        class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
+      ></span>
     {:else if showAccountValue}
       <Eye class="h-4 w-4 text-muted-foreground" />
     {:else}

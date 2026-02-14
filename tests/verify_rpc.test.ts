@@ -11,9 +11,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
-import { supabaseUrl, supabaseAnonKey, supabaseServiceKey } from './helpers';
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+import { supabaseUrl, supabaseAnonKey, supabaseAdmin } from './helpers';
 
 describe('Bank Account Encryption RPC', () => {
     let testUser: any = null;

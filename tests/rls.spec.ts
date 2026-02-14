@@ -14,22 +14,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
-import * as dotenv from 'dotenv';
-import { readFileSync } from 'fs';
-
-// ========================================
-// 環境變數解析
-// ========================================
-
-// 手動讀取 .env 檔案並解析 (Playwright 環境可能未自動加載)
-const envConfig = dotenv.parse(readFileSync('.env'));
-
-const supabaseUrl = envConfig.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = envConfig.PUBLIC_SUPABASE_ANON_KEY;
-const supabaseServiceKey = envConfig.SUPABASE_SERVICE_ROLE_KEY;
-
-// 管理員客戶端：具備所有權限，用於準備與清理測試資料
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+import { supabaseUrl, supabaseAnonKey, supabaseAdmin, authSignInWithRetry } from './helpers';
 
 test.describe('RLS 安全性驗證流程', () => {
     let userA: any;
@@ -98,10 +83,7 @@ test.describe('RLS 安全性驗證流程', () => {
     test('一般使用者不應讀取他人的 Profile (RLS SELECT 驗證)', async () => {
         // 使用一般使用者 A 的連線
         const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        await supabase.auth.signInWithPassword({
-            email: userA.email!,
-            password: 'testPassword123'
-        });
+        await authSignInWithRetry(supabase, userA.email!, 'testPassword123');
 
         // 嘗試查詢 B 的 Profile
         const { data, error } = await supabase
@@ -119,10 +101,7 @@ test.describe('RLS 安全性驗證流程', () => {
      */
     test('一般使用者不應讀取他人的請款單 (RLS SELECT 驗證)', async () => {
         const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        await supabase.auth.signInWithPassword({
-            email: userA.email!,
-            password: 'testPassword123'
-        });
+        await authSignInWithRetry(supabase, userA.email!, 'testPassword123');
 
         // 嘗試查詢 B 的請款單
         const { data } = await supabase
@@ -139,10 +118,7 @@ test.describe('RLS 安全性驗證流程', () => {
      */
     test('一般使用者不應更新他人的個人資料 (RLS UPDATE 驗證)', async () => {
         const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        await supabase.auth.signInWithPassword({
-            email: userA.email!,
-            password: 'testPassword123'
-        });
+        await authSignInWithRetry(supabase, userA.email!, 'testPassword123');
 
         // 嘗試修改 B 的名字
         const { error } = await supabase

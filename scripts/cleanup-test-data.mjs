@@ -22,16 +22,47 @@ const TEST_NAME_PATTERNS = [
     "%RPC Request%",
 ];
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function isRetryableNetworkError(error) {
+    const text = String(error?.message || error?.cause?.message || error || "").toLowerCase();
+    return (
+        text.includes("enotfound") ||
+        text.includes("eai_again") ||
+        text.includes("fetch failed") ||
+        text.includes("network") ||
+        text.includes("timed out")
+    );
+}
+async function withNetworkRetry(fn, maxAttempts = 5) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            if (!isRetryableNetworkError(error) || attempt === maxAttempts) {
+                throw error;
+            }
+            const backoffMs = Math.min(8000, 400 * 2 ** (attempt - 1));
+            const jitterMs = Math.floor(Math.random() * 300);
+            await sleep(backoffMs + jitterMs);
+        }
+    }
+    throw lastError;
+}
+
 async function listTestUserIds() {
     const ids = [];
     let page = 1;
     const perPage = 1000;
 
     while (true) {
-        const { data, error } = await supabase.auth.admin.listUsers({
-            page,
-            perPage,
-        });
+        const { data, error } = await withNetworkRetry(() =>
+            supabase.auth.admin.listUsers({
+                page,
+                perPage,
+            }),
+        );
         if (error) throw error;
 
         const users = data?.users || [];
@@ -98,7 +129,9 @@ async function cleanupTestData() {
     if (testUserIds.length > 0) {
         await supabase.from("profiles").delete().in("id", testUserIds);
         for (const id of testUserIds) {
-            const { error } = await supabase.auth.admin.deleteUser(id);
+            const { error } = await withNetworkRetry(() =>
+                supabase.auth.admin.deleteUser(id),
+            );
             if (error && !String(error.message || "").includes("User not found")) {
                 console.error(`delete auth user failed: ${id}`, error.message);
             }
