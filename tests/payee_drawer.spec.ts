@@ -68,61 +68,47 @@ test.describe('Payee Drawer Functionality', () => {
         if (pe) throw pe;
         testPayeeId = p.id;
 
-        // 4. Reuse an existing payee that already has encrypted bank account.
-        const { data: revealCandidate } = await supabaseAdmin
+        // 4. Create a deterministic reveal candidate (submit + approve) to avoid shared-data flakiness.
+        const revealName = `Drawer Reveal Payee ${timestamp}`;
+
+        const standardClient = createClient(supabaseUrl, supabaseAnonKey);
+        const financeClient = createClient(supabaseUrl, supabaseAnonKey);
+        await authSignInWithRetry(standardClient, userStandard.email, password);
+        await authSignInWithRetry(financeClient, userFinance.email, password);
+
+        const { data: requestId, error: submitError } = await standardClient.rpc('submit_payee_change_request', {
+            _change_type: 'create',
+            _payee_id: null,
+            _proposed_data: {
+                name: revealName,
+                type: 'vendor',
+                bank_code: '004',
+                service_description: 'Reveal setup'
+            },
+            _proposed_tax_id: '87654321',
+            _proposed_bank_account: '1234512345',
+            _reason: 'E2E reveal setup',
+            _proposed_attachments: {}
+        });
+        if (submitError) throw submitError;
+
+        const { error: approveError } = await financeClient.rpc('approve_payee_change_request', {
+            _request_id: requestId
+        });
+        if (approveError) throw approveError;
+
+        const { data: createdRevealPayee, error: createdRevealPayeeError } = await supabaseAdmin
             .from('payees')
             .select('id, name')
-            .not('bank_account_tail', 'is', null)
-            .not('bank_account', 'is', null)
+            .eq('name', revealName)
             .eq('status', 'available')
+            .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle();
-        if (revealCandidate?.id) {
-            revealPayeeId = revealCandidate.id;
-            revealPayeeName = revealCandidate.name;
-        } else {
-            // 5. Create a deterministic reveal candidate (submit + approve) so this test is never skipped.
-            const revealName = `Drawer Reveal Payee ${timestamp}`;
+            .single();
 
-            const standardClient = createClient(supabaseUrl, supabaseAnonKey);
-            const financeClient = createClient(supabaseUrl, supabaseAnonKey);
-            await authSignInWithRetry(standardClient, userStandard.email, password);
-            await authSignInWithRetry(financeClient, userFinance.email, password);
-
-            const { data: requestId, error: submitError } = await standardClient.rpc('submit_payee_change_request', {
-                _change_type: 'create',
-                _payee_id: null,
-                _proposed_data: {
-                    name: revealName,
-                    type: 'vendor',
-                    bank_code: '004',
-                    service_description: 'Reveal setup'
-                },
-                _proposed_tax_id: '87654321',
-                _proposed_bank_account: '1234512345',
-                _reason: 'E2E reveal setup',
-                _proposed_attachments: {}
-            });
-            if (submitError) throw submitError;
-
-            const { error: approveError } = await financeClient.rpc('approve_payee_change_request', {
-                _request_id: requestId
-            });
-            if (approveError) throw approveError;
-
-            const { data: createdRevealPayee, error: createdRevealPayeeError } = await supabaseAdmin
-                .from('payees')
-                .select('id, name')
-                .eq('name', revealName)
-                .eq('status', 'available')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            if (createdRevealPayeeError) throw createdRevealPayeeError;
-            revealPayeeId = createdRevealPayee.id;
-            revealPayeeName = createdRevealPayee.name;
-        }
+        if (createdRevealPayeeError) throw createdRevealPayeeError;
+        revealPayeeId = createdRevealPayee.id;
+        revealPayeeName = createdRevealPayee.name;
     });
 
     test.afterAll(async () => {
@@ -213,13 +199,14 @@ test.describe('Payee Drawer Functionality', () => {
             .not.toMatch(/[*•]/);
     });
 
-    test('Standard User can VIEW Pending Request in Drawer and WITHDRAW it', async ({ page }) => {
+    test('Standard User can WITHDRAW pending request from list action', async ({ page }) => {
         await injectSession(page, userStandard.email, password);
         await page.goto('/payees');
+        await expect(page.getByRole('heading', { name: '收款人管理' })).toBeVisible({ timeout: 15000 });
 
         // 1. Create a new pending request via New Payee Page
         const newPayeeName = 'Pending Drawer Test ' + Date.now();
-        await page.getByRole('button', { name: '新增收款人' }).click();
+        await page.locator('a[href="/payees/new"]').click();
         await expect(page).toHaveURL(/\/payees\/new/);
         await expect(page.getByRole('heading', { name: '新增收款人' })).toBeVisible();
 
@@ -246,25 +233,17 @@ test.describe('Payee Drawer Functionality', () => {
         await expect(row).toBeVisible();
         await expect(row).toContainText('待審核 (新增)');
 
-        // 3. Click to open Drawer
-        await row.click();
-        const requestDrawer = page.locator('[role="dialog"]').last();
-        await expect(requestDrawer).toBeVisible();
-        await expect(requestDrawer.getByRole('heading', { name: newPayeeName })).toBeVisible();
-
-        // 4. Check details
-        await expect(requestDrawer.getByText(newPayeeName)).toBeVisible();
-
-        // 5. Withdraw
-        // Need to scroll into view or ensure the button is visible
-        const withdrawBtn = requestDrawer.getByRole('button', { name: '撤銷申請' });
-        await withdrawBtn.scrollIntoViewIfNeeded();
+        // 3. Withdraw from row action icon
+        const withdrawBtn = row.locator('button[title="撤銷申請"]');
         await expect(withdrawBtn).toBeVisible();
         await withdrawBtn.click();
 
-        // 6. Verify success
+        // Confirm dialog
+        await expect(page.getByRole('heading', { name: '確認撤銷申請' })).toBeVisible();
+        await page.getByTestId('system-confirm-submit').click();
+
+        // 4. Verify success
         await expect(page.getByText('申請已撤銷')).toBeVisible();
-        await expect(requestDrawer).not.toBeVisible();
         await expect(page.getByRole('row', { name: newPayeeName })).not.toBeVisible();
     });
 });

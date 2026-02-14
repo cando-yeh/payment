@@ -1,69 +1,205 @@
 <script lang="ts">
-    /**
-     * PayeeRequestSheet.svelte
-     *
-     * 職責：
-     * 1. 顯示「待審核」的收款人異動申請（新增/修改/停用）。
-     * 2. 唯讀顯示申請內容。
-     * 3. 根據角色（財務/申請人）提供 核准/駁回/撤銷 操作。
-     * 4. 顯示遮罩後的銀行帳號（若有proposed_bank_account_tail）。
-     */
     import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Sheet from "$lib/components/ui/sheet";
-    import * as Avatar from "$lib/components/ui/avatar";
     import { toast } from "svelte-sonner";
     import {
-        Building2,
-        User,
-        CreditCard,
         Check,
         X,
-        Undo2,
         LoaderCircle,
-        FileText,
-        Eye,
     } from "lucide-svelte";
     import { invalidateAll } from "$app/navigation";
 
     let {
-        request, // The selected request object (from +page.svelte)
+        request,
         open = $bindable(false),
         isFinance = false,
-        currentUserId, // Add currentUserId prop to verify requester
     } = $props();
 
-    // 狀態
     let isActionSubmitting = $state(false);
 
-    // 衍生資料
     let changeType = $derived(request?.payload?.change_type || "unknown");
     let proposedData = $derived(request?.payload?.proposed_data || {});
     let reason = $derived(request?.payload?.reason || "");
-    let bankAccountTail = $derived(
+    let proposedBankAccountTail = $derived(
         request?.payload?.proposed_bank_account_tail || "",
     );
+    let proposedBankAccountPlain = $derived(
+        request?.payload?.proposed_bank_account_plain || "",
+    );
+    let linkedPayee = $derived(request?.payload?.linked_payee || null);
 
-    // 顯示名稱
+    let beforeName = $derived(linkedPayee?.name || "");
+    let beforeType = $derived(linkedPayee?.type || request?.type || "");
+    let beforeServiceDescription = $derived(
+        linkedPayee?.service_description || "",
+    );
+    let beforeTaxId = $derived(
+        request?.payload?.linked_tax_id || linkedPayee?.tax_id || "",
+    );
+    let beforeEmail = $derived(linkedPayee?.extra_info?.email || "");
+    let beforeAddress = $derived(linkedPayee?.extra_info?.address || "");
+    let beforeAttachmentUrls = $derived(linkedPayee?.attachment_urls || {});
+    let beforeBankCode = $derived(linkedPayee?.bank || "");
+    let beforeBankAccountTail = $derived(linkedPayee?.bank_account_tail || "");
+    let beforeBankAccountPlain = $derived(
+        request?.payload?.linked_bank_account_plain || "",
+    );
+
+    const ATTACHMENT_FIELDS = [
+        { key: "id_card_front", label: "身分證正面" },
+        { key: "id_card_back", label: "身分證反面" },
+        { key: "bank_passbook", label: "存摺封面" },
+    ] as const;
+
+    function hasOwn(obj: Record<string, any>, key: string) {
+        return Object.prototype.hasOwnProperty.call(obj || {}, key);
+    }
+
+    function toText(v: any) {
+        if (v === null || v === undefined) return "";
+        return String(v);
+    }
+
+    function normalize(v: any) {
+        return toText(v).trim();
+    }
+
+    function changed(before: any, after: any) {
+        return normalize(before) !== normalize(after);
+    }
+
+    function sanitizeEncryptedPlaceholder(v: any) {
+        const text = normalize(v);
+        const looksLikeHexBlob = /^[0-9a-f]+$/i.test(text) && text.length >= 24;
+        return text.includes("已加密") || looksLikeHexBlob ? "" : text;
+    }
+
+    function getAfterValue(
+        key: string,
+        fallback: any,
+        nestedParent?: string,
+    ) {
+        if (hasOwn(proposedData, key)) return toText(proposedData?.[key]);
+        if (
+            nestedParent &&
+            hasOwn(proposedData, nestedParent) &&
+            proposedData?.[nestedParent]?.[key] !== undefined
+        ) {
+            return toText(proposedData[nestedParent][key]);
+        }
+        return toText(fallback);
+    }
+
     let displayName = $derived(
-        changeType === "create"
-            ? proposedData.name
-            : request?.name.replace(/^\[.*?\] /, ""), // Remove prefix if present
+        toText(proposedData?.name) || beforeName || request?.name || "",
     );
-
-    // 顯示類型
     let displayType = $derived(
-        changeType === "create"
-            ? proposedData.type
-            : request?.type || "unknown",
+        toText(proposedData?.type) || beforeType || "unknown",
+    );
+    let taxLabel = $derived(displayType === "vendor" ? "統一編號" : "身分證字號");
+    let afterServiceDescription = $derived(
+        getAfterValue("service_description", beforeServiceDescription),
+    );
+    let afterEmail = $derived(
+        getAfterValue("email", beforeEmail, "extra_info"),
+    );
+    let afterAddress = $derived(
+        getAfterValue("address", beforeAddress, "extra_info"),
+    );
+    let afterBankCode = $derived(
+        getAfterValue("bank_code", beforeBankCode),
+    );
+    let afterBankAccountTail = $derived(
+        proposedBankAccountTail || beforeBankAccountTail || "",
+    );
+    let beforeBankAccountDisplay = $derived.by(() =>
+        bankAccountDisplay(beforeBankAccountPlain, beforeBankAccountTail),
+    );
+    let afterBankAccountDisplay = $derived.by(() =>
+        bankAccountDisplay(proposedBankAccountPlain, afterBankAccountTail),
+    );
+    let taxIdDisplayAfter = $derived.by(() => {
+        if (hasOwn(proposedData, "tax_id")) return sanitizeEncryptedPlaceholder(proposedData.tax_id);
+        return "";
+    });
+    let taxIdDisplayBefore = $derived(sanitizeEncryptedPlaceholder(beforeTaxId));
+    let proposedAttachments = $derived(request?.payload?.proposed_attachments || {});
+    let proposedAttachmentUrls = $derived(
+        request?.payload?.proposed_attachment_urls || {},
+    );
+    let isUpdateFlow = $derived(changeType === "update");
+    let isNameChanged = $derived(
+        hasOwn(proposedData, "name") && changed(beforeName, displayName),
+    );
+    let isTaxIdChanged = $derived(
+        hasOwn(proposedData, "tax_id") &&
+            changed(taxIdDisplayBefore, taxIdDisplayAfter),
+    );
+    let isServiceChanged = $derived(
+        hasOwn(proposedData, "service_description") &&
+            changed(beforeServiceDescription, afterServiceDescription),
+    );
+    let isEmailChanged = $derived(
+        hasOwn(proposedData, "email") && changed(beforeEmail, afterEmail),
+    );
+    let isAddressChanged = $derived(
+        hasOwn(proposedData, "address") && changed(beforeAddress, afterAddress),
+    );
+    let isBankCodeChanged = $derived(
+        hasOwn(proposedData, "bank_code") && changed(beforeBankCode, afterBankCode),
+    );
+    let isBankAccountChanged = $derived(
+        normalize(proposedBankAccountPlain).length > 0 ||
+            (normalize(proposedBankAccountTail).length > 0 &&
+                changed(beforeBankAccountTail, afterBankAccountTail)),
+    );
+    let hasAnyDataChanges = $derived(
+        isNameChanged ||
+            isTaxIdChanged ||
+            isServiceChanged ||
+            isEmailChanged ||
+            isAddressChanged ||
+            isBankCodeChanged ||
+            isBankAccountChanged,
+    );
+    let hasAnyAttachmentChanges = $derived(
+        Boolean(proposedAttachments?.id_card_front) ||
+            Boolean(proposedAttachments?.id_card_back) ||
+            Boolean(proposedAttachments?.bank_passbook),
     );
 
-    /**
-     * Common form submission handler for actions (Withdraw, Approve, Reject)
-     */
+    function withFallback(v: string) {
+        return normalize(v) === "" ? "—" : v;
+    }
+
+    function maskedTail(v: string) {
+        const text = sanitizeEncryptedPlaceholder(v);
+        if (!text) return "—";
+        return `*****${text}`;
+    }
+
+    function bankAccountDisplay(plainValue: any, tailValue: any) {
+        const plain = sanitizeEncryptedPlaceholder(plainValue);
+        if (plain) return plain;
+        return maskedTail(toText(tailValue));
+    }
+
+    function toAttachmentDisplay(value: any) {
+        const text = normalize(value);
+        return text ? text : "—";
+    }
+
+    function getAttachmentHref(
+        source: Record<string, any> | null | undefined,
+        key: string,
+    ) {
+        return source?.[key] || "";
+    }
+
     function handleAction(successMsg: string) {
         return () => {
             isActionSubmitting = true;
@@ -99,175 +235,201 @@
         </Sheet.Header>
 
         {#if request}
-            <div class="mt-6 space-y-6 pb-24">
-                <!-- 基本資訊 Header -->
-                <div class="flex items-center gap-4">
-                    <Avatar.Root
-                        class="h-16 w-16 border-2 border-background shadow-sm"
-                    >
-                        <Avatar.Fallback
-                            class="bg-primary/5 text-xl font-bold text-primary"
-                        >
-                            {(displayName || "?").charAt(0).toUpperCase()}
-                        </Avatar.Fallback>
-                    </Avatar.Root>
-                    <div>
-                        <h3 class="font-semibold text-lg">{displayName}</h3>
-                        <div
-                            class="flex items-center gap-2 text-sm text-muted-foreground mt-1"
-                        >
-                            {#if displayType === "vendor"}
-                                <Building2 class="h-3.5 w-3.5" />
-                                <span>廠商</span>
-                            {:else}
-                                <User class="h-3.5 w-3.5" />
-                                <span>個人戶</span>
-                            {/if}
-                            <span
-                                class="text-xs px-2 py-0.5 rounded-full border bg-muted"
-                            >
-                                {#if changeType === "create"}新增申請
-                                {:else if changeType === "update"}變更申請
-                                {:else if changeType === "disable"}停用申請
-                                {/if}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 唯讀表單欄位 -->
+            <div class="mt-6 space-y-6">
                 <div class="space-y-6">
                     {#if changeType !== "disable"}
-                        <!-- 基本資料 -->
-                        <div class="space-y-4">
-                            <div class="space-y-2">
-                                <Label>收款人名稱</Label>
-                                <Input value={displayName} readonly />
+                        {#if isUpdateFlow}
+                            <div class="space-y-4">
+                                <h3 class="text-base font-semibold">目前資訊</h3>
+                                <div class="space-y-2">
+                                    <Label>收款人名稱</Label>
+                                    <Input value={withFallback(beforeName)} readonly />
+                                </div>
+
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <div class="space-y-2">
+                                        <Label>{taxLabel}</Label>
+                                        <Input value={withFallback(taxIdDisplayBefore)} readonly />
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label>服務項目說明</Label>
+                                        <Input value={withFallback(beforeServiceDescription)} readonly />
+                                    </div>
+                                </div>
+
+                                {#if displayType === "personal"}
+                                    <div class="space-y-2">
+                                        <Label>電子郵件</Label>
+                                        <Input value={withFallback(beforeEmail)} readonly />
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label>戶籍/通訊地址</Label>
+                                        <Input value={withFallback(beforeAddress)} readonly />
+                                    </div>
+                                    <div class="space-y-2 pt-2 border-t">
+                                        <Label>附件</Label>
+                                        <div class="grid gap-3 grid-cols-3">
+                                            {#each ATTACHMENT_FIELDS as field}
+                                                <div class="space-y-1">
+                                                    <p class="text-xs text-muted-foreground">{field.label}</p>
+                                                    {#if getAttachmentHref(beforeAttachmentUrls, field.key)}
+                                                        <a
+                                                            href={getAttachmentHref(beforeAttachmentUrls, field.key)}
+                                                            target="_blank"
+                                                            class="text-sm text-primary underline-offset-2 hover:underline"
+                                                        >
+                                                            查看附件
+                                                        </a>
+                                                    {:else}
+                                                        <p class="text-sm text-muted-foreground">—</p>
+                                                    {/if}
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+
+                                <div class="grid gap-4 grid-cols-5 pt-2 border-t">
+                                    <div class="col-span-2 space-y-2">
+                                        <Label>銀行代碼</Label>
+                                        <Input value={withFallback(beforeBankCode)} readonly />
+                                    </div>
+                                    <div class="col-span-3 space-y-2">
+                                        <Label>銀行帳號</Label>
+                                        <Input value={withFallback(beforeBankAccountDisplay)} readonly />
+                                    </div>
+                                </div>
                             </div>
 
-                            {#if displayType === "vendor"}
-                                <div class="space-y-2">
-                                    <Label>統一編號</Label>
-                                    <Input
-                                        value={proposedData.tax_id || ""}
-                                        readonly
-                                    />
-                                </div>
-                                <div class="space-y-2">
-                                    <Label>服務項目說明</Label>
-                                    <Input
-                                        value={proposedData.service_description ||
-                                            ""}
-                                        readonly
-                                    />
-                                </div>
-                            {:else}
-                                <div class="space-y-2">
-                                    <Label>身分證字號</Label>
-                                    <Input
-                                        value={proposedData.tax_id || ""}
-                                        readonly
-                                    />
-                                </div>
+                            <div class="space-y-4 pt-4 border-t">
+                                <h3 class="text-base font-semibold">變更後資訊</h3>
+                                {#if isNameChanged}
+                                    <div class="space-y-2">
+                                        <Label>收款人名稱</Label>
+                                        <Input value={withFallback(displayName)} readonly />
+                                    </div>
+                                {/if}
+                                {#if isTaxIdChanged}
+                                    <div class="space-y-2">
+                                        <Label>{taxLabel}</Label>
+                                        <Input value={withFallback(taxIdDisplayAfter)} readonly />
+                                    </div>
+                                {/if}
+                                {#if isEmailChanged}
+                                    <div class="space-y-2">
+                                        <Label>電子郵件</Label>
+                                        <Input value={withFallback(afterEmail)} readonly />
+                                    </div>
+                                {/if}
+                                {#if isAddressChanged}
+                                    <div class="space-y-2">
+                                        <Label>通訊地址</Label>
+                                        <Input value={withFallback(afterAddress)} readonly />
+                                    </div>
+                                {/if}
+                                {#if displayType === "personal" && hasAnyAttachmentChanges}
+                                    <div class="space-y-2">
+                                        <Label>附件</Label>
+                                        <div class="grid gap-3 grid-cols-3">
+                                            {#each ATTACHMENT_FIELDS as field}
+                                                <div class="space-y-1">
+                                                    <p class="text-xs text-muted-foreground">{field.label}</p>
+                                                    {#if getAttachmentHref(proposedAttachmentUrls, field.key)}
+                                                        <a
+                                                            href={getAttachmentHref(proposedAttachmentUrls, field.key)}
+                                                            target="_blank"
+                                                            class="text-sm text-primary underline-offset-2 hover:underline"
+                                                        >
+                                                            查看附件
+                                                        </a>
+                                                    {:else}
+                                                        <Input value={toAttachmentDisplay(proposedAttachments?.[field.key])} readonly />
+                                                    {/if}
+                                                </div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+                                {#if isServiceChanged}
+                                    <div class="space-y-2">
+                                        <Label>服務項目說明</Label>
+                                        <Input value={withFallback(afterServiceDescription)} readonly />
+                                    </div>
+                                {/if}
+                                {#if isBankCodeChanged || isBankAccountChanged}
+                                    <div class="grid gap-4 grid-cols-5">
+                                        {#if isBankCodeChanged}
+                                            <div class="col-span-2 space-y-2">
+                                                <Label>銀行代碼</Label>
+                                                <Input value={withFallback(afterBankCode)} readonly />
+                                            </div>
+                                        {/if}
+                                        {#if isBankAccountChanged}
+                                            <div class="col-span-3 space-y-2">
+                                                <Label>銀行帳號</Label>
+                                                <Input value={withFallback(afterBankAccountDisplay)} readonly />
+                                            </div>
+                                        {/if}
+                                    </div>
+                                {/if}
+                                {#if !hasAnyDataChanges && !hasAnyAttachmentChanges}
+                                    <p class="text-sm text-muted-foreground">
+                                        此申請未包含任何資料異動。
+                                    </p>
+                                {/if}
+                            </div>
+                        {:else}
+                            <div class="space-y-4">
+                            <div class="space-y-2">
+                                <Label>收款人名稱</Label>
+                                <Input value={withFallback(displayName)} readonly />
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label>{taxLabel}</Label>
+                                <Input value={withFallback(taxIdDisplayAfter)} readonly />
+                            </div>
+
+                            {#if displayType === "personal"}
                                 <div class="space-y-2">
                                     <Label>電子郵件</Label>
-                                    <Input
-                                        value={proposedData.extra_info?.email ||
-                                            ""}
-                                        readonly
-                                    />
+                                    <Input value={withFallback(afterEmail)} readonly />
                                 </div>
                                 <div class="space-y-2">
                                     <Label>通訊地址</Label>
-                                    <Input
-                                        value={proposedData.extra_info
-                                            ?.address || ""}
-                                        readonly
-                                    />
+                                    <Input value={withFallback(afterAddress)} readonly />
                                 </div>
                             {/if}
+
+                            <div class="space-y-2">
+                                <Label>服務項目說明</Label>
+                                <Input value={withFallback(afterServiceDescription)} readonly />
+                            </div>
                         </div>
 
-                        <!-- 銀行帳號 -->
                         <div class="space-y-4 pt-2 border-t">
-                            <div
-                                class="flex items-center gap-2 text-sm font-semibold text-primary"
-                            >
-                                <CreditCard class="h-4 w-4" />
-                                匯款帳號資訊
-                            </div>
                             <div class="grid gap-4 grid-cols-5">
                                 <div class="col-span-2 space-y-2">
                                     <Label>銀行代碼</Label>
-                                    <Input
-                                        value={proposedData.bank_code || ""}
-                                        readonly
-                                    />
+                                    <Input value={withFallback(afterBankCode)} readonly />
                                 </div>
                                 <div class="col-span-3 space-y-2">
                                     <Label>銀行帳號</Label>
-                                    <Input
-                                        value={bankAccountTail
-                                            ? `*****${bankAccountTail}`
-                                            : "••••••••••••"}
-                                        readonly
-                                    />
-                                    {#if !isFinance}
-                                        <p
-                                            class="text-[0.65rem] text-muted-foreground mt-1"
-                                        >
-                                            唯有財務人員可於核准後查看完整帳號。
-                                        </p>
-                                    {/if}
+                                    <Input value={withFallback(afterBankAccountDisplay)} readonly />
                                 </div>
                             </div>
                         </div>
+                        {/if}
                     {/if}
 
-                    <!-- 變更原因 -->
                     <div class="pt-2 space-y-2 border-t">
                         <Label>變更原因</Label>
-                        <Textarea value={reason} readonly class="resize-none" />
+                        <Textarea value={reason || "—"} readonly class="resize-none" />
                     </div>
                 </div>
 
-                <!-- 審核按鈕區 (固定底部) -->
-                <div
-                    class="absolute bottom-0 left-0 right-0 p-6 bg-background/95 backdrop-blur border-t flex flex-col gap-3"
-                >
-                    {#if request.payload.requested_by === currentUserId}
-                        <!-- 申請人操作：撤銷 -->
-                        <form
-                            method="POST"
-                            action="?/withdrawRequest"
-                            use:enhance={handleAction("申請已撤銷")}
-                            class="w-full"
-                        >
-                            <input
-                                type="hidden"
-                                name="requestId"
-                                value={request.id}
-                            />
-                            <Button
-                                type="submit"
-                                variant="outline"
-                                class="w-full"
-                                disabled={isActionSubmitting}
-                            >
-                                {#if isActionSubmitting}
-                                    <LoaderCircle
-                                        class="mr-2 h-4 w-4 animate-spin"
-                                    />
-                                {:else}
-                                    <Undo2 class="mr-2 h-4 w-4" />
-                                {/if}
-                                撤銷申請
-                            </Button>
-                        </form>
-                    {/if}
-
+                <div class="p-6 bg-background border-t">
                     {#if isFinance}
-                        <!-- 財務操作：核准/駁回 -->
                         <div class="flex gap-3 w-full">
                             <form
                                 method="POST"
@@ -287,9 +449,7 @@
                                     disabled={isActionSubmitting}
                                 >
                                     {#if isActionSubmitting}
-                                        <LoaderCircle
-                                            class="mr-2 h-4 w-4 animate-spin"
-                                        />
+                                        <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
                                     {:else}
                                         <X class="mr-2 h-4 w-4" />
                                     {/if}
@@ -314,9 +474,7 @@
                                     disabled={isActionSubmitting}
                                 >
                                     {#if isActionSubmitting}
-                                        <LoaderCircle
-                                            class="mr-2 h-4 w-4 animate-spin"
-                                        />
+                                        <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
                                     {:else}
                                         <Check class="mr-2 h-4 w-4" />
                                     {/if}

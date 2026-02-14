@@ -19,40 +19,42 @@
         decryptedAccount = null as string | null,
         showAccountValue = false,
         revealing = false,
-        onToggleReveal = async () => {},
-        onStartAddingBankAccount = () => {},
-        onCancelAddingBankAccount = () => {},
-        onSaveAddingBankAccount = () => {},
+        onToggleReveal = (() => {}) as () => void | Promise<void>,
+        onStartAddingBankAccount = (() => {}) as () => void,
+        onCancelAddingBankAccount = (() => {}) as () => void,
+        onSaveAddingBankAccount = (() => {}) as () => void | Promise<void>,
         loading = false,
     } = $props();
 
-    const isManagement = mode === "management";
-    const isPayee = mode === "payee";
-    const canEdit = isManagement
-        ? isEditing
-        : isPayee
-          ? isEditing
-          : isAddingBankAccount;
-    const bankCodeFieldId = isManagement
-        ? "bank"
-        : isPayee
-          ? "bank_code"
-          : "self-bank";
-    const bankCodeFieldName = isManagement
-        ? "bankName"
-        : isPayee
-          ? "bank_code"
-          : "bank";
-    const bankAccountFieldId = isManagement
-        ? "bankAccount"
-        : isPayee
-          ? "bank_account"
-          : "self-bankAccount";
-    const bankAccountFieldName = isPayee ? "bank_account" : "bankAccount";
-    const canReveal = isManagement ? isEditing : isPayee ? isFinance : true;
-    const helperText = isPayee
-        ? "唯有財務人員可查看原始帳號。"
-        : "銀行資訊均經 AES-256 對稱加密儲存，除新增外僅管理員可修改銀行資訊。";
+    const isManagement = $derived(mode === "management");
+    const isPayee = $derived(mode === "payee");
+    const canEdit = $derived(
+        isManagement ? isEditing : isPayee ? isEditing : isAddingBankAccount,
+    );
+    const bankCodeFieldId = $derived(
+        isManagement ? "bank" : isPayee ? "bank_code" : "self-bank",
+    );
+    const bankCodeFieldName = $derived(
+        isManagement ? "bankName" : isPayee ? "bank_code" : "bank",
+    );
+    const bankAccountFieldId = $derived(
+        isManagement
+            ? "bankAccount"
+            : isPayee
+              ? "bank_account"
+              : "self-bankAccount",
+    );
+    const bankAccountFieldName = $derived(
+        isPayee ? "bank_account" : "bankAccount",
+    );
+    const canReveal = $derived(
+        isManagement ? isEditing : isPayee ? isFinance : true,
+    );
+    const helperText = $derived(
+        isPayee
+            ? "唯有財務人員可查看原始帳號。"
+            : "銀行資訊均經 AES-256 對稱加密儲存，除新增外僅管理員可修改銀行資訊。",
+    );
 </script>
 
 <div class="space-y-3">

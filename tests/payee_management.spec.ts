@@ -68,7 +68,9 @@ test.describe('Payee Management Extended Flow', () => {
 
     test('Standard User can submit an UPDATE request', async ({ page }) => {
         await injectSession(page, userStandard.email, password);
-        await page.goto(`/payees/${testPayeeId}/edit`);
+        await page.goto('/payees');
+        await page.getByTestId(`payee-row-${testPayeeId}`).click();
+        await page.getByRole('button', { name: '編輯收款人資訊' }).click();
 
         const updatedName = testPayeeName + ' (Updated)';
         await page.fill('input[name="name"]', updatedName);
@@ -83,12 +85,10 @@ test.describe('Payee Management Extended Flow', () => {
         await page.fill('input[name="bank_account"]', '987654321');
         await page.fill('textarea[name="reason"]', 'Testing update flow');
 
-        // SvelteKit form action: POST to /payees/[id]/edit?/updatePayeeRequest
-        // It returns a 303 redirect to /payees
-        await page.click('button[type="submit"]');
-
-        // Wait for redirect to /payees
-        await expect(page).toHaveURL(/\/payees$/, { timeout: 30000 });
+        await page.getByRole('button', { name: '送出異動申請' }).click();
+        await expect(page.getByText('更新申請已提交，請等待財務審核。')).toBeVisible({
+            timeout: 10000,
+        });
 
         // After submission, the page reloads and pending requests appear as:
         // "[更新] {original_payee_name}" with status "待審核 (更新)"

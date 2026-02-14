@@ -22,9 +22,12 @@ const TEST_NAME_PATTERNS = [
     "%RPC Request%",
 ];
 
+/** @param {number} ms */
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** @param {unknown} error */
 function isRetryableNetworkError(error) {
-    const text = String(error?.message || error?.cause?.message || error || "").toLowerCase();
+    const err = /** @type {{ message?: string; cause?: { message?: string } }} */ (error || {});
+    const text = String(err.message || err.cause?.message || error || "").toLowerCase();
     return (
         text.includes("enotfound") ||
         text.includes("eai_again") ||
@@ -33,6 +36,12 @@ function isRetryableNetworkError(error) {
         text.includes("timed out")
     );
 }
+/**
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @param {number} [maxAttempts=5]
+ * @returns {Promise<T>}
+ */
 async function withNetworkRetry(fn, maxAttempts = 5) {
     let lastError = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {

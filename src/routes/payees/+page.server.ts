@@ -8,6 +8,16 @@ import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upl
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 
+function normalizeComparable(value: unknown): string {
+    if (value == null) return '';
+    return String(value).trim();
+}
+
+function sanitizeEncryptedPlaceholder(value: unknown): string {
+    const text = normalizeComparable(value);
+    return text.includes('已加密') ? '' : text;
+}
+
 function getServiceRoleClient() {
     if (!env.SUPABASE_SERVICE_ROLE_KEY) {
         throw new Error('SUPABASE_SERVICE_ROLE_KEY 未設定');
@@ -34,8 +44,10 @@ export const load: PageServerLoad = async ({ locals }) => {
             change_type, 
             status, 
             proposed_data, 
+            proposed_tax_id,
             proposed_bank_account,
             proposed_bank_account_tail,
+            proposed_attachments,
             reason, 
             created_at, 
             requested_by, 
@@ -52,7 +64,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     const [payeesResponse, requestsResponse] = await Promise.all([
         supabase
             .from('payees')
-            .select('id, name, type, status, bank, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at')
+            .select('id, name, type, status, bank, tax_id, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at')
             .order('created_at', { ascending: false }),
         pendingRequestsQuery
     ]);
@@ -102,9 +114,102 @@ export const load: PageServerLoad = async ({ locals }) => {
         })
     );
 
+    const pendingRequests = (requestsResponse.data || []) as any[];
+    if (pendingRequests.length > 0) {
+        await Promise.all(
+            pendingRequests.map(async (req) => {
+                const proposedAttachments = req?.proposed_attachments || {};
+                req.proposed_attachment_urls = {
+                    id_card_front: null,
+                    id_card_back: null,
+                    bank_passbook: null
+                };
+
+                if (
+                    proposedAttachments?.id_card_front ||
+                    proposedAttachments?.id_card_back ||
+                    proposedAttachments?.bank_passbook
+                ) {
+                    const getSignedUrl = async (path?: string) => {
+                        if (!path) return null;
+                        const { data } = await serviceRoleClient.storage
+                            .from('payees')
+                            .createSignedUrl(path, 3600);
+                        return data?.signedUrl || null;
+                    };
+
+                    const [front, back, bank] = await Promise.all([
+                        getSignedUrl(proposedAttachments.id_card_front),
+                        getSignedUrl(proposedAttachments.id_card_back),
+                        getSignedUrl(proposedAttachments.bank_passbook)
+                    ]);
+
+                    req.proposed_attachment_urls.id_card_front = front;
+                    req.proposed_attachment_urls.id_card_back = back;
+                    req.proposed_attachment_urls.bank_passbook = bank;
+                }
+
+                if (req?.proposed_tax_id && !req?.proposed_data?.tax_id) {
+                    try {
+                        const { data: proposedTaxId } = await supabase.rpc(
+                            'reveal_payee_change_request_tax_id',
+                            { _request_id: req.id }
+                        );
+                        if (proposedTaxId) {
+                            req.proposed_data = {
+                                ...(req.proposed_data || {}),
+                                tax_id: String(proposedTaxId)
+                            };
+                        }
+                    } catch (e) {
+                        console.warn('Failed to reveal proposed tax id for request:', req.id);
+                    }
+                }
+                if (req?.proposed_bank_account && !req?.proposed_bank_account_plain) {
+                    try {
+                        const { data: proposedBankAccount } = await supabase.rpc(
+                            'reveal_payee_change_request_bank_account',
+                            { _request_id: req.id }
+                        );
+                        if (proposedBankAccount) {
+                            req.proposed_bank_account_plain = String(proposedBankAccount);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to reveal proposed bank account for request:', req.id);
+                    }
+                }
+
+                if (req?.payee_id) {
+                    try {
+                        const { data: linkedTaxId } = await supabase.rpc(
+                            'reveal_payee_tax_id',
+                            { _payee_id: req.payee_id }
+                        );
+                        if (linkedTaxId) {
+                            req.linked_tax_id = String(linkedTaxId);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to reveal linked payee tax id for request:', req.id);
+                    }
+                    try {
+                        const { data: linkedBankAccount } = await supabase.rpc(
+                            'reveal_payee_bank_account',
+                            { _payee_id: req.payee_id }
+                        );
+                        if (linkedBankAccount) {
+                            req.linked_bank_account_plain = String(linkedBankAccount);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to reveal linked payee bank account for request:', req.id);
+                    }
+                }
+            })
+        );
+    }
+
     return {
         payees: payeesWithAttachmentUrls,
-        pendingRequests: requestsResponse.data || [],
+        pendingRequests,
         user: session.user,
         is_finance: locals.user?.is_finance ?? false,
         is_admin: locals.user?.is_admin ?? false
@@ -131,8 +236,10 @@ export const actions: Actions = {
         // Extract fields
         const type = (formData.get('type') as string || '').trim();
         const name = (formData.get('name') as string || '').trim();
-        const tax_id = (formData.get('tax_id') as string || '').trim();
-        const bank_account = (formData.get('bank_account') as string || '').trim();
+        const rawTaxId = (formData.get('tax_id') as string || '').trim();
+        const tax_id = sanitizeEncryptedPlaceholder(rawTaxId);
+        const rawBankAccount = (formData.get('bank_account') as string || '').trim();
+        const bank_account = sanitizeEncryptedPlaceholder(rawBankAccount);
         const bank_code = (formData.get('bank_code') as string || '').trim();
         const email = (formData.get('email') as string || '').trim();
         const address = (formData.get('address') as string || '').trim();
@@ -141,6 +248,17 @@ export const actions: Actions = {
         const removeIdFront = (formData.get('remove_attachment_id_front') as string) === 'true';
         const removeIdBack = (formData.get('remove_attachment_id_back') as string) === 'true';
         const removeBankCover = (formData.get('remove_attachment_bank_cover') as string) === 'true';
+
+        // 先讀目前正式資料，用於 diff 判斷（reason 不計入）
+        const { data: currentPayee, error: currentPayeeError } = await supabase
+            .from('payees')
+            .select('id, name, type, bank, tax_id, service_description, extra_info, attachments')
+            .eq('id', payeeId)
+            .single();
+
+        if (currentPayeeError || !currentPayee) {
+            return fail(404, { message: '找不到收款人資料' });
+        }
 
         // --- Basic Validation ---
         if (!name) return fail(400, { message: '收款人名稱為必填' });
@@ -153,13 +271,7 @@ export const actions: Actions = {
         }
         // --- Handle Attachments for Personal Payees ---
         let attachments: Record<string, any> = {};
-
-        // Fetch current payee to get existing attachments because we need to merge
-        const { data: currentPayee } = await supabase
-            .from('payees')
-            .select('attachments')
-            .eq('id', payeeId)
-            .single();
+        let attachmentsChanged = false;
 
         if (type === 'personal') {
             const currentAttachments = currentPayee?.attachments || {};
@@ -170,77 +282,139 @@ export const actions: Actions = {
                 bank_cover: formData.get('attachment_bank_cover') as File
             };
 
-            try {
-                if (files.id_front && files.id_front.size > 0) {
-                    validateFileUpload(files.id_front, '身分證正面', {
-                        maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
-                        allowedTypes: ALLOWED_ATTACHMENT_TYPES
-                    });
+            const attachmentIntentChanged =
+                Boolean(files.id_front && files.id_front.size > 0) ||
+                Boolean(files.id_back && files.id_back.size > 0) ||
+                Boolean(files.bank_cover && files.bank_cover.size > 0) ||
+                removeIdFront ||
+                removeIdBack ||
+                removeBankCover;
+
+            if (attachmentIntentChanged) {
+                try {
+                    if (files.id_front && files.id_front.size > 0) {
+                        validateFileUpload(files.id_front, '身分證正面', {
+                            maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
+                            allowedTypes: ALLOWED_ATTACHMENT_TYPES
+                        });
+                    }
+                    if (files.id_back && files.id_back.size > 0) {
+                        validateFileUpload(files.id_back, '身分證反面', {
+                            maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
+                            allowedTypes: ALLOWED_ATTACHMENT_TYPES
+                        });
+                    }
+                    if (files.bank_cover && files.bank_cover.size > 0) {
+                        validateFileUpload(files.bank_cover, '存摺封面', {
+                            maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
+                            allowedTypes: ALLOWED_ATTACHMENT_TYPES
+                        });
+                    }
+                } catch (err: any) {
+                    return fail(400, { message: err.message || '附件驗證失敗' });
                 }
-                if (files.id_back && files.id_back.size > 0) {
-                    validateFileUpload(files.id_back, '身分證反面', {
-                        maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
-                        allowedTypes: ALLOWED_ATTACHMENT_TYPES
-                    });
+
+                try {
+                    // Determine new paths: use new upload if present, else use existing
+                    const newPaths = {
+                        id_card_front: (files.id_front && files.id_front.size > 0)
+                            ? await uploadFileToStorage(supabase, files.id_front, { bucket: 'payees', prefix: 'id_front' })
+                            : removeIdFront
+                                ? null
+                            : currentAttachments.id_card_front,
+                        id_card_back: (files.id_back && files.id_back.size > 0)
+                            ? await uploadFileToStorage(supabase, files.id_back, { bucket: 'payees', prefix: 'id_back' })
+                            : removeIdBack
+                                ? null
+                            : currentAttachments.id_card_back,
+                        bank_passbook: (files.bank_cover && files.bank_cover.size > 0)
+                            ? await uploadFileToStorage(supabase, files.bank_cover, { bucket: 'payees', prefix: 'bank_cover' })
+                            : removeBankCover
+                                ? null
+                            : currentAttachments.bank_passbook
+                    };
+
+                    // Validate that we have all required attachments (either new or existing)
+                    if (!newPaths.id_card_front) return fail(400, { message: '請上傳身分證正面' });
+                    if (!newPaths.id_card_back) return fail(400, { message: '請上傳身分證反面' });
+                    if (!newPaths.bank_passbook) return fail(400, { message: '請上傳存摺封面' });
+
+                    attachmentsChanged =
+                        normalizeComparable(newPaths.id_card_front) !== normalizeComparable(currentAttachments.id_card_front) ||
+                        normalizeComparable(newPaths.id_card_back) !== normalizeComparable(currentAttachments.id_card_back) ||
+                        normalizeComparable(newPaths.bank_passbook) !== normalizeComparable(currentAttachments.bank_passbook);
+
+                    if (attachmentsChanged) {
+                        attachments = newPaths;
+                    }
+                } catch (err: any) {
+                    console.error('File Upload Error:', err);
+                    return fail(500, { message: '檔案上傳失敗：' + (err.message || '未知錯誤') });
                 }
-                if (files.bank_cover && files.bank_cover.size > 0) {
-                    validateFileUpload(files.bank_cover, '存摺封面', {
-                        maxBytes: MAX_ATTACHMENT_SIZE_BYTES,
-                        allowedTypes: ALLOWED_ATTACHMENT_TYPES
-                    });
-                }
-            } catch (err: any) {
-                return fail(400, { message: err.message || '附件驗證失敗' });
             }
+        }
+        const currentExtra = currentPayee.extra_info || {};
+        const proposed_data: Record<string, string> = {};
 
-            try {
-                // Determine new paths: use new upload if present, else use existing
-                const newPaths = {
-                    id_card_front: (files.id_front && files.id_front.size > 0)
-                        ? await uploadFileToStorage(supabase, files.id_front, { bucket: 'payees', prefix: 'id_front' })
-                        : removeIdFront
-                            ? null
-                        : currentAttachments.id_card_front,
-                    id_card_back: (files.id_back && files.id_back.size > 0)
-                        ? await uploadFileToStorage(supabase, files.id_back, { bucket: 'payees', prefix: 'id_back' })
-                        : removeIdBack
-                            ? null
-                        : currentAttachments.id_card_back,
-                    bank_passbook: (files.bank_cover && files.bank_cover.size > 0)
-                        ? await uploadFileToStorage(supabase, files.bank_cover, { bucket: 'payees', prefix: 'bank_cover' })
-                        : removeBankCover
-                            ? null
-                        : currentAttachments.bank_passbook
-                };
-
-                // Validate that we have all required attachments (either new or existing)
-                if (!newPaths.id_card_front) return fail(400, { message: '請上傳身分證正面' });
-                if (!newPaths.id_card_back) return fail(400, { message: '請上傳身分證反面' });
-                if (!newPaths.bank_passbook) return fail(400, { message: '請上傳存摺封面' });
-
-                attachments = newPaths;
-
-            } catch (err: any) {
-                console.error('File Upload Error:', err);
-                return fail(500, { message: '檔案上傳失敗：' + (err.message || '未知錯誤') });
+        if (normalizeComparable(name) !== normalizeComparable(currentPayee.name)) {
+            proposed_data.name = name;
+        }
+        if (normalizeComparable(type) !== normalizeComparable(currentPayee.type)) {
+            proposed_data.type = type;
+        }
+        if (normalizeComparable(bank_code) !== normalizeComparable(currentPayee.bank)) {
+            proposed_data.bank_code = bank_code;
+        }
+        if (normalizeComparable(service_description) !== normalizeComparable(currentPayee.service_description)) {
+            proposed_data.service_description = service_description;
+        }
+        if (type === 'personal') {
+            if (normalizeComparable(email) !== normalizeComparable(currentExtra.email)) {
+                proposed_data.email = email;
+            }
+            if (normalizeComparable(address) !== normalizeComparable(currentExtra.address)) {
+                proposed_data.address = address;
             }
         }
 
-        const proposed_data: Record<string, string> = {
-            name,
-            type,
-            bank_code,
-            service_description,
-            email,
-            address
-        };
+        let taxIdChanged = false;
+        if (tax_id) {
+            let currentTaxId = sanitizeEncryptedPlaceholder(currentPayee.tax_id);
+            if (!currentTaxId) {
+                const { data: revealedTaxId } = await supabase.rpc('reveal_payee_tax_id', {
+                    _payee_id: payeeId
+                });
+                currentTaxId = sanitizeEncryptedPlaceholder(revealedTaxId);
+            }
+            taxIdChanged = normalizeComparable(tax_id) !== normalizeComparable(currentTaxId);
+        }
+
+        let bankAccountChanged = false;
+        if (bank_account) {
+            let currentBankAccount = '';
+            const { data: revealedBank } = await supabase.rpc('reveal_payee_bank_account', {
+                _payee_id: payeeId
+            });
+            currentBankAccount = normalizeComparable(revealedBank);
+            bankAccountChanged = normalizeComparable(bank_account) !== currentBankAccount;
+        }
+
+        const hasChanges =
+            Object.keys(proposed_data).length > 0 ||
+            taxIdChanged ||
+            bankAccountChanged ||
+            attachmentsChanged;
+
+        if (!hasChanges) {
+            return fail(400, { message: '至少需修改一項資料後才能提交異動申請' });
+        }
 
         const { error: rpcError } = await supabase.rpc('submit_payee_change_request', {
             _change_type: 'update',
             _payee_id: payeeId,
             _proposed_data: proposed_data,
-            _proposed_tax_id: tax_id || null,
-            _proposed_bank_account: bank_account || null,
+            _proposed_tax_id: taxIdChanged ? tax_id : null,
+            _proposed_bank_account: bankAccountChanged ? bank_account : null,
             _reason: reason,
             _proposed_attachments: attachments
         });

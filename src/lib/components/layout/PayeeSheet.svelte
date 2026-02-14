@@ -72,13 +72,75 @@
 
     // 附件連結 (唯讀)
     let attachmentUrls = $derived(payee?.attachment_urls || {});
+    const ENCRYPTED_PLACEHOLDER_PATTERN = /已加密/;
+    const ENCRYPTED_HEX_PATTERN = /^\\x[0-9a-f]+$/i;
+    const ENCRYPTED_HEX_NO_PREFIX_PATTERN = /^[0-9a-f]+$/i;
+
+    function normalizeComparable(value: unknown): string {
+        if (value == null) return "";
+        return String(value).trim();
+    }
+
+    function sanitizeEncryptedPlaceholder(value: unknown): string {
+        const text = normalizeComparable(value);
+        const looksLikeHex =
+            ENCRYPTED_HEX_PATTERN.test(text) ||
+            (ENCRYPTED_HEX_NO_PREFIX_PATTERN.test(text) && text.length >= 24);
+        return ENCRYPTED_PLACEHOLDER_PATTERN.test(text) || looksLikeHex
+            ? ""
+            : text;
+    }
+
+    let hasMeaningfulChanges = $derived.by(() => {
+        if (!isEditing || !payee) return false;
+
+        const currentExtra = payee.extra_info || {};
+        const currentTaxId = sanitizeEncryptedPlaceholder(
+            taxIdCache[payee.id] || payee.tax_id || "",
+        );
+
+        const basicChanged =
+            normalizeComparable(name) !== normalizeComparable(payee.name) ||
+            normalizeComparable(type) !== normalizeComparable(payee.type) ||
+            normalizeComparable(bankCode) !== normalizeComparable(payee.bank) ||
+            normalizeComparable(serviceDescription) !==
+                normalizeComparable(payee.service_description);
+
+        const personalChanged =
+            type === "personal" &&
+            (normalizeComparable(email) !== normalizeComparable(currentExtra.email) ||
+                normalizeComparable(address) !== normalizeComparable(currentExtra.address));
+
+        const taxChanged =
+            normalizeComparable(sanitizeEncryptedPlaceholder(taxId)) !==
+            normalizeComparable(currentTaxId);
+
+        // 空字串視為「未變更」，只有有輸入才代表申請變更帳號
+        const bankAccountChanged = normalizeComparable(bankAccount).length > 0;
+
+        const attachmentChanged =
+            type === "personal" &&
+            (Object.values(removedAttachments).some(Boolean) ||
+                Object.values(attachmentFiles).some((f) => Boolean(f)));
+
+        return Boolean(
+            basicChanged ||
+                personalChanged ||
+                taxChanged ||
+                bankAccountChanged ||
+                attachmentChanged,
+        );
+    });
 
     // 同步資料
     function resetFormFromPayee() {
         if (payee) {
             name = payee.name || "";
             type = payee.type || "vendor";
-            taxId = payee.tax_id || taxIdCache[payee.id] || "";
+            taxId =
+                taxIdCache[payee.id] ||
+                sanitizeEncryptedPlaceholder(payee.tax_id) ||
+                "";
             serviceDescription = payee.service_description || "";
             email = payee.extra_info?.email || "";
             address = payee.extra_info?.address || "";
@@ -107,6 +169,7 @@
             resetFormFromPayee();
             isEditing = false;
             lastSyncedPayeeToken = payeeToken;
+            void ensureTaxIdReady();
         }
     });
 
@@ -221,7 +284,7 @@
      * 銀行帳號解密流程
      */
     async function ensureTaxIdReady() {
-        if (!payee?.id || taxId.trim().length > 0) return;
+        if (!payee?.id || sanitizeEncryptedPlaceholder(taxId).length > 0) return;
 
         try {
             const formData = new FormData();
@@ -272,7 +335,14 @@
                     result.data &&
                     "decryptedAccount" in result.data
                 ) {
-                    decryptedAccount = String(result.data.decryptedAccount);
+                    const nextAccount = sanitizeEncryptedPlaceholder(
+                        result.data.decryptedAccount,
+                    );
+                    if (!nextAccount) {
+                        toast.error("無法讀取帳號資訊");
+                        return;
+                    }
+                    decryptedAccount = nextAccount;
                 } else {
                     toast.error("無法讀取帳號資訊");
                     return;
@@ -293,10 +363,18 @@
     async function handleSubmit({
         formElement,
         formData,
+        cancel,
     }: {
         formElement: HTMLFormElement;
         formData: FormData;
+        cancel: () => void;
     }) {
+        if (!hasMeaningfulChanges) {
+            toast.error("至少需修改一項資料後才能提交異動申請");
+            cancel();
+            return;
+        }
+
         isLoading = true;
 
         // 確保 ID 被送出
@@ -507,7 +585,7 @@
                             <Button
                                 type="submit"
                                 class="flex-1 shadow-lg"
-                                disabled={isLoading}
+                                disabled={isLoading || !hasMeaningfulChanges}
                             >
                                 {#if isLoading}
                                     <LoaderCircle
@@ -529,6 +607,11 @@
                             </Button>
                         {/if}
                     </div>
+                    {#if isEditing && !hasMeaningfulChanges}
+                        <p class="text-xs text-muted-foreground text-center">
+                            至少需修改一項資料後才能提交異動申請（變更原因不計入）。
+                        </p>
+                    {/if}
                 </form>
             </div>
         {/if}

@@ -67,7 +67,10 @@
                       : "-",
                 status: `pending_${req.change_type}`,
                 source: "request",
-                payload: req, // Store full request for detail view
+                payload: {
+                    ...req,
+                    linked_payee: linkedPayee || null,
+                }, // Store full request + current payee snapshot for detail view
             };
         });
 
@@ -207,6 +210,41 @@
         };
     }
 
+    async function handleWithdrawRequestFromList(payee: any) {
+        const requestId = payee?.payload?.id || payee?.id;
+        if (!requestId) return;
+        openSystemConfirm({
+            title: "確認撤銷申請",
+            description: `確定要撤銷「${payee.name}」的申請？`,
+            buttonLabel: "撤銷申請",
+            buttonVariant: "destructive",
+            action: async () => {
+                isActionSubmitting = true;
+                const formData = new FormData();
+                formData.append("requestId", requestId);
+
+                try {
+                    const response = await fetch("?/withdrawRequest", {
+                        method: "POST",
+                        body: formData,
+                        headers: { "x-sveltekit-action": "true" },
+                    });
+                    const result = deserialize(await response.text()) as any;
+                    if (result.type === "success") {
+                        toast.success("申請已撤銷");
+                        await invalidateAll();
+                    } else {
+                        toast.error(result.data?.message || "撤銷失敗");
+                    }
+                } catch {
+                    toast.error("連線錯誤");
+                } finally {
+                    isActionSubmitting = false;
+                }
+            },
+        });
+    }
+
     async function handleToggleStatus(payee: any) {
         const action = payee.status === "available" ? "停用" : "啟用";
         openSystemConfirm({
@@ -234,7 +272,7 @@
                     } else {
                         toast.error(result.data?.message || `${action}失敗`);
                     }
-                } catch (e) {
+                } catch {
                     toast.error("連線錯誤");
                 } finally {
                     isActionSubmitting = false;
@@ -268,7 +306,7 @@
                     } else {
                         toast.error(result.data?.message || "刪除失敗");
                     }
-                } catch (e) {
+                } catch {
                     toast.error("連線錯誤");
                 } finally {
                     isActionSubmitting = false;
@@ -535,6 +573,24 @@
                                         <Ban class="h-4 w-4" />
                                     </Button>
                                 {/if}
+                                {#if payee.source === "request" &&
+                                    payee?.payload?.requested_by === data.user?.id &&
+                                    payee?.payload?.status === "pending"}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        data-testid={`payee-request-withdraw-${payee.id}`}
+                                        class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            handleWithdrawRequestFromList(payee);
+                                        }}
+                                        disabled={isActionSubmitting}
+                                        title="撤銷申請"
+                                    >
+                                        <Undo2 class="h-4 w-4" />
+                                    </Button>
+                                {/if}
                             </div>
                         </Table.Cell>
                     </Table.Row>
@@ -557,7 +613,6 @@
     bind:open={isDetailOpen}
     request={selectedPayee}
     isFinance={data.is_finance}
-    currentUserId={data.user?.id}
 />
 
 <PayeeSheet
