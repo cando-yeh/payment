@@ -59,6 +59,7 @@
 					isAdmin: data.profile?.is_admin ?? false,
 					isApprover: data.profile?.is_approver ?? false,
 					bank: data.profile?.bank || "",
+					bankAccountTail: data.profile?.bank_account_tail || "",
 				}
 			: null,
 	);

@@ -93,21 +93,6 @@
                                 : placeholder}
                         </span>
                     </div>
-                    <div class="flex items-center gap-1 ml-auto shrink-0">
-                        {#if value && !disabled}
-                            <div
-                                role="button"
-                                tabindex="0"
-                                class="p-0.5 hover:bg-muted rounded-full transition-colors"
-                                onclick={clearSelection}
-                                onkeydown={(e) =>
-                                    e.key === "Enter" &&
-                                    clearSelection(e as any)}
-                            >
-                                <X class="h-3.5 w-3.5 opacity-50" />
-                            </div>
-                        {/if}
-                    </div>
                 </Button>
             {/snippet}
         </Popover.Trigger>

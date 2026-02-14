@@ -31,6 +31,7 @@
 -->
 <script lang="ts">
     import { page } from "$app/state";
+    import { goto } from "$app/navigation";
     import { cn } from "$lib/utils";
     import * as Avatar from "$lib/components/ui/avatar";
     import * as Separator from "$lib/components/ui/separator";
@@ -128,6 +129,7 @@
             isAdmin?: boolean;
             isApprover?: boolean;
             bank?: string;
+            bankAccountTail?: string;
         };
         /** 額外的 CSS 類別 */
         class?: string;
@@ -143,6 +145,7 @@
      * 透過點擊左下角的使用者卡片來切換此狀態。
      */
     let accountSheetOpen = $state(false);
+    let pendingNavTimer: ReturnType<typeof setTimeout> | null = null;
 
     // ========================================
     // 輔助函數
@@ -197,6 +200,30 @@
         // 其他頁面使用前綴匹配 (支援子路由)
         return currentPath.startsWith(href);
     }
+
+    function handleNavClick(event: MouseEvent, href: string) {
+        // 保留開新分頁/新視窗等原生操作
+        if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+        ) {
+            return;
+        }
+
+        if (!accountSheetOpen) return;
+
+        event.preventDefault();
+        accountSheetOpen = false;
+        if (pendingNavTimer) clearTimeout(pendingNavTimer);
+        pendingNavTimer = setTimeout(() => {
+            goto(href);
+            pendingNavTimer = null;
+        }, 320);
+    }
 </script>
 
 <!-- 側邊欄容器：macOS 風格設計，高透明度、細緻邊框 -->
@@ -234,6 +261,7 @@
                 <a
                     href={item.href}
                     data-sveltekit-preload-data="hover"
+                    onclick={(event) => handleNavClick(event, item.href)}
                     class={cn(
                         "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
                         // 根據是否為當前頁面套用不同樣式

@@ -20,7 +20,7 @@ export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
         const [profileResponse, approverResponse] = await Promise.all([
             locals.supabase
                 .from('profiles')
-                .select('full_name, email, avatar_url, is_admin, is_finance, approver_id, bank')
+                .select('full_name, email, avatar_url, is_admin, is_finance, approver_id, bank, bank_account_tail')
                 .eq('id', session.user.id)
                 .single(),
             locals.supabase

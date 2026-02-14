@@ -29,6 +29,7 @@
     // 選中的使用者資料（用於開啟 Sheet）
     let selectedUser = $state<any>(null);
     let isSheetOpen = $state(false);
+    let clearSelectedUserTimer: ReturnType<typeof setTimeout> | null = null;
 
     $effect(() => {
         users = data.users;
@@ -43,11 +44,21 @@
         pendingOps = { ...pendingOps, [op]: isPending };
     }
 
-    // 當 Sheet 關閉時，清除選中的使用者，確保下次點擊能正常觸發
+    // Sheet 關閉時延後卸載，讓退場動畫先播放完成。
     $effect(() => {
-        if (!isSheetOpen) {
-            selectedUser = null;
+        if (isSheetOpen) {
+            if (clearSelectedUserTimer) {
+                clearTimeout(clearSelectedUserTimer);
+                clearSelectedUserTimer = null;
+            }
+            return;
         }
+
+        if (!selectedUser) return;
+        clearSelectedUserTimer = setTimeout(() => {
+            selectedUser = null;
+            clearSelectedUserTimer = null;
+        }, 320);
     });
 
     const activeCount = $derived(users.filter((u) => isActiveUser(u)).length);
@@ -250,7 +261,7 @@
                     {#each filteredUsers as user}
                         <Table.Row
                             class="hover:bg-muted/20 cursor-pointer"
-                            onclick={() => {
+                            on:click={() => {
                                 selectedUser = { ...user };
                                 isSheetOpen = true;
                             }}
@@ -415,7 +426,7 @@
     </div>
 </div>
 
-{#if selectedUser && isSheetOpen}
+{#if selectedUser}
     <UserProfileSheet
         user={selectedUser}
         bind:open={isSheetOpen}

@@ -26,6 +26,7 @@
         LoaderCircle,
         FileText,
         Upload,
+        UserX,
     } from "lucide-svelte";
     import { compressFormImageInputs } from "$lib/client/image-compression";
     import { timedFetch } from "$lib/client/timed-fetch";
@@ -36,6 +37,7 @@
 
     // 狀態
     let isLoading = $state(false);
+    let isDisableSubmitting = $state(false);
 
     // 表單欄位
     let name = $state("");
@@ -149,6 +151,40 @@
             }
         };
     }
+
+    async function submitDisableRequest() {
+        if (!payee?.id || isDisableSubmitting) return;
+
+        isDisableSubmitting = true;
+        try {
+            const formData = new FormData();
+            formData.append("payeeId", payee.id);
+            formData.append("reason", "停用受款人申請");
+
+            const response = await timedFetch("?/submitDisableRequest", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const text = await response.text();
+            const result = deserialize(text) as any;
+
+            if (result?.type === "success") {
+                toast.success(
+                    result.data?.message || "停用申請已提交，請等待財務審核",
+                );
+                await invalidateAll();
+                open = false;
+                return;
+            }
+
+            toast.error(result?.data?.message || "提交停用申請失敗");
+        } catch {
+            toast.error("提交停用申請失敗");
+        } finally {
+            isDisableSubmitting = false;
+        }
+    }
 </script>
 
 <Sheet.Root bind:open>
@@ -191,7 +227,7 @@
 
                 <form
                     method="POST"
-                    action="?/updatePayeeRequest"
+                    action="/payees?/updatePayeeRequest"
                     use:enhance={handleSubmit}
                     enctype="multipart/form-data"
                     class="space-y-6"
@@ -461,6 +497,25 @@
                     <div
                         class="sticky bottom-0 bg-background/95 backdrop-blur pt-4 pb-4 border-t mt-4 flex gap-3"
                     >
+                        {#if !isFinance && payee.status === "available"}
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                data-testid="payee-submit-disable-request"
+                                class="flex-1"
+                                onclick={submitDisableRequest}
+                                disabled={isDisableSubmitting || isLoading}
+                            >
+                                {#if isDisableSubmitting}
+                                    <LoaderCircle
+                                        class="mr-2 h-4 w-4 animate-spin"
+                                    />
+                                {:else}
+                                    <UserX class="mr-2 h-4 w-4" />
+                                {/if}
+                                停用收款人
+                            </Button>
+                        {/if}
                         <Button
                             type="submit"
                             class="flex-1 shadow-lg"

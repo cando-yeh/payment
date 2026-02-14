@@ -136,6 +136,7 @@ test.describe('Admin Users Page', () => {
         await userRow.click();
         const sheet = page.getByRole('dialog');
         await expect(sheet).toBeVisible();
+        await sheet.getByRole('button', { name: '編輯個人資訊' }).click();
         await sheet.getByRole('button', { name: '財務' }).click();
         await sheet.getByRole('button', { name: '確認儲存變更' }).click();
 

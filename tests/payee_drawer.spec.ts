@@ -15,6 +15,17 @@ test.describe('Payee Drawer Functionality', () => {
     let testPayeeName: string;
     let revealPayeeId: string;
     let revealPayeeName: string;
+    async function openPayeeEditDrawer(page: any, row: any) {
+        const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
+        for (let i = 0; i < 4; i++) {
+            await row.click();
+            if (await drawer.isVisible({ timeout: 1200 }).catch(() => false)) {
+                return drawer;
+            }
+            await page.waitForTimeout(200);
+        }
+        throw new Error('Payee edit drawer did not open after retries');
+    }
 
     test.beforeAll(async () => {
         const timestamp = Date.now();
@@ -86,10 +97,7 @@ test.describe('Payee Drawer Functionality', () => {
         // Locate the row and click it
         const row = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(row).toBeVisible();
-        await row.click();
-
-        // Check availability of Sheet form
-        const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
+        const drawer = await openPayeeEditDrawer(page, row);
         await expect(drawer).toBeVisible();
         await expect(page.getByRole('heading', { name: testPayeeName })).toBeVisible();
 
@@ -106,11 +114,7 @@ test.describe('Payee Drawer Functionality', () => {
         // Open Drawer
         const editRow = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(editRow).toBeVisible();
-        await editRow.click();
-        const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
-        if (!(await drawer.isVisible().catch(() => false))) {
-            await editRow.click();
-        }
+        const drawer = await openPayeeEditDrawer(page, editRow);
         await expect(drawer).toBeVisible();
 
         // Modify a field
@@ -136,11 +140,7 @@ test.describe('Payee Drawer Functionality', () => {
         // Open Drawer
         const financeRow = page.getByTestId(`payee-row-${revealPayeeId}`);
         await expect(financeRow).toBeVisible();
-        await financeRow.click();
-        const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
-        if (!(await drawer.isVisible().catch(() => false))) {
-            await financeRow.click();
-        }
+        const drawer = await openPayeeEditDrawer(page, financeRow);
 
         const bankInput = drawer.locator('input[name="bank_account"]');
         const revealBtn = drawer.locator('div:has(> input#bank_account) button').first();

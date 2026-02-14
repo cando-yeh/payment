@@ -363,9 +363,18 @@ export const actions: Actions = {
             is_finance: isFinance,
             approver_id: approverId || null
         };
+
+        // 🔒 姓名權限防範：僅限本人修改
+        const session = await locals.getSession();
+        const currentUserId = session?.user?.id;
         if (fullName) {
-            updatePayload.full_name = fullName;
+            if (userId === currentUserId) {
+                updatePayload.full_name = fullName;
+            } else {
+                console.warn(`Admin ${currentUserId} attempted to change name for user ${userId}. Blocked by backend logic.`);
+            }
         }
+
         if (typeof bankNameRaw === 'string') {
             updatePayload.bank = bankName || null;
         }

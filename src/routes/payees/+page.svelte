@@ -18,7 +18,7 @@
         UserX,
         UserCheck,
     } from "lucide-svelte";
-    import { goto, invalidateAll } from "$app/navigation";
+    import { invalidateAll } from "$app/navigation";
     import { enhance, deserialize } from "$app/forms";
     import { toast } from "svelte-sonner";
     import PayeeSheet from "$lib/components/layout/PayeeSheet.svelte";
@@ -150,12 +150,16 @@
 
     function openDetail(payee: any) {
         selectedPayee = payee;
-        isDetailOpen = true;
+        queueMicrotask(() => {
+            isDetailOpen = true;
+        });
     }
 
     function openEditSheet(payee: any) {
         editingPayee = payee;
-        isSheetOpen = true;
+        queueMicrotask(() => {
+            isSheetOpen = true;
+        });
     }
 
     function openSystemConfirm(options: {
@@ -278,7 +282,7 @@
                 管理所有廠商與個人收款對象。
             </p>
         </div>
-        <Button onclick={() => goto("/payees/new")}>
+        <Button href="/payees/new" role="button">
             <Plus class="mr-2 h-4 w-4" />
             新增收款人
         </Button>

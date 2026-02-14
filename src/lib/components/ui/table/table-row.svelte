@@ -17,6 +17,7 @@
 		"hover:[&,&>svelte-css-wrapper]:[&>th,td]:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors",
 		className
 	)}
+	on:click
 	{...restProps}
 >
 	{@render children?.()}

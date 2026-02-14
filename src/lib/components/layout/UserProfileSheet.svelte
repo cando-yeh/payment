@@ -30,6 +30,7 @@
     import { deserialize, applyAction } from "$app/forms";
     import { untrack } from "svelte";
     import { timedFetch } from "$lib/client/timed-fetch";
+    import { page } from "$app/state";
     import { cn } from "$lib/utils.js";
     import { invalidateAll } from "$app/navigation";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
@@ -58,36 +59,62 @@
     let fullName = $state("");
     let bankName = $state("");
     let inputBankAccount = $state("");
+    let isEditing = $state(false);
     let isAdmin = $state(false);
     let isFinance = $state(false);
     let approverId = $state("");
 
+    function resetFormFromUser() {
+        fullName = user?.full_name || user?.name || "";
+        bankName = user?.bank || "";
+        inputBankAccount = "";
+        isAdmin = user?.is_admin || user?.isAdmin || false;
+        isFinance = user?.is_finance || user?.isFinance || false;
+        approverId = user?.approver_id || "";
+        showAccountValue = false;
+        decryptedAccount = null;
+    }
+
+    // 從應用程式狀態獲取當前登入者 ID
+    const currentUserId = $derived(
+        page.data.currentUserId || page.data.session?.user?.id,
+    );
+    const currentUserEmail = $derived(page.data.session?.user?.email);
+
+    // 判斷是否為本人：比對 ID 或 Email（增加魯棒性）
+    const isSelf = $derived(
+        user?.id === currentUserId ||
+            (user?.email &&
+                currentUserEmail &&
+                user.email === currentUserEmail),
+    );
+    const maskedAccountTail = $derived.by(() => {
+        const rawTail = String(
+            user?.bank_account_tail || user?.bankAccountTail || "",
+        ).trim();
+        if (!rawTail) return "";
+        return `*****${rawTail.slice(-5)}`;
+    });
+
     // 監聽 user prop 變化並同步狀態
     $effect(() => {
         if (user) {
-            fullName = user.full_name || user.name || "";
-            bankName = user.bank || "";
-            inputBankAccount = ""; // 切換使用者時重設輸入框
-            isAdmin = user.is_admin || user.isAdmin || false;
-            isFinance = user.is_finance || user.isFinance || false;
-            approverId = user.approver_id || "";
+            resetFormFromUser();
+            isEditing = false; // 切換使用者時強制退出編輯模式
+        }
+    });
 
-            // 重設銀行帳號顯示狀態
-            showAccountValue = false;
-            decryptedAccount = null;
+    // 關閉視窗時，丟棄未儲存變更並回到檢視模式。
+    $effect(() => {
+        if (!open && user) {
+            resetFormFromUser();
+            isEditing = false;
         }
     });
 
     /**
      * 強制同步效應
      */
-    $effect(() => {
-        fullName = user.full_name || user.name || "";
-        bankName = user.bank || "";
-        isAdmin = user.is_admin || user.isAdmin || false;
-        isFinance = user.is_finance || user.isFinance || false;
-        approverId = user.approver_id || "";
-    });
 
     /**
      * 表單提交結果處理器
@@ -113,6 +140,24 @@
                 toast.error(result.data?.message || "更新失敗，請稍後再試");
             }
         };
+    }
+
+    /**
+     * 編輯模式控制
+     */
+    async function startEditing() {
+        isEditing = true;
+        // 進入編輯模式時，自動揭露銀行帳號
+        if (!decryptedAccount) {
+            await toggleReveal();
+        } else {
+            showAccountValue = true;
+        }
+    }
+
+    function cancelEditing() {
+        isEditing = false;
+        resetFormFromUser();
     }
 
     /**
@@ -179,7 +224,7 @@
 </script>
 
 <Sheet.Root bind:open>
-    <Sheet.Content class="sm:max-w-md overflow-y-auto">
+    <Sheet.Content class="sm:max-w-sm overflow-y-auto">
         <Sheet.Header>
             <Sheet.Title
                 >{isManagementMode ? "編輯使用者" : "個人帳戶設定"}</Sheet.Title
@@ -191,11 +236,11 @@
             </Sheet.Description>
         </Sheet.Header>
 
-        <div class="mt-8 space-y-8 pb-8">
+        <div class="mt-4 space-y-4 pb-4">
             <!-- 使用者標頭區塊 -->
             <div class="flex flex-col items-center gap-4">
                 <Avatar.Root
-                    class="h-24 w-24 border-2 border-background shadow-md"
+                    class="h-16 w-16 border-2 border-background shadow-md"
                 >
                     {#if user.avatar_url || user.avatarUrl}
                         <Avatar.Image
@@ -211,13 +256,28 @@
                             .toUpperCase()}
                     </Avatar.Fallback>
                 </Avatar.Root>
-                <div class="text-center">
-                    <h3 class="text-lg font-semibold">
-                        {user.full_name || user.name}
-                    </h3>
+                <div class="text-center w-full px-4">
+                    {#if isEditing && isSelf}
+                        <div class="space-y-1">
+                            <Input
+                                name="fullName"
+                                bind:value={fullName}
+                                class="text-center text-lg font-semibold h-9 bg-muted/50 border-primary/20 focus:bg-background transition-colors"
+                                placeholder="請輸入姓名"
+                                required
+                            />
+                            <p class="text-[0.7rem] text-muted-foreground">
+                                編輯您的顯示名稱
+                            </p>
+                        </div>
+                    {:else}
+                        <h3 class="text-lg font-semibold">
+                            {user.full_name || user.name}
+                        </h3>
+                    {/if}
                     <p class="text-sm text-muted-foreground">{user.email}</p>
                     <div
-                        class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                        class="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.65rem] font-medium text-primary"
                     >
                         <ShieldCheck class="h-3.5 w-3.5" />
                         {getRoleLabel()}
@@ -235,16 +295,17 @@
                     loading = true;
                     return handleResult();
                 }}
-                class="space-y-6"
+                class="space-y-4"
             >
                 <!-- 隱藏欄位供管理員模式辨識目標 -->
                 {#if isManagementMode}
                     <input type="hidden" name="userId" value={user.id} />
                 {/if}
+                <input type="hidden" name="isAdminValue" value={isAdmin} />
 
                 <!-- 管理權限設定 (僅管理員模式顯示) -->
                 {#if isManagementMode}
-                    <div class="space-y-4">
+                    <div class="space-y-2">
                         <div class="flex items-end gap-2">
                             <div
                                 class="flex-[2] flex items-center gap-2 text-sm font-semibold h-5"
@@ -268,6 +329,7 @@
                                 <Button
                                     type="button"
                                     variant={isAdmin ? "default" : "outline"}
+                                    disabled={!isEditing}
                                     class={cn(
                                         "flex-1 gap-2 transition-all h-9",
                                         !isAdmin &&
@@ -282,6 +344,7 @@
                                 <Button
                                     type="button"
                                     variant={isFinance ? "default" : "outline"}
+                                    disabled={!isEditing}
                                     class={cn(
                                         "flex-1 gap-2 transition-all h-9",
                                         !isFinance &&
@@ -298,6 +361,7 @@
                                 <Select.Root
                                     type="single"
                                     name="approverId"
+                                    disabled={!isEditing}
                                     bind:value={approverId}
                                 >
                                     <Select.Trigger
@@ -355,7 +419,7 @@
                 {/if}
 
                 <!-- 銀行帳號 -->
-                <div class="space-y-4">
+                <div class="space-y-3">
                     <div class="flex items-center gap-2 text-sm font-semibold">
                         <CreditCard class="h-4 w-4 text-primary" />
                         匯款帳號資訊
@@ -366,6 +430,7 @@
                             <BankCodeCombobox
                                 id="bank"
                                 name={isManagementMode ? "bankName" : "bank"}
+                                disabled={!isEditing}
                                 bind:value={bankName}
                                 submitMode="code-name"
                             />
@@ -381,9 +446,12 @@
                                         : "password"}
                                     bind:value={inputBankAccount}
                                     placeholder={showAccountValue
-                                        ? decryptedAccount || "點擊眼睛解密..."
-                                        : "••••••••••••"}
-                                    disabled={revealing}
+                                        ? decryptedAccount || "請輸入新帳號..."
+                                        : isEditing
+                                          ? "••••••••••••"
+                                          : maskedAccountTail ||
+                                            "••••••••••••"}
+                                    disabled={revealing || !isEditing}
                                 />
                                 <Button
                                     type="button"
@@ -412,27 +480,51 @@
                     <p
                         class="text-[0.7rem] text-muted-foreground leading-relaxed"
                     >
-                        所有資訊均經 AES-256 對稱加密儲存。{#if isManagementMode}管理員可覆寫新帳號。{:else}若需修改請直接輸入新帳號。{/if}
+                        銀行資訊均經 AES-256
+                        對稱加密儲存，除新增外僅管理員可修改銀行資訊。
                     </p>
                 </div>
 
                 <div
-                    class="pt-4 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-4"
+                    class="pt-2 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-2 flex flex-col gap-2"
                 >
-                    <Button
-                        type="submit"
-                        disabled={loading}
-                        class="w-full gap-2 shadow-lg"
-                    >
-                        {#if loading}
-                            <span
-                                class="animate-spin h-4 w-4 border-2 border-background border-t-transparent rounded-full"
-                            ></span>
-                        {:else}
-                            <Save class="h-4 w-4" />
-                        {/if}
-                        {isManagementMode ? "確認儲存變更" : "儲存並更新設定"}
-                    </Button>
+                    {#if isEditing}
+                        <div class="flex flex-row gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                class="flex-1"
+                                onclick={cancelEditing}
+                            >
+                                取消編輯
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={loading}
+                                class="flex-1 gap-2 shadow-lg"
+                            >
+                                {#if loading}
+                                    <span
+                                        class="animate-spin h-4 w-4 border-2 border-background border-t-transparent rounded-full"
+                                    ></span>
+                                {:else}
+                                    <Save class="h-4 w-4" />
+                                {/if}
+                                {isManagementMode
+                                    ? "確認儲存變更"
+                                    : "儲存並更新設定"}
+                            </Button>
+                        </div>
+                    {:else}
+                        <Button
+                            type="button"
+                            class="w-full gap-2 shadow-lg"
+                            onclick={startEditing}
+                        >
+                            <User class="h-4 w-4" />
+                            編輯個人資訊
+                        </Button>
+                    {/if}
                 </div>
             </form>
         </div>

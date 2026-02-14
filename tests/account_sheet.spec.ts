@@ -59,11 +59,7 @@ test.describe.serial('Account Sheet', () => {
         for (let i = 0; i < 3; i++) {
             await trigger.click({ force: true });
             await page.waitForTimeout(300);
-            if (
-                await page
-                    .getByRole('button', { name: '儲存並更新設定' })
-                    .isVisible()
-            ) break;
+            if (await page.getByRole('dialog').isVisible().catch(() => false)) break;
         }
 
         // Verify form fields
@@ -76,7 +72,8 @@ test.describe.serial('Account Sheet', () => {
             sheetDialog.getByText('銀行代碼', { exact: true }),
         ).toBeVisible();
 
-        // Verify the save button
+        // Enter edit mode then verify the save button
+        await sheetDialog.getByRole('button', { name: '編輯個人資訊' }).click();
         await expect(
             sheetDialog.getByRole('button', { name: '儲存並更新設定' })
         ).toBeVisible();
