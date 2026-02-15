@@ -77,11 +77,11 @@ test.describe.serial('Claim Detail Page', () => {
         await page.goto(`/claims/${claimId}`);
         await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
 
-        // Verify edit page heading contains edit tag
-        await expect(page.locator('h1')).toContainText('(編輯)');
+        // Verify unified layout heading
+        await expect(page.locator('h1')).toContainText('請款單');
 
         // Verify line item remains editable
-        await expect(page.locator('input[placeholder="項目說明"]').first()).toBeVisible();
+        await expect(page.locator('input[placeholder="說明"]').first()).toBeVisible();
     });
 
     test('Draft edit page has save action', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe.serial('Claim Detail Page', () => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await page.fill('input[placeholder="項目說明"]', 'Updated from edit page');
+        await page.fill('input[placeholder="說明"]', 'Updated from edit page');
         await page.getByRole('button', { name: '儲存變更' }).click();
         await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
         await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();

@@ -284,10 +284,7 @@
                     <Table.Body class="divide-y divide-border/10">
                         {#if filteredClaims.length > 0}
                             {#each filteredClaims as claim}
-                                {@const claimHref =
-                                    ["draft", "returned"].includes(claim.status)
-                                        ? `/claims/${claim.id}/edit`
-                                        : `/claims/${claim.id}`}
+                                {@const claimHref = `/claims/${claim.id}`}
                                 <Table.Row
                                     class="group border-none hover:bg-secondary/30 transition-all cursor-pointer h-20"
                                     onclick={() => goto(claimHref)}

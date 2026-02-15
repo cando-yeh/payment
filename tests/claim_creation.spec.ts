@@ -74,9 +74,9 @@ test.describe('Claim Creation Flow', () => {
         await page.goto(`/claims/${latestClaim?.id}`);
         await expect(page).toHaveURL(new RegExp(`/claims/${latestClaim?.id}`));
 
-        // 8. Verify Edit Page (draft default behavior)
-        await expect(page.locator('h1')).toContainText('員工費用報銷 (編輯)');
-        await expect(page.locator(`text=單號: ${latestClaim?.id}`)).toBeVisible();
+        // 8. Verify unified claim layout (draft default behavior)
+        await expect(page.locator('h1')).toContainText('請款單');
+        await expect(page.locator(`text=#${latestClaim?.id}`)).toBeVisible();
 
         // 9. Verify draft actions are available in edit mode
         await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();
