@@ -18,6 +18,7 @@
         ArrowLeft,
         Save,
     } from "lucide-svelte";
+    import { toast } from "svelte-sonner";
     import type { PageData } from "./$types";
 
     let { data }: { data: PageData } = $props();
@@ -31,10 +32,13 @@
             description: "",
             amount: "",
             invoice_number: "",
+            attachment_status: "",
+            exempt_reason: "",
         },
     ]);
     let payeeId = $state("");
     let isSubmitting = $state(false);
+    let itemValidationErrors = $state<string[]>([]);
 
     // Floating Account State
     let isFloatingAccount = $state(false);
@@ -55,6 +59,17 @@
     let totalAmount = $derived(
         items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
     );
+    let duplicateInvoiceNumbersInForm = $derived.by(() => {
+        const countByInvoice = new Map<string, number>();
+        for (const item of items) {
+            const invoice = String(item?.invoice_number || "").trim();
+            if (!invoice) continue;
+            countByInvoice.set(invoice, (countByInvoice.get(invoice) || 0) + 1);
+        }
+        return Array.from(countByInvoice.entries())
+            .filter(([, count]) => count > 1)
+            .map(([invoice]) => invoice);
+    });
 
     function selectType(type: string) {
         claimType = type;
@@ -66,6 +81,8 @@
                 description: "",
                 amount: "",
                 invoice_number: "",
+                attachment_status: "",
+                exempt_reason: "",
             },
         ];
     }
@@ -79,13 +96,66 @@
                 description: "",
                 amount: "",
                 invoice_number: "",
+                attachment_status: "",
+                exempt_reason: "",
             },
         ];
+        itemValidationErrors = [];
     }
 
     function removeItem(index: number) {
         if (items.length > 1) {
             items = items.filter((_, i) => i !== index);
+            itemValidationErrors = [];
+        }
+    }
+
+    function validateBeforeSubmit(event: SubmitEvent) {
+        const submitter = event.submitter as
+            | HTMLButtonElement
+            | HTMLInputElement
+            | null;
+        const intent = submitter?.getAttribute("value");
+        if (intent !== "submit") return;
+        if (!data.hasApprover) {
+            event.preventDefault();
+            toast.error("尚未設定核准人，無法直接提交。請先聯繫管理員設定。");
+            return;
+        }
+
+        const form = event.currentTarget as HTMLFormElement;
+        const formData = new FormData(form);
+        const nextErrors = new Array(items.length).fill("");
+
+        for (let i = 0; i < items.length; i += 1) {
+            const item = items[i];
+            const status = String(item?.attachment_status || "").trim();
+            const exemptReason = String(item?.exempt_reason || "").trim();
+            const file = formData.get(`item_attachment_${i}`) as File | null;
+            const hasFile = Boolean(file && file.size > 0);
+
+            if (!status) {
+                nextErrors[i] = "請選擇憑證處理方式";
+                continue;
+            }
+            if (status === "uploaded" && !hasFile) {
+                nextErrors[i] = "已選擇上傳憑證，請選擇附件檔案";
+                continue;
+            }
+            if (status !== "uploaded" && hasFile) {
+                nextErrors[i] = "已有檔案時，憑證處理方式需選擇「上傳憑證」";
+                continue;
+            }
+            if (status === "exempt" && !exemptReason) {
+                nextErrors[i] = "選擇無憑證時，請填寫理由";
+            }
+        }
+
+        itemValidationErrors = nextErrors;
+        const hasError = nextErrors.some((message) => Boolean(message));
+        if (hasError) {
+            event.preventDefault();
+            toast.error("請先完成所有明細的憑證檢核後再直接提交");
         }
     }
 
@@ -164,6 +234,8 @@
         <form
             method="POST"
             action="?/create"
+            enctype="multipart/form-data"
+            onsubmit={validateBeforeSubmit}
             use:enhance={() => {
                 isSubmitting = true;
                 return async ({ result, update }) => {
@@ -192,7 +264,13 @@
                     </h1>
                 </div>
                 <div class="flex items-center gap-2">
-                    <Button type="submit" disabled={isSubmitting}>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        disabled={isSubmitting}
+                        name="submit_intent"
+                        value="draft"
+                    >
                         {#if isSubmitting}
                             <span class="mr-2">儲存中...</span>
                         {:else}
@@ -200,8 +278,22 @@
                             儲存草稿
                         {/if}
                     </Button>
+                    <Button
+                        type="submit"
+                        name="submit_intent"
+                        value="submit"
+                        aria-disabled={isSubmitting || !data.hasApprover}
+                        disabled={isSubmitting || !data.hasApprover}
+                    >
+                        直接提交
+                    </Button>
                 </div>
             </div>
+            {#if !data.hasApprover}
+                <p class="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                    尚未設定核准人，無法直接提交。請先聯繫管理員設定核准人。
+                </p>
+            {/if}
 
             <div class="grid gap-6">
                 <!-- Main Info Card -->
@@ -441,6 +533,48 @@
                                             bind:value={item.amount}
                                         />
                                     </div>
+                                    <div class="col-span-12 md:col-span-5 space-y-2">
+                                        <Label class="text-xs">
+                                            請款憑證處理
+                                        </Label>
+                                        <div class="flex flex-wrap gap-3 text-xs">
+                                            <label class="inline-flex items-center gap-1.5">
+                                                <input
+                                                    type="radio"
+                                                    value="uploaded"
+                                                    bind:group={item.attachment_status}
+                                                />
+                                                上傳憑證
+                                            </label>
+                                            <label class="inline-flex items-center gap-1.5">
+                                                <input
+                                                    type="radio"
+                                                    value="pending_supplement"
+                                                    bind:group={item.attachment_status}
+                                                />
+                                                憑證後補
+                                            </label>
+                                            <label class="inline-flex items-center gap-1.5">
+                                                <input
+                                                    type="radio"
+                                                    value="exempt"
+                                                    bind:group={item.attachment_status}
+                                                />
+                                                無憑證
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-span-12 md:col-span-5">
+                                        <Label class="text-xs">附件檔案</Label>
+                                        <Input
+                                            type="file"
+                                            name={`item_attachment_${i}`}
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                        />
+                                        <p class="text-[11px] text-muted-foreground mt-1">
+                                            選擇「上傳憑證」時需提供檔案
+                                        </p>
+                                    </div>
                                     <div class="col-span-1 flex justify-end">
                                         <Button
                                             variant="ghost"
@@ -454,6 +588,23 @@
                                             />
                                         </Button>
                                     </div>
+                                    {#if item.attachment_status === "exempt"}
+                                        <div class="col-span-12">
+                                            <Label class="text-xs">無憑證理由</Label>
+                                            <Textarea
+                                                rows={2}
+                                                placeholder="請填寫無憑證原因"
+                                                bind:value={item.exempt_reason}
+                                            />
+                                        </div>
+                                    {/if}
+                                    {#if itemValidationErrors[i]}
+                                        <div class="col-span-12">
+                                            <p class="text-xs text-destructive font-medium">
+                                                {itemValidationErrors[i]}
+                                            </p>
+                                        </div>
+                                    {/if}
                                 </div>
                             {/each}
                         </div>
@@ -464,6 +615,11 @@
                                 totalAmount,
                             )}
                         </div>
+                        {#if duplicateInvoiceNumbersInForm.length > 0}
+                            <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                                偵測到本單內重複發票號碼：{duplicateInvoiceNumbersInForm.join(", ")}。此為提醒，不會阻擋提交。
+                            </div>
+                        {/if}
                     </Card.Content>
                 </Card.Root>
 
@@ -471,7 +627,7 @@
                     class="bg-blue-50 p-4 rounded-md text-sm text-blue-800 border border-blue-200"
                 >
                     <p class="font-bold mb-1">💡 提示：</p>
-                    <p>請先儲存草稿，儲存後即可上傳相關憑證與附件。</p>
+                    <p>可直接儲存草稿或直接提交，附件可在建立時一併上傳。</p>
                 </div>
             </div>
         </form>

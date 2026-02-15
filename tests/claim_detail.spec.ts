@@ -71,49 +71,33 @@ test.describe.serial('Claim Detail Page', () => {
         if (testUser) await supabaseAdmin.auth.admin.deleteUser(testUser.id);
     });
 
-    test('View claim detail page shows correct info', async ({ page }) => {
+    test('Draft claim opens in edit mode', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
+        await expect(page).toHaveURL(new RegExp(`/claims/${claimId}/edit`));
 
-        // Verify claim heading contains claim ID
-        await expect(page.locator('h1')).toContainText('請款單 #');
+        // Verify edit page heading contains edit tag
+        await expect(page.locator('h1')).toContainText('(編輯)');
 
-        // Verify type badge
-        await expect(page.locator('text=員工報銷')).toBeVisible();
-
-        // Verify status badge (should be draft)
-        await expect(page.locator('[data-slot="badge"]').filter({ hasText: '草稿' }).first()).toBeVisible();
-
-        // Verify line item details
-        await expect(page.locator('text=Test line item')).toBeVisible();
+        // Verify line item remains editable
+        await expect(page.locator('input[placeholder="項目說明"]').first()).toBeVisible();
     });
 
-    test('Draft claim has submit and delete actions', async ({ page }) => {
+    test('Draft edit page has save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await expect(page.getByTestId('claim-submit-button')).toBeVisible();
-        await expect(page.getByTestId('claim-delete-button')).toBeVisible();
+        await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();
     });
 
-    test('Delete draft claim redirects to list', async ({ page }) => {
+    test('Draft edit page can submit save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await page.waitForLoadState('networkidle');
-
-        // Click delete. Depending on hydration timing, it may:
-        // 1) open app confirm dialog, or
-        // 2) submit directly and redirect.
-        await page.getByTestId('claim-delete-button').click();
-        const confirmBtn = page.getByTestId('claim-confirm-submit');
-        if (await confirmBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-            await confirmBtn.click();
-        }
-
-        // Should redirect to claims list
-        await expect(page).toHaveURL(/\/claims$/, { timeout: 10000 });
+        await page.fill('input[placeholder="項目說明"]', 'Updated from edit page');
+        await page.getByRole('button', { name: '儲存變更' }).click();
+        await expect(page).toHaveURL(new RegExp(`/claims/${claimId}/edit`));
+        await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();
     });
 });

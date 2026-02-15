@@ -51,7 +51,7 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
         if (approver) await supabaseAdmin.auth.admin.deleteUser(approver.id);
     });
 
-    test('Submission: detects duplicates and allows force submit', async ({ page }) => {
+    test('Submission: duplicate invoices are warned but do not block submit', async ({ page }) => {
         // 1. Create the FIRST claim with the invoice number
         const { data: claim1, error: error1 } = await supabaseAdmin.from('claims').insert([
             {
@@ -104,22 +104,14 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
         // 3. Login as applicant and try to submit the second claim
         await injectSession(page, applicant.email, password);
         await page.goto(`/claims/${claim2.id}`);
+        await expect(page).toHaveURL(new RegExp(`/claims/${claim2.id}/edit`));
 
         // Click "Submit" button
-        await page.click('button:has-text("提交審核")');
+        await page.getByRole('button', { name: '提交審核' }).click();
 
-        // 4. Expect the Duplicate Warning Modal
-        const duplicateModal = page.getByRole('dialog');
-        await expect(duplicateModal.getByText('檢測到重複發票')).toBeVisible();
-        await expect(duplicateModal.getByText(invoiceNumber, { exact: true })).toBeVisible();
-        await expect(duplicateModal.getByText('Original Claim')).toBeVisible();
-
-        // 5. Click "仍要強制提交"
-        await page.click('button:has-text("仍要強制提交")');
-
-        // 6. Verify success (it should redirect or update status)
-        // Wait for status badge to change to "待主管審核"
-        await expect(page.getByText('待主管審核').first()).toBeVisible();
+        // 4. Verify success (duplicate no longer blocks submit)
+        await page.goto('/claims?tab=processing');
+        await expect(page.getByText(`#${claim2.id}`)).toBeVisible();
 
         // Double check DB
         const { data: updatedClaim } = await supabaseAdmin

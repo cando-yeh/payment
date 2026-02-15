@@ -19,6 +19,19 @@ test.describe('Payee Management Extended Flow', () => {
     let testPayeeId: string;
     let testPayeeName: string;
 
+    async function openPayeeEditDrawer(page: any, payeeId: string) {
+        const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
+        const row = page.getByTestId(`payee-row-${payeeId}`);
+        for (let i = 0; i < 5; i += 1) {
+            await row.click();
+            if (await drawer.isVisible({ timeout: 1500 }).catch(() => false)) {
+                return drawer;
+            }
+            await page.waitForTimeout(250);
+        }
+        throw new Error('Payee edit drawer did not open after retries');
+    }
+
     test.beforeAll(async () => {
         const timestamp = Date.now();
         testPayeeName = 'E2E Base Payee ' + timestamp;
@@ -69,12 +82,12 @@ test.describe('Payee Management Extended Flow', () => {
     test('Standard User can submit an UPDATE request', async ({ page }) => {
         await injectSession(page, userStandard.email, password);
         await page.goto('/payees');
-        await page.getByTestId(`payee-row-${testPayeeId}`).click();
-        await page.getByRole('button', { name: '編輯收款人資訊' }).click();
+        const drawer = await openPayeeEditDrawer(page, testPayeeId);
+        await drawer.getByRole('button', { name: '編輯收款人資訊' }).click();
 
         const updatedName = testPayeeName + ' (Updated)';
-        await page.fill('input[name="name"]', updatedName);
-        await page.fill('input[name="identity_no"]', '12345678');
+        await drawer.locator('input[name="name"]').fill(updatedName);
+        await drawer.locator('input[name="identity_no"]').fill('12345678');
         await page.evaluate(() => {
             const bankCodeInput = document.querySelector('input[name="bank_code"]') as HTMLInputElement | null;
             if (!bankCodeInput) throw new Error('bank_code input not found');
@@ -82,10 +95,10 @@ test.describe('Payee Management Extended Flow', () => {
             bankCodeInput.dispatchEvent(new Event('input', { bubbles: true }));
             bankCodeInput.dispatchEvent(new Event('change', { bubbles: true }));
         });
-        await page.fill('input[name="bank_account"]', '987654321');
-        await page.fill('textarea[name="reason"]', 'Testing update flow');
+        await drawer.locator('input[name="bank_account"]').fill('987654321');
+        await drawer.locator('textarea[name="reason"]').fill('Testing update flow');
 
-        await page.getByRole('button', { name: '送出異動申請' }).click();
+        await drawer.getByRole('button', { name: '送出異動申請' }).click();
         await expect(page.getByText('更新申請已提交，請等待財務審核。')).toBeVisible({
             timeout: 10000,
         });

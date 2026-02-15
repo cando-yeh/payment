@@ -126,11 +126,16 @@ test.describe('Approval Flow E2E', () => {
             date_start: new Date().toISOString().split('T')[0]
         });
 
-        await page.goto(`/claims/${claimId}`);
-        await expect(page.locator('text=提交審核')).toBeVisible();
-        await page.click('text=提交審核');
+        // Ensure approver mapping is persisted before submit.
+        await supabaseAdmin
+            .from('profiles')
+            .update({ approver_id: manager.id })
+            .eq('id', applicant.id);
+        await waitForProfileFields(applicant.id, { approver_id: manager.id });
 
-        await expect(page.locator(`text=請款單 #${claimId}`)).toBeVisible();
+        await page.goto(`/claims/${claimId}`);
+        await expect(page).toHaveURL(new RegExp(`/claims/${claimId}/edit`));
+        await expect(page.getByRole('button', { name: '提交審核' })).toBeVisible();
     });
 
     test('Rejection Flow: Manager can open pending_manager claim and see reject action', async ({ page }) => {

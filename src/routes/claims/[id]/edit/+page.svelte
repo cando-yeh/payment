@@ -1,5 +1,6 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
+    import { deserialize } from "$app/forms";
     import { goto } from "$app/navigation";
     import { page } from "$app/state";
     import { untrack } from "svelte";
@@ -40,6 +41,30 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
         type: string;
     }
 
+    function emptyItem() {
+        return {
+            date: new Date().toISOString().split("T")[0],
+            category: "general",
+            description: "",
+            amount: "",
+            invoice_number: "",
+        };
+    }
+
+    function normalizeItemForEditor(item: any) {
+        return {
+            date: String(item?.date || item?.date_start || new Date().toISOString().split("T")[0]),
+            category: String(item?.category || "general"),
+            description: String(item?.description || ""),
+            amount:
+                item?.amount === null || item?.amount === undefined
+                    ? ""
+                    : String(item.amount),
+            invoice_number: String(item?.invoice_number || ""),
+            extra: item?.extra || {},
+        };
+    }
+
     let { data }: { data: PageData & { claim: Claim; payees: Payee[] } } =
         $props();
 
@@ -54,17 +79,9 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
                 ? data.claim.items
                 : JSON.parse(data.claim.items || "[]");
             if (parsed.length === 0) {
-                return [
-                    {
-                        date: new Date().toISOString().split("T")[0],
-                        category: "general",
-                        description: "",
-                        amount: "",
-                        invoice_number: "",
-                    },
-                ];
+                return [emptyItem()];
             }
-            return parsed;
+            return parsed.map(normalizeItemForEditor);
         }),
     );
 
@@ -85,17 +102,9 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
             : JSON.parse(data.claim.items || "[]");
 
         if (newItems.length === 0) {
-            items = [
-                {
-                    date: new Date().toISOString().split("T")[0],
-                    category: "general",
-                    description: "",
-                    amount: "",
-                    invoice_number: "",
-                },
-            ];
+            items = [emptyItem()];
         } else {
-            items = newItems;
+            items = newItems.map(normalizeItemForEditor);
         }
 
         isFloatingAccount = !!data.claim.bank_code;
@@ -123,19 +132,40 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     function addItem() {
         items = [
             ...items,
-            {
-                date: new Date().toISOString().split("T")[0],
-                category: "general",
-                description: "",
-                amount: "",
-                invoice_number: "",
-            },
+            emptyItem(),
         ];
     }
 
     function removeItem(index: number) {
         if (items.length > 1) {
             items = items.filter((_, i) => i !== index);
+        }
+    }
+
+    function prepareSave(event: MouseEvent) {
+        const button = event.currentTarget as HTMLButtonElement | null;
+        const form = button?.form;
+        if (!form) return;
+        form.setAttribute("action", "?/update");
+    }
+
+    async function submitForReview(event: MouseEvent) {
+        if (isSubmitting) return;
+
+        isSubmitting = true;
+        try {
+            const response = await fetch(`/claims/${data.claim.id}?/submit`, {
+                method: "POST",
+                body: new FormData(),
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const result = deserialize(await response.text()) as any;
+            if (result?.type === "redirect" && result.location) {
+                await goto(result.location);
+                return;
+            }
+        } finally {
+            isSubmitting = false;
         }
     }
 
@@ -157,8 +187,12 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
         action="?/update"
         use:enhance={() => {
             isSubmitting = true;
-            return async ({ update }) => {
+            return async ({ result, update }) => {
                 isSubmitting = false;
+                if (result.type === "redirect") {
+                    goto(result.location);
+                    return;
+                }
                 await update();
             };
         }}
@@ -184,13 +218,26 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <Button type="submit" disabled={isSubmitting}>
+                <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    formaction="?/update"
+                    onclick={prepareSave}
+                >
                     {#if isSubmitting}
                         <span class="mr-2">儲存中...</span>
                     {:else}
                         <Save class="mr-2 h-4 w-4" />
                         儲存變更
                     {/if}
+                </Button>
+                <Button
+                    type="button"
+                    disabled={isSubmitting}
+                    onclick={submitForReview}
+                >
+                    提交審核
                 </Button>
             </div>
         </div>

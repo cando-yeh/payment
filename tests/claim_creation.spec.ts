@@ -72,17 +72,14 @@ test.describe('Claim Creation Flow', () => {
             .single();
         expect(latestClaim?.claim_type).toBe('employee');
         await page.goto(`/claims/${latestClaim?.id}`);
+        await expect(page).toHaveURL(new RegExp(`/claims/${latestClaim?.id}/edit`));
 
-        // 8. Verify Detail Page
-        await expect(page.locator('h1')).toContainText('請款單 #'); // ID
-        await expect(page.locator('text=員工報銷')).toBeVisible(); // Type Badge
-        await expect(page.locator('text=請款總額')).toBeVisible(); // Amount total visible
+        // 8. Verify Edit Page (draft default behavior)
+        await expect(page.locator('h1')).toContainText('員工費用報銷 (編輯)');
+        await expect(page.locator(`text=單號: ${latestClaim?.id}`)).toBeVisible();
 
-        // 9. Verify Action Buttons (Draft state)
-        await expect(page.locator('button:has-text("提交審核")')).toBeVisible();
-        await expect(page.locator('button:has-text("刪除")')).toBeVisible();
-
-        // 10. Verify Attachment Button exists
-        await expect(page.locator('button:has(.lucide-upload)')).toBeVisible();
+        // 9. Verify draft actions are available in edit mode
+        await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();
+        await expect(page.getByRole('button', { name: '提交審核' })).toBeVisible();
     });
 });

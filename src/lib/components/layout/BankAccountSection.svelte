@@ -48,7 +48,7 @@
         isPayee ? "bank_account" : "bankAccount",
     );
     const canReveal = $derived(
-        isManagement ? isEditing : isPayee ? isFinance : true,
+        isManagement ? true : isPayee ? isFinance : true,
     );
     const helperText = $derived(
         isPayee
@@ -126,11 +126,7 @@
                     {:else}
                         <Input
                             id={bankAccountFieldId}
-                            type={isPayee
-                                ? "text"
-                                : showAccountValue
-                                  ? "text"
-                                  : "password"}
+                            type="text"
                             value={showAccountValue
                                 ? decryptedAccount || maskedAccountTail
                                 : maskedAccountTail || "••••••••••••"}

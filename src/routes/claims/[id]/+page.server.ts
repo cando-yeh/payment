@@ -46,6 +46,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
     // RBAC Check for View
     const isApplicant = claim.applicant_id === session.user.id;
 
+    if (isApplicant && (claim.status === 'draft' || claim.status === 'returned')) {
+        throw redirect(303, `/claims/${id}/edit`);
+    }
+
     const { data: profile } = await supabase
         .from('profiles')
         .select('is_finance, is_admin')
@@ -73,6 +77,13 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         .select('*, actor:profiles(full_name)')
         .eq('claim_id', id);
 
+    let duplicateWarnings: any[] = [];
+    try {
+        duplicateWarnings = await checkDuplicateInvoices(supabase, id);
+    } catch (e) {
+        console.warn('Duplicate invoice reminder load failed:', e);
+    }
+
     if (claim.items) {
         claim.items.sort((a: any, b: any) => a.item_index - b.item_index);
     }
@@ -86,7 +97,8 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
             ...claim,
             history: sortedHistory
         },
-        user: { id: session.user.id, isFinance, isAdmin, isApprover }
+        user: { id: session.user.id, isFinance, isAdmin, isApprover },
+        duplicateWarnings
     };
 
 };
@@ -141,19 +153,7 @@ export const actions: Actions = {
             return fail(400, { message: 'Only draft or returned claims can be submitted' });
         }
 
-        const formData = await request.formData();
-        const force = formData.get('force') === 'true';
-
-        // Duplicate Invoice Check
-        if (!force) {
-            const duplicates = await checkDuplicateInvoices(supabase, id);
-            if (duplicates.length > 0) {
-                return fail(400, {
-                    duplicates,
-                    message: '檢測到重複發票'
-                });
-            }
-        }
+        await request.formData();
 
         const { data: applicantProfile, error: profileError } = await supabase
             .from('profiles')
@@ -198,7 +198,7 @@ export const actions: Actions = {
             return fail(409, { message: '請款單狀態已變更，請重新整理後再試' });
         }
 
-        throw redirect(303, `/claims/${id}`);
+        throw redirect(303, '/claims?tab=processing');
     },
 
     approve: async ({ request, params, locals: { supabase, getSession } }) => {
@@ -237,19 +237,6 @@ export const actions: Actions = {
         }
 
         if (!nextStatus) return fail(403, { message: 'Forbidden' });
-
-        const force = formData.get('force') === 'true';
-
-        // Duplicate Invoice Check during approval
-        if (!force) {
-            const duplicates = await checkDuplicateInvoices(supabase, id);
-            if (duplicates.length > 0) {
-                return fail(400, {
-                    duplicates,
-                    message: '檢測到重複發票'
-                });
-            }
-        }
 
         const { error: updateError } = await supabase
             .from('claims')

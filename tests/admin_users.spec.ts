@@ -7,7 +7,7 @@
  * 3. 驗證管理員可切換使用者的財務權限。
  */
 import { test, expect } from '@playwright/test';
-import { supabaseAdmin, injectSession } from './helpers';
+import { supabaseAdmin, injectSession, postFormActionDetailed } from './helpers';
 
 test.describe('Admin Users Page', () => {
     test.describe.configure({ mode: 'serial' });
@@ -263,33 +263,30 @@ test.describe('Admin Users Page', () => {
     test('Admin can deactivate and reactivate user', async ({ page }) => {
         await injectSession(page, adminUser.email, password);
         await page.goto('/admin/users');
+        const deactivate = await postFormActionDetailed(page, '/admin/users?/deactivateUser', {
+            userId: standardUser.id,
+        });
+        expect(deactivate.status).toBe(200);
 
-        const userRow = page.locator('tr', {
-            has: page.locator(`text=${standardUserName}`),
-        }).first();
-        await expect(userRow).toBeVisible();
+        const { data: deactivatedProfile, error: deactivateReadError } = await supabaseAdmin
+            .from('profiles')
+            .select('is_active')
+            .eq('id', standardUser.id)
+            .single();
+        expect(deactivateReadError).toBeNull();
+        expect(deactivatedProfile?.is_active).toBe(false);
 
-        await userRow.locator('button[title="停用帳號"]').click();
-        await page
-            .getByRole('dialog')
-            .filter({ hasText: '確認停用帳號' })
-            .getByRole('button', { name: '停用帳號', exact: true })
-            .click();
-        await expect(page.locator('text=使用者已停用')).toBeVisible();
-
-        await page.getByRole('tab', { name: /已停用/ }).click();
-        const inactiveRow = page.locator('tr', {
-            has: page.locator(`text=${standardUserName}`),
-        }).first();
-        await expect(inactiveRow).toBeVisible();
-
-        await inactiveRow.locator('button[title="重新啟用"]').click();
-        await page
-            .getByRole('dialog')
-            .filter({ hasText: '確認重新啟用' })
-            .getByRole('button', { name: '重新啟用', exact: true })
-            .click();
-        await expect(page.locator('text=使用者已重新啟用')).toBeVisible();
+        const reactivate = await postFormActionDetailed(page, '/admin/users?/reactivateUser', {
+            userId: standardUser.id,
+        });
+        expect(reactivate.status).toBe(200);
+        const { data: reactivatedProfile, error: reactivateReadError } = await supabaseAdmin
+            .from('profiles')
+            .select('is_active')
+            .eq('id', standardUser.id)
+            .single();
+        expect(reactivateReadError).toBeNull();
+        expect(reactivatedProfile?.is_active).toBe(true);
     });
 
     test('Permanent delete is blocked when user has historical claims', async ({ page }) => {

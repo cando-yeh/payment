@@ -53,8 +53,7 @@
 
     // Duplicate Modal State
     let isDuplicateModalOpen = $state(false);
-    let duplicates = $derived(form?.duplicates || []);
-    let pendingAction = $state<"submit" | "approve" | null>(null);
+    let duplicates = $derived(data.duplicateWarnings || []);
     let isPrimaryActionSubmitting = $state(false);
     let isConfirmModalOpen = $state(false);
     let confirmTitle = $state("確認操作");
@@ -63,12 +62,6 @@
     let confirmButtonVariant = $state<"default" | "destructive">("default");
     let pendingConfirmForm = $state<HTMLFormElement | null>(null);
     let allowConfirmedSubmitFor = $state<HTMLFormElement | null>(null);
-
-    $effect(() => {
-        if (form?.duplicates?.length > 0) {
-            isDuplicateModalOpen = true;
-        }
-    });
 
     function openAttachmentDrawer(item: any) {
         selectedItem = item;
@@ -90,6 +83,7 @@
             return;
         }
         event.preventDefault();
+        event.stopPropagation();
         pendingConfirmForm = form;
         confirmTitle = options.title || "確認操作";
         confirmMessage = options.message;
@@ -252,7 +246,7 @@
                         enhanceAction({
                             successMessage: "草稿已刪除",
                         })}
-                    onsubmit={(event) =>
+                    onsubmitcapture={(event) =>
                         requestConfirmSubmit(event, {
                             title: "確認刪除草稿",
                             message: "確定要刪除此草稿嗎？",
@@ -288,7 +282,6 @@
                         type="submit"
                         data-testid="claim-submit-button"
                         class="rounded-lg shadow-md shadow-primary/10 font-bold px-6 h-9"
-                        onclick={() => (pendingAction = "submit")}
                         disabled={isPrimaryActionSubmitting}
                     >
                         <Send class="mr-1.5 h-3.5 w-3.5" />
@@ -325,7 +318,7 @@
                         enhanceAction({
                             successMessage: "已撤回為草稿",
                         })}
-                    onsubmit={(event) =>
+                    onsubmitcapture={(event) =>
                         requestConfirmSubmit(event, {
                             title: "確認撤回草稿",
                             message:
@@ -372,7 +365,6 @@
                     <Button
                         type="submit"
                         class="rounded-lg bg-primary hover:bg-primary/90 shadow-md shadow-primary/10 font-bold px-8 h-9"
-                        onclick={() => (pendingAction = "approve")}
                         disabled={isPrimaryActionSubmitting}
                     >
                         <CheckCircle2 class="mr-1.5 h-3.5 w-3.5" />
@@ -382,6 +374,27 @@
             {/if}
         </div>
     </div>
+
+    {#if duplicates.length > 0}
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-start gap-2">
+                    <AlertCircle class="h-4 w-4 text-amber-700 mt-0.5" />
+                    <p class="text-sm text-amber-800">
+                        偵測到重複發票號碼（僅提醒，不阻擋提交）。
+                    </p>
+                </div>
+                <Button
+                    type="button"
+                    variant="outline"
+                    class="h-8 px-3 text-xs border-amber-300 text-amber-800 hover:bg-amber-100"
+                    onclick={() => (isDuplicateModalOpen = true)}
+                >
+                    查看明細
+                </Button>
+            </div>
+        </div>
+    {/if}
 
     <!-- Header Section -->
     <div
@@ -835,7 +848,7 @@
                                         successMessage: "附件已刪除",
                                     })}
                                 class="w-full"
-                                onsubmit={(event) =>
+                                onsubmitcapture={(event) =>
                                     requestConfirmSubmit(event, {
                                         title: "確認移除附件",
                                         message: "確定要永久移除此附件嗎？",
@@ -862,6 +875,13 @@
                                 </Button>
                             </form>
                         {/if}
+                    </div>
+                {:else if selectedItem?.attachment_status === "exempt"}
+                    <div class="space-y-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                        <p class="text-sm font-semibold text-amber-800">此明細已標記為無憑證</p>
+                        <p class="text-xs text-amber-700 leading-relaxed">
+                            理由：{selectedItem?.extra?.exempt_reason || "未填寫"}
+                        </p>
                     </div>
                 {:else if claim.status === "draft" || claim.status === "pending_doc_review" || claim.status === "paid_pending_doc"}
                     <div
@@ -1006,50 +1026,13 @@
                 {/each}
             </div>
 
-            <Dialog.Footer class="mt-8 flex flex-col sm:flex-row gap-3">
+            <Dialog.Footer class="mt-8">
                 <Button
-                    variant="ghost"
-                    class="flex-1 rounded-xl h-12 font-bold"
+                    class="w-full rounded-xl h-12 font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/10"
                     onclick={() => (isDuplicateModalOpen = false)}
                 >
-                    取消
+                    我知道了
                 </Button>
-                <form
-                    action={pendingAction === "approve"
-                        ? "?/approve"
-                        : "?/submit"}
-                    method="POST"
-                    use:enhance={() => {
-                        isPrimaryActionSubmitting = true;
-                        return enhanceAction({
-                            successMessage:
-                                pendingAction === "approve"
-                                    ? "核准成功"
-                                    : "已送出審核",
-                            onSuccess: () => {
-                                isDuplicateModalOpen = false;
-                            },
-                            onFinally: () => {
-                                isPrimaryActionSubmitting = false;
-                            },
-                        });
-                    }}
-                    class="flex-1"
-                >
-                    <input type="hidden" name="force" value="true" />
-                    {#if pendingAction === "approve"}
-                        <input type="hidden" name="comment" value={comment} />
-                    {/if}
-                    <Button
-                        type="submit"
-                        class="w-full rounded-xl h-12 font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/10"
-                        disabled={isPrimaryActionSubmitting}
-                    >
-                        {isPrimaryActionSubmitting
-                            ? "提交中..."
-                            : "仍要強制提交"}
-                    </Button>
-                </form>
             </Dialog.Footer>
         </Dialog.Content>
     </Dialog.Root>

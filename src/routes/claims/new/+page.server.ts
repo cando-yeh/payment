@@ -1,5 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const EDITABLE_CLAIM_STATUSES = new Set(['draft', 'returned']);
+const ALLOWED_ATTACHMENT_STATUSES = new Set(['uploaded', 'pending_supplement', 'exempt']);
 
 type ClaimItemInput = {
     date?: string;
@@ -7,6 +12,8 @@ type ClaimItemInput = {
     description?: string;
     amount?: number | string;
     invoice_number?: string;
+    attachment_status?: string;
+    exempt_reason?: string;
     extra?: Record<string, unknown>;
 };
 
@@ -26,6 +33,12 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         throw redirect(303, '/auth');
     }
 
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('approver_id')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
     const { data: payees, error } = await supabase
         .from('payees')
         .select('id, name, type')
@@ -37,7 +50,10 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         return { payees: [] };
     }
 
-    return { payees };
+    return {
+        payees,
+        hasApprover: Boolean(profile?.approver_id)
+    };
 };
 
 export const actions: Actions = {
@@ -51,6 +67,8 @@ export const actions: Actions = {
         const claimType = String(formData.get('claim_type') || '');
         const payeeId = String(formData.get('payee_id') || '');
         const itemsJson = String(formData.get('items') || '');
+        const submitIntent = String(formData.get('submit_intent') || 'draft');
+        const shouldSubmitDirectly = submitIntent === 'submit';
 
         const isFloatingAccount = formData.get('is_floating_account') === 'true';
         const bankCode = String(formData.get('bank_code') || '').trim();
@@ -61,6 +79,9 @@ export const actions: Actions = {
         if (!claimType || !itemsJson) {
             return fail(400, { message: 'Missing required fields' });
         }
+        if (!['draft', 'submit'].includes(submitIntent)) {
+            return fail(400, { message: 'Invalid submit intent' });
+        }
 
         const allowedTypes = new Set(['employee', 'vendor', 'personal_service']);
         if (!allowedTypes.has(claimType)) {
@@ -70,6 +91,43 @@ export const actions: Actions = {
         const items = normalizeItems(itemsJson);
         if (!items || items.length === 0) {
             return fail(400, { message: 'At least one item is required' });
+        }
+
+        const voucherSelections = items.map((item) => {
+            const statusRaw = String(item.attachment_status || '').trim();
+            const exemptReason = String(item.exempt_reason || '').trim();
+            const status = ALLOWED_ATTACHMENT_STATUSES.has(statusRaw)
+                ? (statusRaw as 'uploaded' | 'pending_supplement' | 'exempt')
+                : null;
+            return { status, exemptReason };
+        });
+
+        const attachmentPlans: {
+            effectiveStatus: 'uploaded' | 'pending_supplement' | 'exempt';
+            exemptReason: string;
+            file: File | null;
+        }[] = [];
+        for (let i = 0; i < items.length; i += 1) {
+            const selected = voucherSelections[i] || { status: null, exemptReason: '' };
+            const file = formData.get(`item_attachment_${i}`) as File | null;
+            const hasFile = Boolean(file && file.size > 0);
+
+            if (shouldSubmitDirectly && !selected.status) {
+                return fail(400, { message: `第 ${i + 1} 筆明細尚未選擇憑證處理方式` });
+            }
+
+            const effectiveStatus = selected.status || (hasFile ? 'uploaded' : 'pending_supplement');
+            if (effectiveStatus === 'uploaded' && !hasFile) {
+                return fail(400, { message: `第 ${i + 1} 筆明細已選擇上傳憑證，請選擇附件檔案` });
+            }
+            if (effectiveStatus !== 'uploaded' && hasFile) {
+                return fail(400, { message: `第 ${i + 1} 筆明細已上傳檔案，請將憑證處理方式改為「上傳憑證」` });
+            }
+            if (effectiveStatus === 'exempt' && !selected.exemptReason) {
+                return fail(400, { message: `第 ${i + 1} 筆明細選擇「無憑證」時，必須填寫理由` });
+            }
+
+            attachmentPlans.push({ effectiveStatus, exemptReason: selected.exemptReason, file });
         }
 
         const claimItems = items.map((item, index) => {
@@ -84,7 +142,7 @@ export const actions: Actions = {
                 amount,
                 invoice_number: item.invoice_number || null,
                 attachment_status: 'pending_supplement',
-                extra: item.extra || {}
+                extra: {}
             };
         });
 
@@ -126,15 +184,117 @@ export const actions: Actions = {
             return fail(500, { message: 'Failed to create claim' });
         }
 
-        const { error: itemsError } = await supabase
+        const { data: createdItems, error: itemsError } = await supabase
             .from('claim_items')
-            .insert(claimItems.map((item) => ({ ...item, claim_id: claimId })));
+            .insert(claimItems.map((item) => ({ ...item, claim_id: claimId })))
+            .select('id, item_index');
 
         if (itemsError) {
             console.error('Error creating claim items:', itemsError);
             return fail(500, { message: 'Failed to create claim items' });
         }
 
-        throw redirect(303, `/claims/${claimId}`);
+        if (!createdItems) return fail(500, { message: 'Failed to read created claim items' });
+
+        const itemIdByIndex = new Map<number, string>();
+        for (const item of createdItems) {
+            const itemIndex = Number((item as any).item_index);
+            if (Number.isFinite(itemIndex)) {
+                itemIdByIndex.set(itemIndex - 1, String((item as any).id));
+            }
+        }
+
+        for (let i = 0; i < items.length; i += 1) {
+            const { effectiveStatus, exemptReason, file } = attachmentPlans[i];
+
+            const itemId = itemIdByIndex.get(i);
+            if (!itemId) {
+                return fail(500, { message: `Failed to resolve claim item for attachment #${i + 1}` });
+            }
+
+            let nextExtra: Record<string, unknown> = {};
+            if (effectiveStatus === 'uploaded' && file) {
+                try {
+                    validateFileUpload(file, `附件 #${i + 1}`, {
+                        required: false,
+                        maxBytes: 10 * 1024 * 1024,
+                        allowedTypes: ALLOWED_UPLOAD_MIME_TYPES
+                    });
+                } catch (err: any) {
+                    return fail(400, { message: err.message || 'Unsupported attachment type' });
+                }
+
+                let filePath = '';
+                try {
+                    filePath = await uploadFileToStorage(supabase, file, {
+                        bucket: 'claims',
+                        prefix: itemId,
+                        folder: claimId
+                    });
+                } catch (err: any) {
+                    console.error('Upload error while creating claim:', err);
+                    return fail(500, { message: 'Failed to upload attachments' });
+                }
+
+                nextExtra = { file_path: filePath, original_name: file.name };
+            } else if (effectiveStatus === 'exempt') {
+                nextExtra = { exempt_reason: exemptReason };
+            }
+
+            const { error: attachmentUpdateError } = await supabase
+                .from('claim_items')
+                .update({
+                    attachment_status: effectiveStatus,
+                    extra: nextExtra
+                })
+                .eq('id', itemId)
+                .eq('claim_id', claimId);
+
+            if (attachmentUpdateError) {
+                console.error('Error linking attachment while creating claim:', attachmentUpdateError);
+                return fail(500, { message: 'Failed to link attachments to claim items' });
+            }
+        }
+
+        if (shouldSubmitDirectly) {
+            const { data: applicantProfile, error: profileError } = await supabase
+                .from('profiles')
+                .select('approver_id')
+                .eq('id', session.user.id)
+                .single();
+            if (profileError) {
+                return fail(500, { message: '讀取申請人資料失敗' });
+            }
+            if (!applicantProfile?.approver_id) {
+                return fail(400, { message: '您尚未指派核准人，請聯繫管理員進行設定。' });
+            }
+
+            const nowIso = new Date().toISOString();
+            const { data: updatedClaim, error: submitError } = await supabase
+                .from('claims')
+                .update({
+                    status: 'pending_manager',
+                    submitted_at: nowIso,
+                    updated_at: nowIso
+                })
+                .eq('id', claimId)
+                .eq('applicant_id', session.user.id)
+                .in('status', Array.from(EDITABLE_CLAIM_STATUSES))
+                .select('id, status')
+                .maybeSingle();
+
+            if (submitError) {
+                return fail(500, { message: '提交失敗' });
+            }
+            if (!updatedClaim) {
+                return fail(409, { message: '請款單狀態已變更，請重新整理後再試' });
+            }
+        }
+
+        if (shouldSubmitDirectly) {
+            throw redirect(303, '/claims?tab=processing');
+        }
+
+        throw redirect(303, `/claims/${claimId}/edit`);
     }
 };
