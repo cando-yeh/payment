@@ -72,7 +72,7 @@ test.describe('Claim Creation Flow', () => {
             .single();
         expect(latestClaim?.claim_type).toBe('employee');
         await page.goto(`/claims/${latestClaim?.id}`);
-        await expect(page).toHaveURL(new RegExp(`/claims/${latestClaim?.id}/edit`));
+        await expect(page).toHaveURL(new RegExp(`/claims/${latestClaim?.id}`));
 
         // 8. Verify Edit Page (draft default behavior)
         await expect(page.locator('h1')).toContainText('員工費用報銷 (編輯)');

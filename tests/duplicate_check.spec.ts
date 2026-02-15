@@ -18,6 +18,19 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
         throw new Error(`Profile not ready for user: ${userId}`);
     }
 
+    async function waitForApprover(userId: string, approverId: string) {
+        for (let i = 0; i < 20; i++) {
+            const { data } = await supabaseAdmin
+                .from('profiles')
+                .select('approver_id')
+                .eq('id', userId)
+                .maybeSingle();
+            if (data?.approver_id === approverId) return;
+            await sleep(200);
+        }
+        throw new Error(`Approver not ready for user: ${userId}`);
+    }
+
     test.beforeAll(async () => {
         // Create Approver
         const { data: ap } = await supabaseAdmin.auth.admin.createUser({
@@ -44,6 +57,7 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
             .from('profiles')
             .update({ approver_id: approver.id })
             .eq('id', applicant.id);
+        await waitForApprover(applicant.id, approver.id);
     });
 
     test.afterAll(async () => {
@@ -104,10 +118,19 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
         // 3. Login as applicant and try to submit the second claim
         await injectSession(page, applicant.email, password);
         await page.goto(`/claims/${claim2.id}`);
-        await expect(page).toHaveURL(new RegExp(`/claims/${claim2.id}/edit`));
+        await expect(page).toHaveURL(new RegExp(`/claims/${claim2.id}`));
 
         // Click "Submit" button
         await page.getByRole('button', { name: '提交審核' }).click();
+
+        await expect.poll(async () => {
+            const { data } = await supabaseAdmin
+                .from('claims')
+                .select('status')
+                .eq('id', claim2.id)
+                .single();
+            return data?.status;
+        }).toBe('pending_manager');
 
         // 4. Verify success (duplicate no longer blocks submit)
         await page.goto('/claims?tab=processing');

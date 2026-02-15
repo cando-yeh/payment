@@ -32,6 +32,7 @@
     import { cn } from "$lib/utils";
     import { compressImageFile } from "$lib/client/image-compression";
     import { toast } from "svelte-sonner";
+    import ClaimEditor from "$lib/components/claims/ClaimEditor.svelte";
 
     import type { PageData } from "./$types";
 
@@ -225,6 +226,15 @@
     }
 </script>
 
+{#if data.viewMode === "edit"}
+    <ClaimEditor
+        claim={data.claim}
+        payees={data.payees}
+        backHref="/claims"
+        updateAction={`/claims/${data.claim.id}?/editUpdate`}
+        submitAction={`/claims/${data.claim.id}?/submit`}
+    />
+{:else}
 <div class="space-y-10 pb-20" in:fade={{ duration: 400 }}>
     <div class="flex items-center justify-between">
         <Button
@@ -1061,6 +1071,7 @@
         </Dialog.Content>
     </Dialog.Root>
 </div>
+{/if}
 
 <style>
     /* 這裡不再需要定義背景色，已由 +layout 管理 */

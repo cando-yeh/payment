@@ -134,7 +134,7 @@ test.describe('Approval Flow E2E', () => {
         await waitForProfileFields(applicant.id, { approver_id: manager.id });
 
         await page.goto(`/claims/${claimId}`);
-        await expect(page).toHaveURL(new RegExp(`/claims/${claimId}/edit`));
+        await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
         await expect(page.getByRole('button', { name: '提交審核' })).toBeVisible();
     });
 
