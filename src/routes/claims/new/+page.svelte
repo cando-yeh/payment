@@ -226,15 +226,13 @@
                                     {#if claimType === "vendor"}
                                         {#each vendorPayees as payee}
                                             <option value={payee.id}
-                                                >{payee.name} (統編: {payee.tax_id ||
-                                                    "-"})</option
+                                                >{payee.name}</option
                                             >
                                         {/each}
                                     {:else}
                                         {#each personalPayees as payee}
                                             <option value={payee.id}
-                                                >{payee.name} (ID: {payee.tax_id ||
-                                                    "-"})</option
+                                                >{payee.name}</option
                                             >
                                         {/each}
                                     {/if}

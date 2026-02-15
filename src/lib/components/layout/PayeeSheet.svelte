@@ -72,6 +72,7 @@
 
     // 附件連結 (唯讀)
     let attachmentUrls = $derived(payee?.attachment_urls || {});
+    let attachmentMeta = $derived(payee?.attachments || {});
     const ENCRYPTED_PLACEHOLDER_PATTERN = /已加密/;
     const ENCRYPTED_HEX_PATTERN = /^\\x[0-9a-f]+$/i;
     const ENCRYPTED_HEX_NO_PREFIX_PATTERN = /^[0-9a-f]+$/i;
@@ -96,7 +97,7 @@
 
         const currentExtra = payee.extra_info || {};
         const currentTaxId = sanitizeEncryptedPlaceholder(
-            taxIdCache[payee.id] || payee.tax_id || "",
+            taxIdCache[payee.id] || payee.identity_no || payee.unified_no || "",
         );
 
         const basicChanged =
@@ -139,7 +140,8 @@
             type = payee.type || "vendor";
             taxId =
                 taxIdCache[payee.id] ||
-                sanitizeEncryptedPlaceholder(payee.tax_id) ||
+                sanitizeEncryptedPlaceholder(payee.identity_no) ||
+                sanitizeEncryptedPlaceholder(payee.unified_no) ||
                 "";
             serviceDescription = payee.service_description || "";
             email = payee.extra_info?.email || "";
@@ -190,7 +192,7 @@
     }
 
     function hasExistingAttachment(key: AttachmentKey) {
-        return Boolean(attachmentUrls?.[key] && !removedAttachments[key]);
+        return Boolean(attachmentMeta?.[key] && !removedAttachments[key]);
     }
 
     function hasAttachment(key: AttachmentKey) {
@@ -242,19 +244,19 @@
     function isAttachmentImage(key: AttachmentKey) {
         const file = attachmentFiles[key];
         if (file) return file.type.startsWith("image/");
-        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || "") : "";
+        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || attachmentMeta[key] || "") : "";
         return Boolean(url && isImageUrl(url));
     }
 
     function isAttachmentPdf(key: AttachmentKey) {
         const file = attachmentFiles[key];
         if (file) return file.type === "application/pdf";
-        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || "") : "";
+        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || attachmentMeta[key] || "") : "";
         return Boolean(url && isPdfUrl(url));
     }
 
     function getAttachmentPreviewUrl(key: AttachmentKey) {
-        return localPreviewUrls[key] || (hasExistingAttachment(key) ? String(attachmentUrls[key]) : null);
+        return localPreviewUrls[key] || (hasExistingAttachment(key) ? String(attachmentUrls[key] || "") : null);
     }
 
     $effect(() => {
@@ -284,7 +286,7 @@
      * 銀行帳號解密流程
      */
     async function ensureTaxIdReady() {
-        if (!payee?.id || sanitizeEncryptedPlaceholder(taxId).length > 0) return;
+        if (!payee?.id || type !== "personal" || !isFinance || sanitizeEncryptedPlaceholder(taxId).length > 0) return;
 
         try {
             const formData = new FormData();
@@ -454,7 +456,7 @@
 
                         <div class="grid gap-4 md:grid-cols-2">
                             <div class="space-y-2">
-                                <Label for="tax_id"
+                                <Label for="identity_no"
                                     >{type === "vendor"
                                         ? "統一編號 (8碼)"
                                         : "身分證字號"} <span
@@ -462,8 +464,8 @@
                                     ></Label
                                 >
                                 <Input
-                                    id="tax_id"
-                                    name="tax_id"
+                                    id="identity_no"
+                                    name="identity_no"
                                     bind:value={taxId}
                                     placeholder={type === "vendor"
                                         ? "12345678"
@@ -471,7 +473,7 @@
                                     maxlength={type === "vendor" ? 8 : 10}
                                     readonly={!isEditing}
                                     class={viewOnlyFieldClass}
-                                    required
+                                    required={type === "vendor"}
                                 />
                             </div>
                             <div class="space-y-2">

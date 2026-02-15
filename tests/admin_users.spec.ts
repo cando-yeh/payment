@@ -10,7 +10,9 @@ import { test, expect } from '@playwright/test';
 import { supabaseAdmin, injectSession } from './helpers';
 
 test.describe('Admin Users Page', () => {
+    test.describe.configure({ mode: 'serial' });
     let adminUser: any;
+    let financeUser: any;
     let standardUser: any;
     const password = 'password123';
     // Use unique names with timestamp to avoid collisions with leftover test data
@@ -47,10 +49,18 @@ test.describe('Admin Users Page', () => {
 
         // Create standard user
         standardUser = await createUserWithRetry(`admin_test_${ts}_2`, standardUserName);
+
+        // Create finance user
+        financeUser = await createUserWithRetry(`admin_test_${ts}_3`, `FinanceUser_${ts}`);
+        await supabaseAdmin
+            .from('profiles')
+            .update({ is_finance: true })
+            .eq('id', financeUser.id);
     });
 
     test.afterAll(async () => {
         if (adminUser) await supabaseAdmin.auth.admin.deleteUser(adminUser.id);
+        if (financeUser) await supabaseAdmin.auth.admin.deleteUser(financeUser.id);
         if (standardUser) await supabaseAdmin.auth.admin.deleteUser(standardUser.id);
     });
 
@@ -77,6 +87,97 @@ test.describe('Admin Users Page', () => {
 
         // Verify the page shows user count badge
         await expect(page.locator('text=位使用者')).toBeVisible();
+    });
+
+    test('Finance user can view /admin/users but cannot manage lifecycle actions', async ({ page }) => {
+        await injectSession(page, financeUser.email, password);
+        await page.goto('/admin/users');
+        await expect(page).toHaveURL(/\/admin\/users/);
+
+        await expect(page.locator('h1')).toContainText('使用者管理');
+        await expect(page.locator('table')).toBeVisible();
+
+        // Finance can view module but should not see deactivate/delete actions.
+        await expect(page.locator('button[title="停用帳號"]')).toHaveCount(0);
+        await expect(page.locator('button[title="重新啟用"]')).toHaveCount(0);
+        await expect(page.locator('button[title="永久刪除"]')).toHaveCount(0);
+    });
+
+    test('Finance cannot update user permissions directly', async ({ page }) => {
+        await injectSession(page, financeUser.email, password);
+        await page.goto('/admin/users');
+
+        const result = await page.evaluate(async (targetUserId) => {
+            const formData = new FormData();
+            formData.append('userId', targetUserId);
+            formData.append('field', 'is_admin');
+            formData.append('value', 'true');
+            const response = await fetch('?/updateUserPermissions', {
+                method: 'POST',
+                headers: { 'x-sveltekit-action': 'true' },
+                body: formData
+            });
+            return { ok: response.ok, text: await response.text() };
+        }, standardUser.id);
+
+        expect(result.ok).toBeTruthy();
+        expect(result.text).toContain('"type":"failure"');
+        expect(result.text).toContain('僅管理員可執行此操作');
+
+        const { data: profileAfterAttempt, error } = await supabaseAdmin
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', standardUser.id)
+            .single();
+        expect(error).toBeNull();
+        expect(profileAfterAttempt?.is_admin).toBe(false);
+    });
+
+    test('Finance can update bank/approver but cannot elevate permissions via updateUserProfile', async ({ page }) => {
+        await injectSession(page, financeUser.email, password);
+        await page.goto('/admin/users');
+
+        const bankName = '004-臺灣銀行';
+        const bankAccount = '';
+
+        const result = await page.evaluate(
+            async ({ targetUserId, approverId, bankName, bankAccount }) => {
+                const formData = new FormData();
+                formData.append('userId', targetUserId);
+                formData.append('bankName', bankName);
+                if (bankAccount) formData.append('bankAccount', bankAccount);
+                formData.append('approverId', approverId);
+                // Finance should not be able to modify permissions even if values are passed.
+                formData.append('isAdminValue', 'true');
+                formData.append('isFinanceValue', 'true');
+                const response = await fetch('?/updateUserProfile', {
+                    method: 'POST',
+                    headers: { 'x-sveltekit-action': 'true' },
+                    body: formData
+                });
+                return { ok: response.ok, text: await response.text() };
+            },
+            {
+                targetUserId: standardUser.id,
+                approverId: adminUser.id,
+                bankName,
+                bankAccount
+            }
+        );
+
+        expect(result.ok).toBeTruthy();
+        expect(result.text).toContain('"type":"success"');
+
+        const { data: profileAfterSave, error } = await supabaseAdmin
+            .from('profiles')
+            .select('approver_id, bank, is_admin, is_finance')
+            .eq('id', standardUser.id)
+            .single();
+        expect(error).toBeNull();
+        expect(profileAfterSave?.approver_id).toBe(adminUser.id);
+        expect(profileAfterSave?.bank).toBe(bankName);
+        expect(profileAfterSave?.is_admin).toBe(false);
+        expect(profileAfterSave?.is_finance).toBe(false);
     });
 
     test('Admin can toggle finance permission', async ({ page }) => {

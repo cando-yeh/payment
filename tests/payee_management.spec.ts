@@ -74,7 +74,7 @@ test.describe('Payee Management Extended Flow', () => {
 
         const updatedName = testPayeeName + ' (Updated)';
         await page.fill('input[name="name"]', updatedName);
-        await page.fill('input[name="tax_id"]', '12345678');
+        await page.fill('input[name="identity_no"]', '12345678');
         await page.evaluate(() => {
             const bankCodeInput = document.querySelector('input[name="bank_code"]') as HTMLInputElement | null;
             if (!bankCodeInput) throw new Error('bank_code input not found');

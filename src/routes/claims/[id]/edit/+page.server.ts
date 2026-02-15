@@ -43,7 +43,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
 
     const { data: payees, error: payeesError } = await supabase
         .from('payees')
-        .select('id, name, type, tax_id')
+        .select('id, name, type')
         .eq('status', 'available')
         .order('name');
 

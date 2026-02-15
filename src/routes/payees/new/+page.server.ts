@@ -31,8 +31,8 @@ export const actions: Actions = {
         const type = (formData.get('type') as string || '').trim();
         const name = (formData.get('name') as string || '').trim();
 
-        // Extract sensitive fields (to be encrypted by RPC)
-        const tax_id = (formData.get('tax_id') as string || '').trim();
+        // Extract identity field (vendor: unified_no, personal: national_id)
+        const identity_no = ((formData.get('identity_no') as string) || '').trim();
         const bank_account = (formData.get('bank_account') as string || '').trim();
 
         // Extract other fields
@@ -48,12 +48,12 @@ export const actions: Actions = {
         if (!['vendor', 'personal'].includes(type)) {
             return fail(400, { message: '無效的收款人類型' });
         }
-        if (type === 'vendor' && !/^\d{8}$/.test(tax_id)) {
+        if (type === 'vendor' && !/^\d{8}$/.test(identity_no)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });
         }
         // Match frontend validation
         if (type === 'personal') {
-            if (!/^[A-Z][0-9]{9}$/.test(tax_id)) {
+            if (!/^[A-Z][0-9]{9}$/.test(identity_no)) {
                 return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
             }
         }
@@ -111,7 +111,7 @@ export const actions: Actions = {
         }
 
         // Construct proposed_data for non-sensitive info
-        // IMPORTANT: tax_id and bank_account are excluded here as they are handled separately for encryption
+        // IMPORTANT: identity_no and bank_account are excluded here as they are handled separately for encryption
         const proposed_data: Record<string, string> = {
             name,
             type,
@@ -123,14 +123,14 @@ export const actions: Actions = {
 
         // Call the RPC to submit the request
         // The RPC handles:
-        // 1. Encryption of tax_id and bank_account (using pgp_sym_encrypt)
+        // 1. Encryption of identity_no and bank_account (using pgp_sym_encrypt)
         // 2. Insertion into payee_change_requests table
         // 3. Setting initial status to 'pending'
         const { error: rpcError } = await supabase.rpc('submit_payee_change_request', {
             _change_type: 'create',
             _payee_id: null, // New payee, so no ID yet
             _proposed_data: proposed_data,
-            _proposed_tax_id: tax_id,        // Passed securely for encryption
+            _proposed_tax_id: identity_no,        // RPC will map by type (vendor/plain, personal/encrypted)
             _proposed_bank_account: bank_account, // Passed securely for encryption
             _reason: 'New payee request',
             _proposed_attachments: attachments // Pass attachments

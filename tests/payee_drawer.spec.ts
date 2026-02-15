@@ -156,7 +156,7 @@ test.describe('Payee Drawer Functionality', () => {
 
         // Modify a field
         const newService = 'E2E Service ' + Date.now();
-        await drawer.locator('input[name="tax_id"]').fill('12345678');
+        await drawer.locator('input[name="identity_no"]').fill('12345678');
         await drawer.locator('input[name="service_description"]').fill(newService);
         await drawer.locator('input[name="bank_account"]').fill('1234567890');
         await drawer.locator('textarea[name="reason"]').fill('E2E Drawer Update Test');
@@ -212,7 +212,7 @@ test.describe('Payee Drawer Functionality', () => {
 
         // Fill form on the new page
         await page.locator('input[name="name"]').fill(newPayeeName);
-        await page.locator('input[name="tax_id"]').fill('11223344');
+        await page.locator('input[name="identity_no"]').fill('11223344');
 
         // Select Bank
         const bankCombobox = page.locator('button[role="combobox"]');

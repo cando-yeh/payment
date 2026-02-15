@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         .from('claims')
         .select(`
             *,
-            payee:payees(id, name, type, tax_id, bank),
+            payee:payees(id, name, type, bank),
             applicant:profiles!claims_applicant_id_fkey(id, full_name, approver_id),
             items:claim_items(*)
         `)

@@ -7,6 +7,38 @@ import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upl
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+const PAYEE_SELECT_PRIMARY = 'id, name, type, status, bank, unified_no, national_id_tail, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at';
+const PAYEE_SELECT_FALLBACK = 'id, name, type, status, bank, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at';
+const REQUEST_SELECT_PRIMARY = `
+            id,
+            change_type,
+            status,
+            proposed_data,
+            proposed_unified_no,
+            proposed_national_id_tail,
+            proposed_bank_account,
+            proposed_bank_account_tail,
+            proposed_attachments,
+            reason,
+            created_at,
+            requested_by,
+            payee_id
+        `;
+const REQUEST_SELECT_FALLBACK = `
+            id,
+            change_type,
+            status,
+            proposed_data,
+            proposed_bank_account,
+            proposed_bank_account_tail,
+            proposed_attachments,
+            reason,
+            created_at,
+            requested_by,
+            payee_id
+        `;
+const PAYEE_UPDATE_SELECT_PRIMARY = 'id, name, type, bank, unified_no, national_id_tail, service_description, extra_info, attachments';
+const PAYEE_UPDATE_SELECT_FALLBACK = 'id, name, type, bank, service_description, extra_info, attachments';
 
 function normalizeComparable(value: unknown): string {
     if (value == null) return '';
@@ -16,6 +48,19 @@ function normalizeComparable(value: unknown): string {
 function sanitizeEncryptedPlaceholder(value: unknown): string {
     const text = normalizeComparable(value);
     return text.includes('已加密') ? '' : text;
+}
+
+function normalizePayeeIdentity(payee: any): string {
+    if (!payee) return '';
+    if (payee.type === 'vendor') {
+        return normalizeComparable(payee.unified_no);
+    }
+    return '';
+}
+
+function isMissingColumnError(err: any): boolean {
+    const text = String(err?.message || '').toLowerCase();
+    return err?.code === '42703' || (text.includes('column') && text.includes('does not exist'));
 }
 
 function getServiceRoleClient() {
@@ -32,42 +77,44 @@ export const load: PageServerLoad = async ({ locals }) => {
         throw redirect(303, '/auth');
     }
 
-    const isFinanceOrAdmin = Boolean(
-        locals.user?.is_finance || locals.user?.is_admin
-    );
+    const isFinance = Boolean(locals.user?.is_finance);
     const serviceRoleClient = getServiceRoleClient();
 
-    let pendingRequestsQuery = serviceRoleClient
-        .from('payee_change_requests')
-        .select(`
-            id, 
-            change_type, 
-            status, 
-            proposed_data, 
-            proposed_tax_id,
-            proposed_bank_account,
-            proposed_bank_account_tail,
-            proposed_attachments,
-            reason, 
-            created_at, 
-            requested_by, 
-            payee_id
-        `)
+    const buildPendingRequestsQuery = (selectClause: string) =>
+        serviceRoleClient
+            .from('payee_change_requests')
+            .select(selectClause)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-    if (!isFinanceOrAdmin) {
+    let pendingRequestsQuery = buildPendingRequestsQuery(REQUEST_SELECT_PRIMARY);
+    if (!isFinance) {
         pendingRequestsQuery = pendingRequestsQuery.eq('requested_by', session.user.id);
     }
 
-    // 1. Fetch data in parallel
-    const [payeesResponse, requestsResponse] = await Promise.all([
+    // 1. Fetch data in parallel, while keeping compatibility with pre-migration schemas.
+    let [payeesResponse, requestsResponse]: any = await Promise.all([
         supabase
             .from('payees')
-            .select('id, name, type, status, bank, tax_id, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at')
+            .select(PAYEE_SELECT_PRIMARY)
             .order('created_at', { ascending: false }),
         pendingRequestsQuery
     ]);
+
+    if (payeesResponse.error && isMissingColumnError(payeesResponse.error)) {
+        payeesResponse = await supabase
+            .from('payees')
+            .select(PAYEE_SELECT_FALLBACK)
+            .order('created_at', { ascending: false });
+    }
+
+    if (requestsResponse.error && isMissingColumnError(requestsResponse.error)) {
+        let fallbackRequestsQuery = buildPendingRequestsQuery(REQUEST_SELECT_FALLBACK);
+        if (!isFinance) {
+            fallbackRequestsQuery = fallbackRequestsQuery.eq('requested_by', session.user.id);
+        }
+        requestsResponse = await fallbackRequestsQuery;
+    }
 
     if (payeesResponse.error) {
         console.error('Error fetching payees:', payeesResponse.error);
@@ -95,7 +142,7 @@ export const load: PageServerLoad = async ({ locals }) => {
                 return data?.signedUrl || null;
             };
 
-            if (attachments.id_card_front || attachments.id_card_back || attachments.bank_passbook) {
+            if (isFinance && (attachments.id_card_front || attachments.id_card_back || attachments.bank_passbook)) {
                 const [front, back, bank] = await Promise.all([
                     getSignedUrl(attachments.id_card_front),
                     getSignedUrl(attachments.id_card_back),
@@ -109,6 +156,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
             return {
                 ...payee,
+                identity_no: normalizePayeeIdentity(payee),
                 attachment_urls: signedUrls
             };
         })
@@ -125,10 +173,14 @@ export const load: PageServerLoad = async ({ locals }) => {
                     bank_passbook: null
                 };
 
+                const canViewRequestAttachments =
+                    isFinance ||
+                    (req?.requested_by === session.user.id && req?.status === 'pending');
                 if (
-                    proposedAttachments?.id_card_front ||
-                    proposedAttachments?.id_card_back ||
-                    proposedAttachments?.bank_passbook
+                    canViewRequestAttachments &&
+                    (proposedAttachments?.id_card_front ||
+                        proposedAttachments?.id_card_back ||
+                        proposedAttachments?.bank_passbook)
                 ) {
                     const getSignedUrl = async (path?: string) => {
                         if (!path) return null;
@@ -149,7 +201,7 @@ export const load: PageServerLoad = async ({ locals }) => {
                     req.proposed_attachment_urls.bank_passbook = bank;
                 }
 
-                if (req?.proposed_tax_id && !req?.proposed_data?.tax_id) {
+                if (isFinance && req?.proposed_national_id_tail && !req?.proposed_data?.identity_no) {
                     try {
                         const { data: proposedTaxId } = await supabase.rpc(
                             'reveal_payee_change_request_tax_id',
@@ -158,14 +210,20 @@ export const load: PageServerLoad = async ({ locals }) => {
                         if (proposedTaxId) {
                             req.proposed_data = {
                                 ...(req.proposed_data || {}),
-                                tax_id: String(proposedTaxId)
+                                identity_no: String(proposedTaxId)
                             };
                         }
                     } catch (e) {
                         console.warn('Failed to reveal proposed tax id for request:', req.id);
                     }
                 }
-                if (req?.proposed_bank_account && !req?.proposed_bank_account_plain) {
+                if (!req?.proposed_data?.identity_no && req?.proposed_unified_no) {
+                    req.proposed_data = {
+                        ...(req.proposed_data || {}),
+                        identity_no: String(req.proposed_unified_no)
+                    };
+                }
+                if (isFinance && req?.proposed_bank_account && !req?.proposed_bank_account_plain) {
                     try {
                         const { data: proposedBankAccount } = await supabase.rpc(
                             'reveal_payee_change_request_bank_account',
@@ -179,14 +237,14 @@ export const load: PageServerLoad = async ({ locals }) => {
                     }
                 }
 
-                if (req?.payee_id) {
+                if (isFinance && req?.payee_id) {
                     try {
                         const { data: linkedTaxId } = await supabase.rpc(
                             'reveal_payee_tax_id',
                             { _payee_id: req.payee_id }
                         );
                         if (linkedTaxId) {
-                            req.linked_tax_id = String(linkedTaxId);
+                            req.linked_identity_no = String(linkedTaxId);
                         }
                     } catch (e) {
                         console.warn('Failed to reveal linked payee tax id for request:', req.id);
@@ -236,8 +294,10 @@ export const actions: Actions = {
         // Extract fields
         const type = (formData.get('type') as string || '').trim();
         const name = (formData.get('name') as string || '').trim();
-        const rawTaxId = (formData.get('tax_id') as string || '').trim();
-        const tax_id = sanitizeEncryptedPlaceholder(rawTaxId);
+        const rawIdentity = (
+            (formData.get('identity_no') as string) || ''
+        ).trim();
+        const identity_no = sanitizeEncryptedPlaceholder(rawIdentity);
         const rawBankAccount = (formData.get('bank_account') as string || '').trim();
         const bank_account = sanitizeEncryptedPlaceholder(rawBankAccount);
         const bank_code = (formData.get('bank_code') as string || '').trim();
@@ -252,21 +312,33 @@ export const actions: Actions = {
         // 先讀目前正式資料，用於 diff 判斷（reason 不計入）
         const { data: currentPayee, error: currentPayeeError } = await supabase
             .from('payees')
-            .select('id, name, type, bank, tax_id, service_description, extra_info, attachments')
+            .select(PAYEE_UPDATE_SELECT_PRIMARY)
             .eq('id', payeeId)
             .single();
 
-        if (currentPayeeError || !currentPayee) {
+        let resolvedCurrentPayee = currentPayee as any;
+        let resolvedCurrentPayeeError = currentPayeeError;
+        if (resolvedCurrentPayeeError && isMissingColumnError(resolvedCurrentPayeeError)) {
+            const fallbackCurrentPayee = await supabase
+                .from('payees')
+                .select(PAYEE_UPDATE_SELECT_FALLBACK)
+                .eq('id', payeeId)
+                .single();
+            resolvedCurrentPayee = fallbackCurrentPayee.data as any;
+            resolvedCurrentPayeeError = fallbackCurrentPayee.error;
+        }
+
+        if (resolvedCurrentPayeeError || !resolvedCurrentPayee) {
             return fail(404, { message: '找不到收款人資料' });
         }
 
         // --- Basic Validation ---
         if (!name) return fail(400, { message: '收款人名稱為必填' });
 
-        if (type === 'vendor' && tax_id && !/^\d{8}$/.test(tax_id)) {
+        if (type === 'vendor' && identity_no && !/^\d{8}$/.test(identity_no)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });
         }
-        if (type === 'personal' && tax_id && !/^[A-Z][0-9]{9}$/.test(tax_id)) {
+        if (type === 'personal' && identity_no && !/^[A-Z][0-9]{9}$/.test(identity_no)) {
             return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
         }
         // --- Handle Attachments for Personal Payees ---
@@ -274,7 +346,7 @@ export const actions: Actions = {
         let attachmentsChanged = false;
 
         if (type === 'personal') {
-            const currentAttachments = currentPayee?.attachments || {};
+            const currentAttachments = resolvedCurrentPayee?.attachments || {};
 
             const files = {
                 id_front: formData.get('attachment_id_front') as File,
@@ -353,19 +425,19 @@ export const actions: Actions = {
                 }
             }
         }
-        const currentExtra = currentPayee.extra_info || {};
+        const currentExtra = resolvedCurrentPayee.extra_info || {};
         const proposed_data: Record<string, string> = {};
 
-        if (normalizeComparable(name) !== normalizeComparable(currentPayee.name)) {
+        if (normalizeComparable(name) !== normalizeComparable(resolvedCurrentPayee.name)) {
             proposed_data.name = name;
         }
-        if (normalizeComparable(type) !== normalizeComparable(currentPayee.type)) {
+        if (normalizeComparable(type) !== normalizeComparable(resolvedCurrentPayee.type)) {
             proposed_data.type = type;
         }
-        if (normalizeComparable(bank_code) !== normalizeComparable(currentPayee.bank)) {
+        if (normalizeComparable(bank_code) !== normalizeComparable(resolvedCurrentPayee.bank)) {
             proposed_data.bank_code = bank_code;
         }
-        if (normalizeComparable(service_description) !== normalizeComparable(currentPayee.service_description)) {
+        if (normalizeComparable(service_description) !== normalizeComparable(resolvedCurrentPayee.service_description)) {
             proposed_data.service_description = service_description;
         }
         if (type === 'personal') {
@@ -377,16 +449,20 @@ export const actions: Actions = {
             }
         }
 
-        let taxIdChanged = false;
-        if (tax_id) {
-            let currentTaxId = sanitizeEncryptedPlaceholder(currentPayee.tax_id);
-            if (!currentTaxId) {
+        let identityChanged = false;
+        if (identity_no) {
+            let currentIdentity = '';
+            if (type === 'vendor') {
+                currentIdentity = sanitizeEncryptedPlaceholder(
+                    resolvedCurrentPayee.unified_no
+                );
+            } else {
                 const { data: revealedTaxId } = await supabase.rpc('reveal_payee_tax_id', {
                     _payee_id: payeeId
                 });
-                currentTaxId = sanitizeEncryptedPlaceholder(revealedTaxId);
+                currentIdentity = sanitizeEncryptedPlaceholder(revealedTaxId);
             }
-            taxIdChanged = normalizeComparable(tax_id) !== normalizeComparable(currentTaxId);
+            identityChanged = normalizeComparable(identity_no) !== normalizeComparable(currentIdentity);
         }
 
         let bankAccountChanged = false;
@@ -401,7 +477,7 @@ export const actions: Actions = {
 
         const hasChanges =
             Object.keys(proposed_data).length > 0 ||
-            taxIdChanged ||
+            identityChanged ||
             bankAccountChanged ||
             attachmentsChanged;
 
@@ -413,7 +489,7 @@ export const actions: Actions = {
             _change_type: 'update',
             _payee_id: payeeId,
             _proposed_data: proposed_data,
-            _proposed_tax_id: taxIdChanged ? tax_id : null,
+            _proposed_tax_id: identityChanged ? identity_no : null,
             _proposed_bank_account: bankAccountChanged ? bank_account : null,
             _reason: reason,
             _proposed_attachments: attachments
@@ -430,9 +506,10 @@ export const actions: Actions = {
     /**
      * 解密收款人銀行帳號 (所有已登入使用者可查看)
      */
-    revealPayeeAccount: async ({ request, locals: { supabase, getSession } }) => {
+    revealPayeeAccount: async ({ request, locals: { supabase, getSession, user } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: '未登入' });
+        if (!user?.is_finance) return fail(403, { message: '權限不足：僅財務可檢視完整帳號' });
 
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
@@ -450,9 +527,10 @@ export const actions: Actions = {
 
         return { success: true, decryptedAccount: data };
     },
-    revealPayeeTaxId: async ({ request, locals: { supabase, getSession } }) => {
+    revealPayeeTaxId: async ({ request, locals: { supabase, getSession, user } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: '未登入' });
+        if (!user?.is_finance) return fail(403, { message: '權限不足：僅財務可檢視完整身分證字號' });
 
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
@@ -603,8 +681,8 @@ export const actions: Actions = {
      */
     removePayee: async ({ request, locals: { getSession, user } }) => {
         const session = await getSession();
-        if (!session || (!user?.is_finance && !user?.is_admin)) {
-            return fail(403, { message: '權限不足：僅財務或管理員可執行此操作' });
+        if (!session || !user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務可執行此操作' });
         }
 
         const formData = await request.formData();
@@ -643,8 +721,8 @@ export const actions: Actions = {
      */
     toggleStatus: async ({ request, locals: { getSession, user } }) => {
         const session = await getSession();
-        if (!session || (!user?.is_finance && !user?.is_admin)) {
-            return fail(403, { message: '權限不足：僅財務或管理員可執行此操作' });
+        if (!session || !user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務可執行此操作' });
         }
 
         const formData = await request.formData();

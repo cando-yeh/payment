@@ -10,6 +10,7 @@
 
     let {
         editable = false,
+        allowRoleEdit = true,
         isEditing = false,
         isAdmin = $bindable(false),
         isFinance = $bindable(false),
@@ -88,13 +89,15 @@
                     <Button
                         type="button"
                         variant="outline"
-                        disabled={!isEditing}
+                        disabled={!isEditing || !allowRoleEdit}
                         class={getRoleClass(
                             role.key,
                             isRoleEnabled(role.key),
                             "editable",
                         )}
-                        onclick={() => toggleRole(role.key)}
+                        onclick={() => {
+                            if (allowRoleEdit) toggleRole(role.key);
+                        }}
                     >
                         <svelte:component this={role.icon} class="h-4 w-4" />
                         <span>{role.label}</span>

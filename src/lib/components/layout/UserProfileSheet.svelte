@@ -28,6 +28,7 @@
         open = $bindable(false),
         isManagementMode = false,
         approverOptions = [],
+        canEditPermissions = true,
     } = $props();
 
     let loading = $state(false);
@@ -325,6 +326,7 @@
                 const response = await timedFetch(actionPath, {
                     method: "POST",
                     body: formData,
+                    headers: { "x-sveltekit-action": "true" },
                 });
                 const text = await response.text();
                 const result = deserialize(text) as any;
@@ -453,6 +455,7 @@
                         {approverOptions}
                         currentUserId={user.id}
                         helperText={roleApproverHelperText}
+                        allowRoleEdit={canEditPermissions}
                     />
 
                     <input type="hidden" name="isAdminValue" value={isAdmin} />

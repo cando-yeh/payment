@@ -82,7 +82,10 @@ const authHandle: Handle = async ({ event, resolve }) => {
         };
 
         // 3. 行政/管理路由保護
-        if (pathname.startsWith('/admin') && !event.locals.user.is_admin) {
+        // /admin/users 同時允許 admin 與 finance 進入（實際可執行操作由各 action 再細分）
+        const canAccessAdminUsers = pathname.startsWith('/admin/users') &&
+            (event.locals.user.is_admin || event.locals.user.is_finance);
+        if (pathname.startsWith('/admin') && !event.locals.user.is_admin && !canAccessAdminUsers) {
             throw redirect(303, '/');
         }
 

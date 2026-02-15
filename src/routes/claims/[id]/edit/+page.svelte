@@ -38,7 +38,6 @@ import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
         id: string;
         name: string;
         type: string;
-        tax_id?: string;
     }
 
     let { data }: { data: PageData & { claim: Claim; payees: Payee[] } } =

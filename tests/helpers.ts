@@ -172,11 +172,15 @@ export async function postFormAction(
                     fd.append(k, v);
                 }
             }
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 20000);
             const res = await fetch(targetUrl, {
                 method: 'POST',
                 body: fd,
                 headers: { 'x-sveltekit-action': 'true' },
+                signal: controller.signal,
             });
+            clearTimeout(timeout);
             return res.text();
         },
         { targetUrl: url, payload: form }
@@ -198,11 +202,15 @@ export async function postFormActionDetailed(
                     fd.append(k, v);
                 }
             }
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 20000);
             const res = await fetch(targetUrl, {
                 method: 'POST',
                 body: fd,
                 headers: { 'x-sveltekit-action': 'true' },
+                signal: controller.signal,
             });
+            clearTimeout(timeout);
             return { url: res.url, body: await res.text(), status: res.status };
         },
         { targetUrl: url, payload: form }

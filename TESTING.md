@@ -19,6 +19,10 @@ This command does:
 2. `test:run`: run Vitest tests
 3. `test:e2e:stable`: run Playwright E2E with `--workers=2`
 
+Latest baseline (2026-02-15):
+- Vitest: 15 passed
+- Playwright: 55 passed
+
 ## Why `stable`
 
 E2E tests create users and sign in many times. High parallelism can trigger Supabase Auth rate limits.
@@ -45,6 +49,10 @@ Using `--workers=2` reduces flaky failures while keeping acceptable speed.
 ### UI text assertion failures
 - Cause: text changes or i18n wording updates.
 - Action: prefer `data-testid` selectors for critical actions/dialogs.
+
+### Schema mismatch after new migrations (e.g. payee identity split)
+- Cause: test DB not yet migrated to latest columns.
+- Action: apply latest migrations before running e2e; current server code has fallback for read path, but migration is still required for full feature set.
 
 ## CI suggestion
 

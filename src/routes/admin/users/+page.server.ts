@@ -56,8 +56,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     const session = await locals.getSession();
     if (!session) throw redirect(303, '/auth');
 
-    // 🔒 使用 hooks.server.ts 已注入的 locals.user 做權限檢查，無需額外查詢
-    if (!locals.user?.is_admin) {
+    // 🔒 管理頁入口：允許 admin 與 finance 檢視
+    const canViewUserModule = Boolean(locals.user?.is_admin || locals.user?.is_finance);
+    if (!canViewUserModule) {
         throw redirect(303, '/');
     }
 
@@ -78,7 +79,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
         users: users || [],
         approverOptions: (users || []).map((u: any) => ({ id: u.id, full_name: u.full_name })),
         defaultTab,
-        currentUserId: session.user.id
+        currentUserId: session.user.id,
+        canManagePermissions: locals.user?.is_admin ?? false,
+        canManageLifecycle: locals.user?.is_admin ?? false,
+        canManageProfileBasic: canViewUserModule,
+        isAdminViewer: locals.user?.is_admin ?? false,
+        isFinanceViewer: locals.user?.is_finance ?? false
     };
 };
 
@@ -346,9 +352,11 @@ export const actions: Actions = {
     },
 
     updateUserProfile: async ({ request, locals }) => {
-        // 🔒 權限驗證
-        if (!locals.user?.is_admin) {
-            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        // 🔒 權限驗證：admin/finance 可更新（欄位範圍不同）
+        const isAdmin = Boolean(locals.user?.is_admin);
+        const isFinance = Boolean(locals.user?.is_finance);
+        if (!isAdmin && !isFinance) {
+            return fail(403, { message: '權限不足：僅管理員或財務可執行此操作' });
         }
 
         const formData = await request.formData();
@@ -356,8 +364,8 @@ export const actions: Actions = {
         const fullNameRaw = formData.get('fullName');
         const bankNameRaw = formData.get('bankName');
         const bankAccountRaw = formData.get('bankAccount');
-        const isAdmin = formData.get('isAdminValue') === 'true';
-        const isFinance = formData.get('isFinanceValue') === 'true';
+        const nextIsAdmin = formData.get('isAdminValue') === 'true';
+        const nextIsFinance = formData.get('isFinanceValue') === 'true';
         const approverIdRaw = formData.get('approverId');
         const approverId = typeof approverIdRaw === 'string' ? approverIdRaw.trim() : '';
 
@@ -372,19 +380,17 @@ export const actions: Actions = {
         }
 
         const updatePayload: Record<string, any> = {
-            is_admin: isAdmin,
-            is_finance: isFinance,
             approver_id: approverId
         };
 
         // 🔒 姓名權限防範：僅限本人修改
         const session = await locals.getSession();
         const currentUserId = session?.user?.id;
-        if (userId === currentUserId && !isAdmin) {
+        if (isAdmin && userId === currentUserId && !nextIsAdmin) {
             return fail(400, { message: '不可移除自己的管理員權限' });
         }
 
-        if (fullName) {
+        if (isAdmin && fullName) {
             if (userId === currentUserId) {
                 updatePayload.full_name = fullName;
             } else {
@@ -396,8 +402,15 @@ export const actions: Actions = {
             updatePayload.bank = bankName || null;
         }
 
+        if (isAdmin) {
+            updatePayload.is_admin = nextIsAdmin;
+            updatePayload.is_finance = nextIsFinance;
+        }
+
         // 1. 更新基本資料與權限
-        const { data: updatedRow, error: updateError } = await locals.supabase
+        // 使用 service role 繞過 profiles RLS，實際授權由上方 admin/finance 邏輯控管。
+        const serviceRoleClient = getServiceRoleClient();
+        const { data: updatedRow, error: updateError } = await serviceRoleClient
             .from('profiles')
             .update(updatePayload)
             .eq('id', userId)
@@ -428,9 +441,9 @@ export const actions: Actions = {
     },
 
     revealUserBankAccount: async ({ request, locals }) => {
-        // 🔒 權限驗證
-        if (!locals.user?.is_admin) {
-            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        // 🔒 權限驗證：admin/finance 可查看（細節由 RPC 驗證）
+        if (!locals.user?.is_admin && !locals.user?.is_finance) {
+            return fail(403, { message: '權限不足：僅管理員或財務可執行此操作' });
         }
 
         const formData = await request.formData();
@@ -451,8 +464,8 @@ export const actions: Actions = {
     },
 
     getUserProfileSnapshot: async ({ request, locals }) => {
-        if (!locals.user?.is_admin) {
-            return fail(403, { message: '權限不足：僅管理員可執行此操作' });
+        if (!locals.user?.is_admin && !locals.user?.is_finance) {
+            return fail(403, { message: '權限不足：僅管理員或財務可執行此操作' });
         }
 
         const formData = await request.formData();

@@ -46,6 +46,16 @@
             const linkedPayee = req.payee_id
                 ? payeeById.get(req.payee_id)
                 : null;
+            const proposedBankAccountDisplay = req.proposed_bank_account_tail
+                ? `*******${String(req.proposed_bank_account_tail).slice(-5)}`
+                : req.proposed_bank_account
+                  ? "*******"
+                  : "-";
+            const linkedBankAccountDisplay = linkedPayee?.bank_account_tail
+                ? `*******${String(linkedPayee.bank_account_tail).slice(-5)}`
+                : linkedPayee?.bank_account
+                  ? "*******"
+                  : "-";
             return {
                 id: req.id, // Request ID
                 name:
@@ -60,11 +70,10 @@
                     req.change_type === "create"
                         ? req.proposed_data?.bank_code || "-"
                         : linkedPayee?.bank || "-",
-                bank_account: req.proposed_bank_account_tail
-                    ? `*******${String(req.proposed_bank_account_tail).slice(-5)}`
-                    : req.proposed_bank_account
-                      ? "*******"
-                      : "-",
+                bank_account:
+                    req.change_type === "create"
+                        ? proposedBankAccountDisplay
+                        : linkedBankAccountDisplay,
                 status: `pending_${req.change_type}`,
                 source: "request",
                 payload: {
@@ -483,7 +492,7 @@
                                         ? revealedAccounts[payee.id]
                                         : payee.bank_account || "-"}
                                 </span>
-                                {#if payee.source === "active" && payee.bank_account && payee.bank_account !== "-"}
+                                {#if data.is_finance && payee.source === "active" && payee.bank_account && payee.bank_account !== "-"}
                                     <Button
                                         variant="ghost"
                                         size="icon"
@@ -521,7 +530,7 @@
                         </Table.Cell>
                         <Table.Cell class="text-right">
                             <div class="flex items-center justify-end gap-1">
-                                {#if payee.source === "active" && (data.is_finance || data.is_admin)}
+                                {#if payee.source === "active" && data.is_finance}
                                     <Button
                                         variant="ghost"
                                         size="icon"
@@ -557,7 +566,7 @@
                                         <Trash2 class="h-4 w-4" />
                                     </Button>
                                 {/if}
-                                {#if payee.source === "active" && !(data.is_finance || data.is_admin) && payee.status === "available"}
+                                {#if payee.source === "active" && !data.is_finance && payee.status === "available"}
                                     <Button
                                         variant="ghost"
                                         size="icon"

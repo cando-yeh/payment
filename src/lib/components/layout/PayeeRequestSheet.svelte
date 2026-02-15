@@ -38,7 +38,7 @@
         linkedPayee?.service_description || "",
     );
     let beforeTaxId = $derived(
-        request?.payload?.linked_tax_id || linkedPayee?.tax_id || "",
+        request?.payload?.linked_identity_no || linkedPayee?.identity_no || linkedPayee?.unified_no || "",
     );
     let beforeEmail = $derived(linkedPayee?.extra_info?.email || "");
     let beforeAddress = $derived(linkedPayee?.extra_info?.address || "");
@@ -123,7 +123,8 @@
         bankAccountDisplay(proposedBankAccountPlain, afterBankAccountTail),
     );
     let taxIdDisplayAfter = $derived.by(() => {
-        if (hasOwn(proposedData, "tax_id")) return sanitizeEncryptedPlaceholder(proposedData.tax_id);
+        if (request?.payload?.proposed_unified_no) return sanitizeEncryptedPlaceholder(request.payload.proposed_unified_no);
+        if (hasOwn(proposedData, "identity_no")) return sanitizeEncryptedPlaceholder(proposedData.identity_no);
         return "";
     });
     let taxIdDisplayBefore = $derived(sanitizeEncryptedPlaceholder(beforeTaxId));
@@ -136,7 +137,7 @@
         hasOwn(proposedData, "name") && changed(beforeName, displayName),
     );
     let isTaxIdChanged = $derived(
-        hasOwn(proposedData, "tax_id") &&
+        hasOwn(proposedData, "identity_no") &&
             changed(taxIdDisplayBefore, taxIdDisplayAfter),
     );
     let isServiceChanged = $derived(

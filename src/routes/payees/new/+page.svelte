@@ -124,26 +124,26 @@
 
                     <div class="space-y-2">
                         {#if payeeType === "vendor"}
-                            <Label for="tax_id"
+                            <Label for="identity_no"
                                 >統一編號 (8碼) <span class="text-red-500"
                                     >*</span
                                 ></Label
                             >
                             <Input
-                                id="tax_id"
-                                name="tax_id"
+                                id="identity_no"
+                                name="identity_no"
                                 placeholder="12345678"
                                 maxlength={8}
                                 required
                             />
                         {:else}
-                            <Label for="tax_id"
+                            <Label for="identity_no"
                                 >身分證字號 <span class="text-red-500">*</span
                                 ></Label
                             >
                             <Input
-                                id="id_number"
-                                name="tax_id"
+                                id="identity_no"
+                                name="identity_no"
                                 placeholder="A123456789"
                                 maxlength={10}
                                 required

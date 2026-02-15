@@ -209,7 +209,7 @@
             <div>
                 <h1 class="text-3xl font-bold tracking-tight">使用者管理</h1>
                 <p class="text-muted-foreground">
-                    管理員可停用/啟用使用者，僅對無任何關聯資料的帳號執行永久刪除。
+                    管理員可停用/啟用/刪除使用者；財務可維護銀行與核准人資訊。
                 </p>
             </div>
             <div class="flex items-center gap-2 rounded-lg bg-muted px-4 py-2">
@@ -341,7 +341,7 @@
                                 <div
                                     class="flex items-center justify-end gap-1"
                                 >
-                                    {#if isActiveUser(user)}
+                                    {#if data.canManageLifecycle && isActiveUser(user)}
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -364,7 +364,7 @@
                                         >
                                             <UserX class="h-4 w-4" />
                                         </Button>
-                                    {:else}
+                                    {:else if data.canManageLifecycle}
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -386,27 +386,29 @@
                                             <UserCheck class="h-4 w-4" />
                                         </Button>
                                     {/if}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
-                                        onclick={(e) => {
-                                            e.stopPropagation();
-                                            openSystemConfirm({
-                                                title: "確認永久刪除",
-                                                description: `確定要永久刪除使用者「${user.full_name}」？此操作無法復原。`,
-                                                buttonLabel: "永久刪除",
-                                                buttonVariant: "destructive",
-                                                action: () =>
-                                                    removeUser(
-                                                        user.id,
-                                                    ),
-                                            });
-                                        }}
-                                        title="永久刪除"
-                                    >
-                                        <Trash2 class="h-4 w-4" />
-                                    </Button>
+                                    {#if data.canManageLifecycle}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+                                            onclick={(e) => {
+                                                e.stopPropagation();
+                                                openSystemConfirm({
+                                                    title: "確認永久刪除",
+                                                    description: `確定要永久刪除使用者「${user.full_name}」？此操作無法復原。`,
+                                                    buttonLabel: "永久刪除",
+                                                    buttonVariant: "destructive",
+                                                    action: () =>
+                                                        removeUser(
+                                                            user.id,
+                                                        ),
+                                                });
+                                            }}
+                                            title="永久刪除"
+                                        >
+                                            <Trash2 class="h-4 w-4" />
+                                        </Button>
+                                    {/if}
                                 </div>
                             </Table.Cell>
                         </Table.Row>
@@ -432,6 +434,7 @@
         bind:open={isSheetOpen}
         isManagementMode={true}
         approverOptions={data.approverOptions}
+        canEditPermissions={data.canManagePermissions}
     />
 {/if}
 

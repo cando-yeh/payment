@@ -43,7 +43,6 @@ test.describe.serial('Claim Creation Variants', () => {
         const { data: vendor } = await supabaseAdmin.from('payees').insert({
             name: `Variant Vendor ${ts}`,
             type: 'vendor',
-            tax_id: `V${ts}`.slice(0, 8),
             bank: '004',
             status: 'available'
         }).select('id').single();
@@ -52,7 +51,6 @@ test.describe.serial('Claim Creation Variants', () => {
         const { data: personal } = await supabaseAdmin.from('payees').insert({
             name: `Variant Personal ${ts}`,
             type: 'personal',
-            tax_id: `P${ts}`.slice(0, 8),
             bank: '004',
             status: 'available'
         }).select('id').single();
