@@ -1,0 +1,207 @@
+import { EDITABLE_CLAIM_STATUSES } from "$lib/server/claims/constants";
+
+type ClaimItemInput = {
+    date?: string;
+    date_start?: string;
+    category?: string;
+    description?: string;
+    amount?: number | string;
+    invoice_number?: string;
+    extra?: Record<string, unknown>;
+};
+
+export type EditableClaimRow = {
+    id: string;
+    applicant_id: string;
+    claim_type: string;
+    status: string;
+};
+
+export type ParsedEditForm = {
+    payeeId: string;
+    isFloating: boolean;
+    bankCode: string | null;
+    bankBranch: string | null;
+    bankAccount: string | null;
+    accountName: string | null;
+    normalizedItems: {
+        claim_id: string;
+        item_index: number;
+        date_start: string;
+        date_end: null;
+        category: string;
+        description: string;
+        amount: number;
+        invoice_number: string | null;
+        attachment_status: "pending_supplement";
+        extra: Record<string, unknown>;
+    }[];
+    totalAmount: number;
+};
+
+function parseItems(value: string): ClaimItemInput[] | null {
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+export async function getOwnedClaim(
+    supabase: App.Locals["supabase"],
+    id: string,
+    userId: string
+) {
+    return supabase
+        .from("claims")
+        .select("id, applicant_id, status")
+        .eq("id", id)
+        .eq("applicant_id", userId)
+        .single();
+}
+
+export function parseAndValidateEditForm(
+    formData: FormData,
+    claimRow: EditableClaimRow,
+    claimId: string
+): { ok: true; value: ParsedEditForm } | { ok: false; status: number; message: string } {
+    const payeeId = String(formData.get("payee_id") || "");
+    const isFloating = formData.get("is_floating") === "on";
+    const bankCode = isFloating ? String(formData.get("bank_code") || "").trim() : null;
+    const bankBranch = isFloating ? String(formData.get("bank_branch") || "").trim() : null;
+    const bankAccount = isFloating ? String(formData.get("bank_account") || "").trim() : null;
+    const accountName = isFloating ? String(formData.get("account_name") || "").trim() : null;
+    const itemsJson = String(formData.get("items") || "[]");
+
+    if (claimRow.claim_type !== "employee" && !payeeId) {
+        return { ok: false, status: 400, message: "Payee is required" };
+    }
+    if (isFloating && (!bankCode || !accountName || !bankAccount)) {
+        return { ok: false, status: 400, message: "Floating account details are incomplete" };
+    }
+
+    const parsedItems = parseItems(itemsJson);
+    if (!parsedItems || parsedItems.length === 0) {
+        return { ok: false, status: 400, message: "At least one item is required" };
+    }
+
+    const normalizedItems = parsedItems.map((item, index) => {
+        const amount = Number(item.amount);
+        return {
+            claim_id: claimId,
+            item_index: index + 1,
+            date_start: item.date || item.date_start || new Date().toISOString().slice(0, 10),
+            date_end: null,
+            category: String(item.category || "general").trim(),
+            description: String(item.description || "").trim(),
+            amount,
+            invoice_number: item.invoice_number || null,
+            attachment_status: "pending_supplement" as const,
+            extra: item.extra || {}
+        };
+    });
+
+    if (normalizedItems.some((item) => !Number.isFinite(item.amount) || item.amount <= 0)) {
+        return { ok: false, status: 400, message: "All item amounts must be greater than 0" };
+    }
+
+    const totalAmount = normalizedItems.reduce((sum, item) => sum + item.amount, 0);
+    return {
+        ok: true,
+        value: {
+            payeeId,
+            isFloating,
+            bankCode,
+            bankBranch,
+            bankAccount,
+            accountName,
+            normalizedItems,
+            totalAmount
+        }
+    };
+}
+
+export async function persistEditedClaim(
+    supabase: App.Locals["supabase"],
+    claimRow: EditableClaimRow,
+    parsed: ParsedEditForm
+): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+    const { error: updateClaimError } = await supabase.rpc("update_claim", {
+        _claim_id: claimRow.id,
+        _payee_id: claimRow.claim_type === "employee" ? null : parsed.payeeId,
+        _total_amount: parsed.totalAmount,
+        _bank_code: parsed.isFloating ? parsed.bankCode : null,
+        _bank_branch: parsed.isFloating ? (parsed.bankBranch || null) : null,
+        _bank_account: parsed.isFloating ? parsed.bankAccount : null,
+        _account_name: parsed.isFloating ? parsed.accountName : null
+    });
+    if (updateClaimError) {
+        console.error("Error updating claim:", updateClaimError);
+        return { ok: false, status: 500, message: "Failed to update claim" };
+    }
+
+    const { error: deleteItemsError } = await supabase
+        .from("claim_items")
+        .delete()
+        .eq("claim_id", claimRow.id);
+    if (deleteItemsError) {
+        console.error("Error clearing claim items:", deleteItemsError);
+        return { ok: false, status: 500, message: "Failed to update claim items" };
+    }
+
+    const { error: insertItemsError } = await supabase
+        .from("claim_items")
+        .insert(parsed.normalizedItems);
+    if (insertItemsError) {
+        console.error("Error inserting claim items:", insertItemsError);
+        return { ok: false, status: 500, message: "Failed to update claim items" };
+    }
+
+    return { ok: true };
+}
+
+export async function ensureApproverAssigned(
+    supabase: App.Locals["supabase"],
+    applicantId: string
+): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+    const { data: applicantProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("approver_id")
+        .eq("id", applicantId)
+        .single();
+    if (profileError) {
+        return { ok: false, status: 500, message: "讀取申請人資料失敗" };
+    }
+    if (!applicantProfile?.approver_id) {
+        return { ok: false, status: 400, message: "您尚未指派核准人，請聯繫管理員進行設定。" };
+    }
+    return { ok: true };
+}
+
+export async function moveClaimToPendingManager(
+    supabase: App.Locals["supabase"],
+    claimId: string,
+    applicantId: string
+): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+    const nowIso = new Date().toISOString();
+    const { data: updatedClaim, error: updateError } = await supabase
+        .from("claims")
+        .update({
+            status: "pending_manager",
+            submitted_at: nowIso,
+            updated_at: nowIso
+        })
+        .eq("id", claimId)
+        .eq("applicant_id", applicantId)
+        .in("status", Array.from(EDITABLE_CLAIM_STATUSES))
+        .select("id, status")
+        .maybeSingle();
+
+    if (updateError) return { ok: false, status: 500, message: "提交失敗" };
+    if (!updatedClaim) {
+        return { ok: false, status: 409, message: "請款單狀態已變更，請重新整理後再試" };
+    }
+    return { ok: true };
+}
+

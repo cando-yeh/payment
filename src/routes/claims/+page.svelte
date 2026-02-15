@@ -13,6 +13,10 @@
     } from "lucide-svelte";
     import { fade } from "svelte/transition";
     import { cn } from "$lib/utils";
+    import {
+        getClaimStatusLabel,
+        getClaimTypeLabel,
+    } from "$lib/claims/constants";
     import type { PageData } from "./$types";
 
     let { data }: { data: PageData } = $props();
@@ -37,50 +41,25 @@
         window.history.replaceState(window.history.state, "", url);
     }
 
-    const statusMap: Record<string, { label: string; color: string }> = {
-        draft: {
-            label: "草稿",
-            color: "bg-slate-100 text-slate-600 border-slate-200",
-        },
-        pending_manager: {
-            label: "待主管審核",
-            color: "bg-amber-100 text-amber-700 border-amber-200",
-        },
-        pending_finance: {
-            label: "待財務審核",
-            color: "bg-blue-100 text-blue-700 border-blue-200",
-        },
-        pending_payment: {
-            label: "待付款",
-            color: "bg-indigo-100 text-indigo-700 border-indigo-200",
-        },
-        paid: {
-            label: "已付款",
-            color: "bg-emerald-100 text-emerald-700 border-emerald-200",
-        },
-        paid_pending_doc: {
-            label: "已付款待補件",
-            color: "bg-orange-100 text-orange-700 border-orange-200",
-        },
-        pending_doc_review: {
-            label: "補件審核中",
-            color: "bg-orange-100 text-orange-700 border-orange-200",
-        },
-        returned: {
-            label: "已退回",
-            color: "bg-rose-100 text-rose-700 border-rose-200",
-        },
-        cancelled: {
-            label: "已撤銷",
-            color: "bg-slate-50 text-slate-400 border-slate-100",
-        },
+    const statusColorMap: Record<string, string> = {
+        draft: "bg-slate-100 text-slate-600 border-slate-200",
+        pending_manager: "bg-amber-100 text-amber-700 border-amber-200",
+        pending_finance: "bg-blue-100 text-blue-700 border-blue-200",
+        pending_payment: "bg-indigo-100 text-indigo-700 border-indigo-200",
+        paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
+        paid_pending_doc: "bg-orange-100 text-orange-700 border-orange-200",
+        pending_doc_review: "bg-orange-100 text-orange-700 border-orange-200",
+        returned: "bg-rose-100 text-rose-700 border-rose-200",
+        cancelled: "bg-slate-50 text-slate-400 border-slate-100",
     };
 
     function getStatusBadge(status: string) {
         return (
-            statusMap[status] || {
-                label: status,
-                color: "bg-slate-100 text-slate-600",
+            {
+                label: getClaimStatusLabel(status),
+                color:
+                    statusColorMap[status] ||
+                    "bg-slate-100 text-slate-600 border-slate-200",
             }
         );
     }
@@ -301,9 +280,7 @@
                                             variant="secondary"
                                             class="rounded-md font-bold text-[10px] px-2 py-0"
                                         >
-                                            {#if claim.claim_type === "employee"}員工報銷
-                                            {:else if claim.claim_type === "vendor"}廠商請款
-                                            {:else}個人勞務{/if}
+                                            {getClaimTypeLabel(claim.claim_type)}
                                         </Badge>
                                     </Table.Cell>
                                     <Table.Cell class="max-w-[250px]">

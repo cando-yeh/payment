@@ -1,10 +1,11 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
-
-const ALLOWED_UPLOAD_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
-const EDITABLE_CLAIM_STATUSES = new Set(['draft', 'returned']);
-const ALLOWED_ATTACHMENT_STATUSES = new Set(['uploaded', 'pending_supplement', 'exempt']);
+import {
+    ALLOWED_ATTACHMENT_STATUSES,
+    ALLOWED_UPLOAD_MIME_TYPES,
+    EDITABLE_CLAIM_STATUSES
+} from '$lib/server/claims/constants';
 
 type ClaimItemInput = {
     date?: string;

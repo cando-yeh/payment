@@ -3,6 +3,11 @@
     import { goto } from "$app/navigation";
     import { untrack } from "svelte";
     import { toast } from "svelte-sonner";
+    import {
+        CLAIM_ITEM_CATEGORIES,
+        CLAIM_TYPE_OPTIONS,
+        getClaimStatusLabel,
+    } from "$lib/claims/constants";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
@@ -14,9 +19,6 @@
     import {
         ArrowLeft,
         ReceiptText,
-        User,
-        Building2,
-        UserCheck,
         Save,
         Send,
         Plus,
@@ -48,18 +50,6 @@
         name: string;
         type: string;
     }
-
-    const statusLabelMap: Record<string, string> = {
-        draft: "草稿",
-        pending_manager: "待主管審核",
-        pending_finance: "待財務審核",
-        pending_payment: "待付款",
-        paid: "已付款",
-        paid_pending_doc: "已付款(待補件)",
-        pending_doc_review: "補件審核中",
-        returned: "已退回",
-        cancelled: "已撤銷",
-    };
 
     const statusColorMap: Record<string, string> = {
         draft: "bg-slate-100 text-slate-700",
@@ -199,25 +189,11 @@
     const totalAmount = $derived(
         items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
     );
-    const displayStatus = $derived(
-        claim.status ? statusLabelMap[claim.status] || claim.status : "編輯中",
-    );
+    const displayStatus = $derived(getClaimStatusLabel(claim.status));
     const displayStatusClass = $derived(
         statusColorMap[claim.status || "draft"] ||
             "bg-slate-100 text-slate-700",
     );
-
-    const categories = [
-        { value: "travel", label: "差旅費" },
-        { value: "food", label: "伙食費" },
-        { value: "general", label: "一般雜支" },
-    ];
-
-    function claimTypeLabel(type: string) {
-        if (type === "employee") return "員工報銷";
-        if (type === "vendor") return "廠商請款";
-        return "個人勞務";
-    }
 
     function submitButtonText() {
         return isCreate ? "直接提交" : "提交審核";
@@ -237,11 +213,9 @@
     function validateBeforeDirectSubmit() {
         for (let i = 0; i < items.length; i += 1) {
             const item = items[i];
-            const status = String(item?.attachment_status || "").trim();
-            if (!status) {
-                toast.error(`第 ${i + 1} 筆明細尚未選擇憑證處理方式`);
-                return false;
-            }
+            const status = String(
+                item?.attachment_status || "pending_supplement",
+            ).trim();
             if (
                 status === "exempt" &&
                 !String(item?.exempt_reason || "").trim()
@@ -532,42 +506,20 @@
                                         !canEditClaimType ? "opacity-60" : ""
                                     }`}
                                 >
-                                    <button
-                                        type="button"
-                                        disabled={!canEditClaimType}
-                                        class={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                                            claimType === "employee"
-                                                ? "bg-background text-foreground shadow-sm"
-                                                : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                        onclick={() => (claimType = "employee")}
-                                    >
-                                        員工報銷
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={!canEditClaimType}
-                                        class={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                                            claimType === "vendor"
-                                                ? "bg-background text-foreground shadow-sm"
-                                                : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                        onclick={() => (claimType = "vendor")}
-                                    >
-                                        廠商請款
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={!canEditClaimType}
-                                        class={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                                            claimType === "personal_service"
-                                                ? "bg-background text-foreground shadow-sm"
-                                                : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                        onclick={() => (claimType = "personal_service")}
-                                    >
-                                        個人勞務
-                                    </button>
+                                    {#each CLAIM_TYPE_OPTIONS as option}
+                                        <button
+                                            type="button"
+                                            disabled={!canEditClaimType}
+                                            class={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+                                                claimType === option.value
+                                                    ? "bg-background text-foreground shadow-sm"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            }`}
+                                            onclick={() => (claimType = option.value)}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    {/each}
                                 </div>
                             </div>
                         </div>
@@ -785,7 +737,7 @@
                                         bind:value={item.category}
                                         disabled={!isEditable}
                                     >
-                                        {#each categories as cat}
+                                        {#each CLAIM_ITEM_CATEGORIES as cat}
                                             <option value={cat.value}
                                                 >{cat.label}</option
                                             >

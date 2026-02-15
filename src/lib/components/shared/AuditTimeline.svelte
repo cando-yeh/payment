@@ -1,5 +1,6 @@
 <script lang="ts">
     import { cn } from "$lib/utils";
+    import { getClaimStatusLabel } from "$lib/claims/constants";
     import { Badge } from "$lib/components/ui/badge";
     import { Clock, User, MessageCircle } from "lucide-svelte";
 
@@ -25,18 +26,6 @@
         withdraw: "撤回草稿",
         cancel: "撤銷申請",
         status_change: "狀態變更",
-    };
-
-    const statusMap: Record<string, string> = {
-        draft: "草稿",
-        pending_manager: "待主管審核",
-        pending_finance: "待財務審核",
-        pending_payment: "待付款",
-        paid: "已付款",
-        paid_pending_doc: "已付款(待補件)",
-        pending_doc_review: "補件審核中",
-        returned: "已退回",
-        cancelled: "已撤銷",
     };
 
     function formatDate(date: string) {
@@ -103,8 +92,7 @@
                                 variant="outline"
                                 class="text-[10px] py-0 h-4 font-normal opacity-60"
                             >
-                                {statusMap[item.from_status] ||
-                                    item.from_status}
+                                {getClaimStatusLabel(item.from_status)}
                             </Badge>
                             <span class="text-muted-foreground text-[10px]"
                                 >→</span
@@ -114,7 +102,7 @@
                             variant="outline"
                             class="text-[10px] py-0 h-4 font-normal bg-muted/20"
                         >
-                            {statusMap[item.to_status] || item.to_status}
+                            {getClaimStatusLabel(item.to_status)}
                         </Badge>
                     </div>
 
