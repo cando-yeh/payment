@@ -64,7 +64,8 @@ export async function getOwnedClaim(
 export function parseAndValidateEditForm(
     formData: FormData,
     claimRow: EditableClaimRow,
-    claimId: string
+    claimId: string,
+    options: { isDraft?: boolean } = {}
 ): { ok: true; value: ParsedEditForm } | { ok: false; status: number; message: string } {
     const payeeId = String(formData.get("payee_id") || "");
     const isFloating = formData.get("is_floating") === "on";
@@ -74,19 +75,19 @@ export function parseAndValidateEditForm(
     const accountName = isFloating ? String(formData.get("account_name") || "").trim() : null;
     const itemsJson = String(formData.get("items") || "[]");
 
-    if (claimRow.claim_type !== "employee" && !payeeId) {
+    if (claimRow.claim_type !== "employee" && !payeeId && !options.isDraft) {
         return { ok: false, status: 400, message: "Payee is required" };
     }
-    if (isFloating && (!bankCode || !accountName || !bankAccount)) {
+    if (isFloating && (!bankCode || !accountName || !bankAccount) && !options.isDraft) {
         return { ok: false, status: 400, message: "Floating account details are incomplete" };
     }
 
     const parsedItems = parseItems(itemsJson);
-    if (!parsedItems || parsedItems.length === 0) {
+    if ((!parsedItems || parsedItems.length === 0) && !options.isDraft) {
         return { ok: false, status: 400, message: "At least one item is required" };
     }
 
-    const normalizedItems = parsedItems.map((item, index) => {
+    const normalizedItems = (parsedItems || []).map((item, index) => {
         const amount = Number(item.amount);
         return {
             claim_id: claimId,
@@ -95,14 +96,14 @@ export function parseAndValidateEditForm(
             date_end: null,
             category: String(item.category || "general").trim(),
             description: String(item.description || "").trim(),
-            amount,
+            amount: Number.isFinite(amount) ? amount : 0,
             invoice_number: item.invoice_number || null,
             attachment_status: "pending_supplement" as const,
             extra: item.extra || {}
         };
     });
 
-    if (normalizedItems.some((item) => !Number.isFinite(item.amount) || item.amount <= 0)) {
+    if (!options.isDraft && normalizedItems.some((item) => item.amount <= 0)) {
         return { ok: false, status: 400, message: "All item amounts must be greater than 0" };
     }
 

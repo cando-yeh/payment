@@ -138,7 +138,7 @@ export const actions: Actions = {
         }
 
         const formData = await request.formData();
-        const parsed = parseAndValidateEditForm(formData, claimRow as EditableClaimRow, params.id);
+        const parsed = parseAndValidateEditForm(formData, claimRow as EditableClaimRow, params.id, { isDraft: true });
         if (!parsed.ok) {
             return fail(parsed.status, { message: parsed.message });
         }
@@ -147,7 +147,7 @@ export const actions: Actions = {
             return fail(persist.status, { message: persist.message });
         }
 
-        throw redirect(303, `/claims/${params.id}`);
+        throw redirect(303, '/claims');
     },
 
     editSubmit: async ({ request, params, locals: { supabase, getSession } }) => {

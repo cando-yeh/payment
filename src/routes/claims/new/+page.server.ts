@@ -296,6 +296,6 @@ export const actions: Actions = {
             throw redirect(303, '/claims?tab=processing');
         }
 
-        throw redirect(303, `/claims/${claimId}`);
+        throw redirect(303, '/claims?tab=draft');
     }
 };

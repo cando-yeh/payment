@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { enhance, deserialize } from "$app/forms";
+    import { enhance, deserialize, applyAction } from "$app/forms";
     import { goto } from "$app/navigation";
     import { untrack } from "svelte";
     import { toast } from "svelte-sonner";
@@ -71,7 +71,7 @@
         mode = "edit",
         isCreate = false,
         formAction = "",
-        formEnctype = "",
+        formEnctype,
         submitAction = "",
         showSaveButton = true,
         showSubmitButton = true,
@@ -80,6 +80,7 @@
         hasApprover = true,
         timelineTitle = "審核歷程",
         history = [],
+        deleteAction,
     }: {
         claim: ClaimEditorClaim;
         payees?: ClaimEditorPayee[];
@@ -88,7 +89,10 @@
         mode?: "edit" | "view";
         isCreate?: boolean;
         formAction?: string;
-        formEnctype?: string;
+        formEnctype?:
+            | "multipart/form-data"
+            | "application/x-www-form-urlencoded"
+            | "text/plain";
         submitAction?: string;
         showSaveButton?: boolean;
         showSubmitButton?: boolean;
@@ -97,6 +101,7 @@
         hasApprover?: boolean;
         timelineTitle?: string;
         history?: any[];
+        deleteAction?: string; // New prop for delete action URL
     } = $props();
 
     function emptyItem() {
@@ -197,6 +202,12 @@
 
     function submitButtonText() {
         return isCreate ? "直接提交" : "提交審核";
+    }
+
+    function voucherStatusLabel(status: string) {
+        if (status === "uploaded") return "上傳憑證";
+        if (status === "exempt") return "無憑證";
+        return "待補件";
     }
 
     function addItem() {
@@ -340,12 +351,33 @@
         <div class="flex items-center gap-2">
             <slot name="header-actions" />
             {#if isEditable && (showSaveButton || showSubmitButton)}
+                {#if isEditable && !isCreate && deleteAction}
+                    <Button
+                        type="submit"
+                        form="claim-delete-form"
+                        variant="ghost"
+                        size="sm"
+                        class="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        disabled={isSubmitting}
+                        onclick={(e) => {
+                            if (
+                                !confirm("確定要刪除此草稿嗎？此動作無法復原。")
+                            ) {
+                                e.preventDefault();
+                            }
+                        }}
+                    >
+                        <Trash2 class="mr-1.5 h-3.5 w-3.5" />
+                        刪除草稿
+                    </Button>
+                {/if}
                 {#if showSaveButton}
                     <Button
                         type="submit"
                         form="claim-editor-form"
                         variant="outline"
                         size="sm"
+                        formnovalidate
                         disabled={isSubmitting}
                     >
                         <Save class="mr-1.5 h-3.5 w-3.5" />
@@ -382,11 +414,9 @@
     </div>
 
     <form
-        id="claim-editor-form"
+        id="claim-delete-form"
         method="POST"
-        action={formAction}
-        enctype={formEnctype || undefined}
-        onsubmitcapture={onSubmitCapture}
+        action={deleteAction}
         use:enhance={() => {
             isSubmitting = true;
             return async ({ result, update }) => {
@@ -396,9 +426,27 @@
                     return;
                 }
                 if (result.type === "failure") {
-                    toast.error(result.data?.message || "操作失敗");
+                    toast.error((result.data?.message as string) || "刪除失敗");
                 }
                 await update();
+            };
+        }}
+    ></form>
+
+    <form
+        id="claim-editor-form"
+        method="POST"
+        action={formAction}
+        enctype={formEnctype || undefined}
+        onsubmitcapture={onSubmitCapture}
+        use:enhance={() => {
+            isSubmitting = true;
+            return async ({ result }) => {
+                isSubmitting = false;
+                if (result.type === "failure") {
+                    toast.error((result.data?.message as string) || "操作失敗");
+                }
+                await applyAction(result);
             };
         }}
     >
@@ -427,9 +475,12 @@
                             </div>
                             <div class="space-y-0.5">
                                 <div class="flex items-center gap-2.5">
-                                    <h1 class="text-lg font-semibold leading-tight">
+                                    <h1
+                                        class="text-lg font-semibold leading-tight"
+                                    >
                                         請款單
-                                        <span class="ml-1 text-muted-foreground/40"
+                                        <span
+                                            class="ml-1 text-muted-foreground/40"
                                             >#{claim.id
                                                 ? claim.id.slice(0, 8)
                                                 : "NEW"}</span
@@ -515,7 +566,8 @@
                                                     ? "bg-background text-foreground shadow-sm"
                                                     : "text-muted-foreground hover:text-foreground"
                                             }`}
-                                            onclick={() => (claimType = option.value)}
+                                            onclick={() =>
+                                                (claimType = option.value)}
                                         >
                                             {option.label}
                                         </button>
@@ -686,7 +738,7 @@
                         <Card.Content class="p-0">
                             <!-- Table Header -->
                             <div
-                                class="grid grid-cols-[110px_120px_1fr_90px_110px_60px_50px_36px] items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
+                                class="grid grid-cols-[110px_120px_1fr_90px_110px_110px_120px_36px] items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
                             >
                                 <span
                                     class="text-center text-xs font-semibold text-muted-foreground"
@@ -710,11 +762,11 @@
                                 >
                                 <span
                                     class="text-center text-xs font-semibold text-muted-foreground"
-                                    >憑證</span
+                                    >憑證處理</span
                                 >
                                 <span
                                     class="text-center text-xs font-semibold text-muted-foreground"
-                                    >無憑證</span
+                                    >附件</span
                                 >
                                 <span></span>
                             </div>
@@ -722,7 +774,7 @@
                             <!-- Table Rows -->
                             {#each items as item, i}
                                 <div
-                                    class="grid grid-cols-[110px_120px_1fr_90px_110px_60px_50px_36px] items-center gap-2 border-b border-border/20 px-4 py-2 transition-colors hover:bg-muted/10"
+                                    class="grid grid-cols-[110px_120px_1fr_90px_110px_110px_120px_36px] items-center gap-2 border-b border-border/20 px-4 py-2 transition-colors hover:bg-muted/10"
                                 >
                                     <!-- 日期 -->
                                     <Input
@@ -772,11 +824,49 @@
                                         disabled={!isEditable}
                                         class="h-8 text-xs"
                                     />
-                                    <!-- 憑證 -->
+                                    <!-- 憑證處理 -->
                                     <div
                                         class="flex items-center justify-center"
                                     >
-                                        {#if item.id}
+                                        {#if isEditable}
+                                            <select
+                                                class="h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+                                                bind:value={
+                                                    item.attachment_status
+                                                }
+                                            >
+                                                <option value="uploaded"
+                                                    >上傳憑證</option
+                                                >
+                                                <option
+                                                    value="pending_supplement"
+                                                    >待補件</option
+                                                >
+                                                <option value="exempt"
+                                                    >無憑證</option
+                                                >
+                                            </select>
+                                        {:else}
+                                            <span
+                                                class="text-[11px] text-muted-foreground"
+                                            >
+                                                {voucherStatusLabel(
+                                                    item.attachment_status,
+                                                )}
+                                            </span>
+                                        {/if}
+                                    </div>
+
+                                    <!-- 附件 -->
+                                    <div
+                                        class="flex items-center justify-center"
+                                    >
+                                        {#if item.attachment_status === "exempt"}
+                                            <span
+                                                class="text-[11px] text-muted-foreground"
+                                                >不需附件</span
+                                            >
+                                        {:else if item.id}
                                             {#if item.attachment_status === "uploaded" && item.extra?.file_path}
                                                 <a
                                                     href={`/api/claims/attachment/${item.id}`}
@@ -785,9 +875,16 @@
                                                 >
                                                     <Eye class="h-3 w-3" /> 查看
                                                 </a>
-                                            {:else if item.attachment_status !== "exempt"}
+                                            {:else}
+                                                <span
+                                                    class="text-[11px] text-muted-foreground"
+                                                    >待上傳</span
+                                                >
+                                            {/if}
+
+                                            {#if isEditable}
                                                 <label
-                                                    class="inline-flex cursor-pointer items-center gap-1 text-[11px] text-primary hover:underline"
+                                                    class="ml-2 inline-flex cursor-pointer items-center gap-1 text-[11px] text-primary hover:underline"
                                                 >
                                                     <Upload class="h-3 w-3" /> 上傳
                                                     <input
@@ -812,18 +909,13 @@
                                                         }}
                                                     />
                                                 </label>
-                                            {:else}
-                                                <span
-                                                    class="text-[11px] text-muted-foreground"
-                                                    >—</span
-                                                >
                                             {/if}
                                         {:else if isEditable}
                                             {#if item.attachment_status === "uploaded"}
                                                 <label
                                                     class="inline-flex cursor-pointer items-center gap-1 text-[11px] text-primary hover:underline"
                                                 >
-                                                    <Upload class="h-3 w-3" /> 上傳
+                                                    <Upload class="h-3 w-3" /> 選擇檔案
                                                     <input
                                                         type="file"
                                                         name={`item_attachment_${i}`}
@@ -844,7 +936,7 @@
                                             {:else}
                                                 <span
                                                     class="text-[11px] text-muted-foreground"
-                                                    >—</span
+                                                    >待補件</span
                                                 >
                                             {/if}
                                         {:else}
@@ -853,29 +945,6 @@
                                                 >—</span
                                             >
                                         {/if}
-                                    </div>
-                                    <!-- 無憑證 checkbox -->
-                                    <div
-                                        class="flex items-center justify-center"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={item.attachment_status ===
-                                                "exempt"}
-                                            disabled={!isEditable}
-                                            class="h-4 w-4 rounded border border-border"
-                                            onchange={(e) => {
-                                                const target =
-                                                    e.currentTarget as HTMLInputElement;
-                                                if (target.checked) {
-                                                    item.attachment_status =
-                                                        "exempt";
-                                                } else {
-                                                    item.attachment_status =
-                                                        "pending_supplement";
-                                                }
-                                            }}
-                                        />
                                     </div>
                                     <!-- 刪除 -->
                                     <div
@@ -915,7 +984,6 @@
                 </section>
             </div>
         </div>
-
     </form>
 
     <!-- Audit History Sheet Drawer -->
