@@ -179,6 +179,36 @@
      */
     function isActive(href: string): boolean {
         const currentPath = page.url.pathname;
+        const fromParam = page.url.searchParams.get("from");
+
+        // If we have a source context, use it to determine active state
+        // This handles cases like viewing a claim detail from the Approval Center
+        if (fromParam) {
+            // If the current path is a sub-path of the href (standard active logic),
+            // we need to be careful not to override it unless fromParam matches something else.
+
+            // Logic:
+            // 1. If href matches fromParam, it should be active.
+            // 2. If href matches currentPath BUT fromParam points elsewhere, it should NOT be active.
+
+            // Check if this nav item corresponds to the source
+            // Decode URI component because it might be encoded
+            const decodedFrom = decodeURIComponent(fromParam);
+
+            if (href === "/" && decodedFrom === "/") return true;
+            if (href !== "/" && decodedFrom.startsWith(href)) return true;
+
+            // If we are here, this item is NOT the source.
+            // But it might still match the current path (e.g. "My Claims" matches "/claims/123").
+            // We want to suppress this match if we have a valid source that is DIFFERENT.
+            if (
+                currentPath.startsWith("/claims") &&
+                href === "/claims" &&
+                !decodedFrom.startsWith("/claims")
+            ) {
+                return false;
+            }
+        }
 
         // 首頁需要精確匹配
         if (href === "/") return currentPath === "/";

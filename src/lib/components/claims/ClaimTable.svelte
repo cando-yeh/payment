@@ -43,7 +43,18 @@
     function handleRowClick(e: MouseEvent, claimId: string) {
         // Prevent navigation if clicking on checkbox or input
         if ((e.target as HTMLElement).tagName === "INPUT") return;
-        goto(`/claims/${claimId}`);
+
+        const currentPath = window.location.pathname;
+        const currentSearch = window.location.search;
+        const fromUrl = currentPath + currentSearch;
+
+        // If we are not in the main claims section, pass the current path + search params as a "from" parameter
+        // This helps the Sidebar maintain the correct active state AND allows us to return to the exact same state (e.g. active tab)
+        if (!currentPath.startsWith("/claims")) {
+            goto(`/claims/${claimId}?from=${encodeURIComponent(fromUrl)}`);
+        } else {
+            goto(`/claims/${claimId}`);
+        }
     }
 
     function toggleSelection(claimId: string) {
@@ -110,7 +121,7 @@
         {#if claims.length > 0}
             {#each claims as claim}
                 <Table.Row
-                    class="group border-none hover:bg-secondary/30 transition-all cursor-pointer h-20"
+                    class="group border-none hover:bg-secondary/30 transition-all cursor-pointer h-12"
                     onclick={(e) => handleRowClick(e, claim.id)}
                 >
                     {#if selectable}

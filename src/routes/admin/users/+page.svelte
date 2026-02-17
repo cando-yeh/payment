@@ -308,11 +308,13 @@
                                 {/if}
                             </Table.Cell>
                             <Table.Cell>
-                                <div class="flex gap-1.5 flex-wrap">
+                                <div
+                                    class="flex gap-1.5 flex-nowrap items-center"
+                                >
                                     {#if user.is_admin}
                                         <Badge
                                             variant="default"
-                                            class="bg-blue-50 text-blue-700 border-blue-200"
+                                            class="bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap"
                                         >
                                             管理員
                                         </Badge>
@@ -320,13 +322,17 @@
                                     {#if user.is_finance}
                                         <Badge
                                             variant="secondary"
-                                            class="bg-amber-50 text-amber-700 border-amber-200"
+                                            class="bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap"
                                         >
                                             財務
                                         </Badge>
                                     {/if}
                                     {#if !user.is_admin && !user.is_finance}
-                                        <Badge variant="outline">員工</Badge>
+                                        <Badge
+                                            variant="outline"
+                                            class="whitespace-nowrap"
+                                            >員工</Badge
+                                        >
                                     {/if}
                                 </div>
                             </Table.Cell>
@@ -355,9 +361,7 @@
                                                     buttonVariant:
                                                         "destructive",
                                                     action: () =>
-                                                        deactivateUser(
-                                                            user.id,
-                                                        ),
+                                                        deactivateUser(user.id),
                                                 });
                                             }}
                                             title="停用帳號"
@@ -376,9 +380,7 @@
                                                     description: `確定要重新啟用使用者「${user.full_name}」？`,
                                                     buttonLabel: "重新啟用",
                                                     action: () =>
-                                                        reactivateUser(
-                                                            user.id,
-                                                        ),
+                                                        reactivateUser(user.id),
                                                 });
                                             }}
                                             title="重新啟用"
@@ -397,11 +399,10 @@
                                                     title: "確認永久刪除",
                                                     description: `確定要永久刪除使用者「${user.full_name}」？此操作無法復原。`,
                                                     buttonLabel: "永久刪除",
-                                                    buttonVariant: "destructive",
+                                                    buttonVariant:
+                                                        "destructive",
                                                     action: () =>
-                                                        removeUser(
-                                                            user.id,
-                                                        ),
+                                                        removeUser(user.id),
                                                 });
                                             }}
                                             title="永久刪除"

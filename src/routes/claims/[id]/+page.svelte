@@ -7,12 +7,60 @@
     import { CircleAlert, CircleCheck, Undo2, CircleX } from "lucide-svelte";
     import type { PageData } from "./$types";
 
+    import { page } from "$app/state";
+
     let { data }: { data: PageData } = $props();
 
     let claim = $derived(data.claim);
     let currentUser = $derived(data.user);
     let history = $derived(data.claim?.history || []);
     let duplicates = $derived(data.duplicateWarnings || []);
+
+    // Determine back link and label based on source
+    // If user came from Approval Center (passed via ?from=/approval), go back there
+    const fromParam = $derived(page.url.searchParams.get("from"));
+
+    // Status to Tab mapping
+    function getApprovalTabForStatus(status: string) {
+        if (["pending_manager"].includes(status)) return "manager";
+        if (["pending_finance"].includes(status)) return "finance";
+        if (["pending_payment"].includes(status)) return "payment";
+        if (["pending_doc_review"].includes(status)) return "doc";
+        return "manager"; // default fallback
+    }
+
+    function getClaimsTabForStatus(status: string) {
+        if (["draft", "returned"].includes(status)) return "drafts";
+        if (
+            ["pending_manager", "pending_finance", "pending_payment"].includes(
+                status,
+            )
+        )
+            return "processing";
+        if (["paid_pending_doc", "pending_doc_review"].includes(status))
+            return "action_required";
+        if (["paid", "cancelled"].includes(status)) return "history";
+        return "drafts"; // default fallback
+    }
+
+    const backHref = $derived.by(() => {
+        if (fromParam?.includes("approval")) {
+            const targetTab = getApprovalTabForStatus(claim.status);
+            return `/approval?tab=${targetTab}`;
+        }
+
+        // Default behavior for "My Claims"
+        // If we have a specific fromParam (e.g. from search), use it.
+        // Otherwise, determine tab based on current status
+        if (fromParam && fromParam !== "/claims") return fromParam;
+
+        const targetTab = getClaimsTabForStatus(claim.status);
+        return `/claims?tab=${targetTab}`;
+    });
+
+    const backLabel = $derived(
+        fromParam?.includes("approval") ? "返回審核中心" : "返回清單",
+    );
 
     const isEditableApplicant = $derived(data.viewMode === "edit");
     const canWithdraw = $derived(
@@ -193,8 +241,8 @@
     claim={editorClaim}
     payees={data.payees}
     mode={isEditableApplicant ? "edit" : "view"}
-    backHref="/claims"
-    backLabel="返回清單"
+    {backHref}
+    {backLabel}
     formAction="?/editUpdate"
     submitAction="?/editSubmit"
     showSaveButton={isEditableApplicant}

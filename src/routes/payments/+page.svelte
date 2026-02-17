@@ -81,7 +81,7 @@
                                 <Table.Cell
                                     class="font-mono text-xs text-muted-foreground"
                                 >
-                                    {payment.id.split("-")[0]}...
+                                    {payment.id}
                                 </Table.Cell>
                                 <Table.Cell class="font-medium">
                                     {payment.payee_name}

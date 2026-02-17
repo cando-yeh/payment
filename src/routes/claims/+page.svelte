@@ -98,7 +98,7 @@
 
     <!-- Main Content Area -->
     <div
-        class="bg-background border border-border/50 rounded-3xl shadow-sm overflow-hidden"
+        class="bg-background border border-border/50 rounded-3xl shadow-sm overflow-hidden pb-2"
     >
         <div class="w-full">
             <div

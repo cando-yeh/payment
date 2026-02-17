@@ -79,6 +79,7 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const claimIds = formData.getAll('claimIds') as string[];
+        const paymentDate = formData.get('paymentDate') as string;
 
         if (!claimIds.length) {
             return fail(400, { message: '請至少選擇一筆單據' });
@@ -115,6 +116,7 @@ export const actions: Actions = {
         const payeeName = first.claim_type === 'employee' ? first.applicant?.full_name : first.payee?.name;
         const bankAccount = first.claim_type === 'employee' ? first.applicant?.bank_account : first.payee?.bank_account;
         const bank = first.claim_type === 'employee' ? first.applicant?.bank : first.payee?.bank;
+        const paidAt = paymentDate ? new Date(paymentDate).toISOString() : new Date().toISOString();
 
         // 4. 建立付款單
         const { data: payment, error: paymentError } = await supabase
@@ -126,7 +128,7 @@ export const actions: Actions = {
                 bank_account: bankAccount,
                 bank: bank,
                 paid_by: session.user.id,
-                paid_at: new Date().toISOString(),
+                paid_at: paidAt,
                 status: 'completed'
             })
             .select()

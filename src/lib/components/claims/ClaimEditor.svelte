@@ -206,6 +206,11 @@
             "bg-slate-100 text-slate-700",
     );
 
+    // Auto-calculate pay_first_patch_doc: true if any item is pending_supplement
+    const payFirstPatchDoc = $derived(
+        items.some((item) => item.attachment_status === "pending_supplement"),
+    );
+
     function submitButtonText() {
         return isCreate ? "直接提交" : "提交審核";
     }
@@ -471,6 +476,11 @@
             value={isFloatingAccount ? "true" : "false"}
         />
         <input type="hidden" name="total_amount" value={totalAmount} />
+        <input
+            type="hidden"
+            name="pay_first_patch_doc"
+            value={payFirstPatchDoc ? "true" : "false"}
+        />
 
         <div class="space-y-5">
             <!-- Header + Basic Info (single container) -->

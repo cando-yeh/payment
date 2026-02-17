@@ -37,6 +37,7 @@ export type ParsedEditForm = {
         extra: Record<string, unknown>;
     }[];
     totalAmount: number;
+    payFirstPatchDoc: boolean;
 };
 
 function parseItems(value: string): ClaimItemInput[] | null {
@@ -74,6 +75,7 @@ export function parseAndValidateEditForm(
     const bankAccount = isFloating ? String(formData.get("bank_account") || "").trim() : null;
     const accountName = isFloating ? String(formData.get("account_name") || "").trim() : null;
     const itemsJson = String(formData.get("items") || "[]");
+    const payFirstPatchDoc = formData.get("pay_first_patch_doc") === "true";
 
     if (claimRow.claim_type !== "employee" && !payeeId && !options.isDraft) {
         return { ok: false, status: 400, message: "Payee is required" };
@@ -106,6 +108,7 @@ export function parseAndValidateEditForm(
     if (!options.isDraft && normalizedItems.some((item) => item.amount <= 0)) {
         return { ok: false, status: 400, message: "All item amounts must be greater than 0" };
     }
+    // ... (rest of validation)
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.amount, 0);
     return {
@@ -118,7 +121,8 @@ export function parseAndValidateEditForm(
             bankAccount,
             accountName,
             normalizedItems,
-            totalAmount
+            totalAmount,
+            payFirstPatchDoc
         }
     };
 }
@@ -136,8 +140,10 @@ export async function persistEditedClaim(
         _bank_code: parsed.isFloating ? parsed.bankCode : null,
         _bank_branch: parsed.isFloating ? (parsed.bankBranch || null) : null,
         _bank_account: parsed.isFloating ? parsed.bankAccount : null,
-        _account_name: parsed.isFloating ? parsed.accountName : null
+        _account_name: parsed.isFloating ? parsed.accountName : null,
+        _pay_first_patch_doc: parsed.payFirstPatchDoc
     });
+
     if (updateClaimError) {
         console.error("Error updating claim:", updateClaimError);
         return { ok: false, status: 500, message: `Failed to update claim: ${updateClaimError.message}` };
