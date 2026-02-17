@@ -7,6 +7,7 @@ type ClaimItemInput = {
     description?: string;
     amount?: number | string;
     invoice_number?: string;
+    attachment_status?: "uploaded" | "pending_supplement" | "exempt";
     extra?: Record<string, unknown>;
 };
 
@@ -33,7 +34,7 @@ export type ParsedEditForm = {
         description: string;
         amount: number;
         invoice_number: string | null;
-        attachment_status: "pending_supplement";
+        attachment_status: "uploaded" | "pending_supplement" | "exempt";
         extra: Record<string, unknown>;
     }[];
     totalAmount: number;
@@ -100,7 +101,7 @@ export function parseAndValidateEditForm(
             description: String(item.description || "").trim(),
             amount: Number.isFinite(amount) ? amount : 0,
             invoice_number: item.invoice_number || null,
-            attachment_status: "pending_supplement" as const,
+            attachment_status: item.attachment_status || "pending_supplement",
             extra: item.extra || {}
         };
     });

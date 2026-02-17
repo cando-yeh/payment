@@ -284,6 +284,10 @@
                 fd.append("account_name", accountName);
             }
             fd.append("items", JSON.stringify(items));
+            fd.append(
+                "pay_first_patch_doc",
+                payFirstPatchDoc ? "true" : "false",
+            );
 
             const response = await fetch(submitAction, {
                 method: "POST",

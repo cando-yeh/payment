@@ -76,6 +76,7 @@ export const actions: Actions = {
         const bankBranch = String(formData.get('bank_branch') || '').trim();
         const accountName = String(formData.get('account_name') || '').trim();
         const bankAccount = String(formData.get('bank_account') || '').trim();
+        const payFirstPatchDoc = formData.get('pay_first_patch_doc') === 'true';
 
         if (!claimType || !itemsJson) {
             return fail(400, { message: 'Missing required fields' });
@@ -155,7 +156,7 @@ export const actions: Actions = {
                 description: String(item.description || '').trim(),
                 amount: Number.isFinite(amount) ? amount : 0,
                 invoice_number: item.invoice_number || null,
-                attachment_status: 'pending_supplement',
+                attachment_status: (item.attachment_status as 'uploaded' | 'pending_supplement' | 'exempt') || 'pending_supplement',
                 extra: {}
             };
         });
@@ -190,7 +191,8 @@ export const actions: Actions = {
             _bank_code: isFloatingAccount ? bankCode : null,
             _bank_branch: isFloatingAccount ? (bankBranch || null) : null,
             _bank_account: isFloatingAccount ? bankAccount : null,
-            _account_name: isFloatingAccount ? accountName : null
+            _account_name: isFloatingAccount ? accountName : null,
+            _pay_first_patch_doc: payFirstPatchDoc
         });
 
         if (claimError || !claimId) {
