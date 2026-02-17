@@ -1,7 +1,7 @@
 <script lang="ts">
     import { enhance, deserialize, applyAction } from "$app/forms";
     import { goto } from "$app/navigation";
-    import { untrack } from "svelte";
+    import { type Snippet, untrack } from "svelte";
     import { toast } from "svelte-sonner";
     import {
         CLAIM_ITEM_CATEGORIES,
@@ -81,6 +81,9 @@
         timelineTitle = "審核歷程",
         history = [],
         deleteAction,
+        headerActions,
+        sidePanel,
+        onDeleteSubmit = undefined,
     }: {
         claim: ClaimEditorClaim;
         payees?: ClaimEditorPayee[];
@@ -102,6 +105,9 @@
         timelineTitle?: string;
         history?: any[];
         deleteAction?: string; // New prop for delete action URL
+        headerActions?: Snippet;
+        sidePanel?: Snippet;
+        onDeleteSubmit?: (e: SubmitEvent) => void;
     } = $props();
 
     function emptyItem() {
@@ -349,7 +355,7 @@
         </Button>
 
         <div class="flex items-center gap-2">
-            <slot name="header-actions" />
+            {@render headerActions?.()}
             {#if isEditable && (showSaveButton || showSubmitButton)}
                 {#if isEditable && !isCreate && deleteAction}
                     <Button
@@ -361,6 +367,7 @@
                         disabled={isSubmitting}
                         onclick={(e) => {
                             if (
+                                !onDeleteSubmit &&
                                 !confirm("確定要刪除此草稿嗎？此動作無法復原。")
                             ) {
                                 e.preventDefault();
@@ -417,6 +424,11 @@
         id="claim-delete-form"
         method="POST"
         action={deleteAction}
+        onsubmitcapture={(e) => {
+            if (onDeleteSubmit) {
+                onDeleteSubmit(e);
+            }
+        }}
         use:enhance={() => {
             isSubmitting = true;
             return async ({ result, update }) => {
@@ -988,7 +1000,7 @@
 
     <!-- Audit History Sheet Drawer -->
     <Sheet.Root bind:open={auditDrawerOpen}>
-        <Sheet.Content side="right" class="w-[340px] sm:w-[400px]">
+        <Sheet.Content class="w-[340px] sm:w-[400px]">
             <Sheet.Header>
                 <Sheet.Title>{timelineTitle}</Sheet.Title>
                 <Sheet.Description
@@ -1010,7 +1022,7 @@
                         </p>
                     </div>
                 {/if}
-                <slot name="side-panel" />
+                {@render sidePanel?.()}
             </div>
         </Sheet.Content>
     </Sheet.Root>

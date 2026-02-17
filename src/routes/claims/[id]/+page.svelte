@@ -1,16 +1,10 @@
 <script lang="ts">
-    import { enhance } from "$app/forms";
+    import { enhance, applyAction } from "$app/forms";
     import { toast } from "svelte-sonner";
     import ClaimEditor from "$lib/components/claims/ClaimEditor.svelte";
     import { Button } from "$lib/components/ui/button";
     import * as Dialog from "$lib/components/ui/dialog";
-    import {
-        AlertCircle,
-        CheckCircle2,
-        Trash2,
-        Undo2,
-        XCircle,
-    } from "lucide-svelte";
+    import { CircleAlert, CircleCheck, Undo2, CircleX } from "lucide-svelte";
     import type { PageData } from "./$types";
 
     let { data }: { data: PageData } = $props();
@@ -103,10 +97,16 @@
         }) => {
             if (result.type === "success") {
                 toast.success(successMessage);
+                await update();
+            } else if (result.type === "redirect") {
+                toast.success(successMessage);
+                await applyAction(result);
             } else if (result.type === "failure") {
                 toast.error(result.data?.message || "操作失敗");
+                await update();
+            } else {
+                await update();
             }
-            await update();
         };
     }
 </script>
@@ -115,7 +115,7 @@
     <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
         <div class="flex items-start justify-between gap-3">
             <div class="flex items-start gap-2">
-                <AlertCircle class="mt-0.5 h-4 w-4 text-amber-700" />
+                <CircleAlert class="mt-0.5 h-4 w-4 text-amber-700" />
                 <p class="text-sm text-amber-800">
                     偵測到重複發票號碼（僅提醒，不阻擋提交）。
                 </p>
@@ -132,6 +132,63 @@
     </div>
 {/if}
 
+{#snippet headerActions()}
+    {#if canWithdraw}
+        <form
+            action="?/withdraw"
+            method="POST"
+            data-testid="claim-withdraw-form"
+            use:enhance={() =>
+                enhanceAction({ successMessage: "已撤回為草稿" })}
+            onsubmitcapture={(event) =>
+                requestConfirmSubmit(event, {
+                    title: "確認撤回草稿",
+                    message: "確定要撤回此申請嗎？撤回後將變為草稿狀態。",
+                    confirmLabel: "撤回草稿",
+                })}
+        >
+            <Button
+                variant="outline"
+                type="submit"
+                data-testid="claim-withdraw-button"
+            >
+                <Undo2 class="mr-1.5 h-4 w-4" /> 撤回草稿
+            </Button>
+        </form>
+    {/if}
+
+    {#if canCancel}
+        <form
+            action="?/cancel"
+            method="POST"
+            use:enhance={() => enhanceAction({ successMessage: "申請已撤銷" })}
+        >
+            <Button variant="outline" type="submit">
+                <CircleX class="mr-1.5 h-4 w-4" /> 撤銷申請
+            </Button>
+        </form>
+    {/if}
+
+    {#if canApprove}
+        <Button
+            variant="outline"
+            class="border-destructive/20 text-destructive hover:bg-destructive/5"
+            onclick={() => (isRejectModalOpen = true)}
+        >
+            <CircleX class="mr-1.5 h-4 w-4" /> 駁回
+        </Button>
+        <form
+            action="?/approve"
+            method="POST"
+            use:enhance={() => enhanceAction({ successMessage: "核准成功" })}
+        >
+            <Button type="submit">
+                <CircleCheck class="mr-1.5 h-4 w-4" /> 核准
+            </Button>
+        </form>
+    {/if}
+{/snippet}
+
 <ClaimEditor
     claim={editorClaim}
     payees={data.payees}
@@ -145,66 +202,15 @@
     deleteAction={isEditableApplicant ? "?/delete" : undefined}
     directSubmitInSameForm={false}
     {history}
->
-    <svelte:fragment slot="header-actions">
-        {#if canWithdraw}
-            <form
-                action="?/withdraw"
-                method="POST"
-                data-testid="claim-withdraw-form"
-                use:enhance={() =>
-                    enhanceAction({ successMessage: "已撤回為草稿" })}
-                onsubmitcapture={(event) =>
-                    requestConfirmSubmit(event, {
-                        title: "確認撤回草稿",
-                        message: "確定要撤回此申請嗎？撤回後將變為草稿狀態。",
-                        confirmLabel: "撤回草稿",
-                    })}
-            >
-                <Button
-                    variant="outline"
-                    type="submit"
-                    data-testid="claim-withdraw-button"
-                >
-                    <Undo2 class="mr-1.5 h-4 w-4" /> 撤回草稿
-                </Button>
-            </form>
-        {/if}
-
-        {#if canCancel}
-            <form
-                action="?/cancel"
-                method="POST"
-                use:enhance={() =>
-                    enhanceAction({ successMessage: "申請已撤銷" })}
-            >
-                <Button variant="outline" type="submit">
-                    <XCircle class="mr-1.5 h-4 w-4" /> 撤銷申請
-                </Button>
-            </form>
-        {/if}
-
-        {#if canApprove}
-            <Button
-                variant="outline"
-                class="border-destructive/20 text-destructive hover:bg-destructive/5"
-                onclick={() => (isRejectModalOpen = true)}
-            >
-                <XCircle class="mr-1.5 h-4 w-4" /> 駁回
-            </Button>
-            <form
-                action="?/approve"
-                method="POST"
-                use:enhance={() =>
-                    enhanceAction({ successMessage: "核准成功" })}
-            >
-                <Button type="submit">
-                    <CheckCircle2 class="mr-1.5 h-4 w-4" /> 核准
-                </Button>
-            </form>
-        {/if}
-    </svelte:fragment>
-</ClaimEditor>
+    {headerActions}
+    onDeleteSubmit={(e) =>
+        requestConfirmSubmit(e as unknown as SubmitEvent, {
+            title: "確認刪除草稿",
+            message: "確定要刪除此草稿嗎？此動作無法復原。",
+            confirmLabel: "確認刪除",
+            confirmVariant: "destructive",
+        })}
+/>
 
 <Dialog.Root bind:open={isRejectModalOpen}>
     <Dialog.Content class="max-w-md rounded-2xl">

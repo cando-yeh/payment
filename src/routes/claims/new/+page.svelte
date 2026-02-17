@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { enhance } from "$app/forms";
-    import { toast } from "svelte-sonner";
     import ClaimEditor from "$lib/components/claims/ClaimEditor.svelte";
     import { Button } from "$lib/components/ui/button";
     import * as Dialog from "$lib/components/ui/dialog";
@@ -36,30 +34,6 @@
     let pendingConfirmForm = $state<HTMLFormElement | null>(null);
     let allowConfirmedSubmitFor = $state<HTMLFormElement | null>(null);
 
-    function requestConfirmSubmit(
-        event: SubmitEvent,
-        options: {
-            title?: string;
-            message: string;
-            confirmLabel?: string;
-            confirmVariant?: "default" | "destructive";
-        },
-    ) {
-        const form = event.currentTarget as HTMLFormElement;
-        if (allowConfirmedSubmitFor === form) {
-            allowConfirmedSubmitFor = null;
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        pendingConfirmForm = form;
-        confirmTitle = options.title || "確認操作";
-        confirmMessage = options.message;
-        confirmButtonLabel = options.confirmLabel || "確認";
-        confirmButtonVariant = options.confirmVariant || "default";
-        isConfirmModalOpen = true;
-    }
-
     function executeConfirmedSubmit() {
         const form = pendingConfirmForm;
         pendingConfirmForm = null;
@@ -89,11 +63,7 @@
     directSubmitInSameForm={true}
     requireApproverOnDirectSubmit={true}
     hasApprover={data.hasApprover}
->
-    <svelte:fragment slot="header-actions">
-        <!-- 新增模式無額外操作按鈕 -->
-    </svelte:fragment>
-</ClaimEditor>
+></ClaimEditor>
 
 <Dialog.Root bind:open={isConfirmModalOpen}>
     <Dialog.Content

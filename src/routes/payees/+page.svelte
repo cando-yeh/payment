@@ -8,8 +8,6 @@
         Plus,
         Search,
         Undo2,
-        Check,
-        X,
         Eye,
         EyeOff,
         LoaderCircle,
@@ -21,7 +19,7 @@
         UserCheck,
     } from "lucide-svelte";
     import { invalidateAll } from "$app/navigation";
-    import { enhance, deserialize } from "$app/forms";
+    import { deserialize } from "$app/forms";
     import { toast } from "svelte-sonner";
     import PayeeSheet from "$lib/components/layout/PayeeSheet.svelte";
     import PayeeRequestSheet from "$lib/components/layout/PayeeRequestSheet.svelte";
@@ -582,9 +580,7 @@
                                         <Ban class="h-4 w-4" />
                                     </Button>
                                 {/if}
-                                {#if payee.source === "request" &&
-                                    payee?.payload?.requested_by === data.user?.id &&
-                                    payee?.payload?.status === "pending"}
+                                {#if payee.source === "request" && payee?.payload?.requested_by === data.user?.id && payee?.payload?.status === "pending"}
                                     <Button
                                         variant="ghost"
                                         size="icon"
@@ -592,7 +588,9 @@
                                         class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/5"
                                         onclick={(e) => {
                                             e.stopPropagation();
-                                            handleWithdrawRequestFromList(payee);
+                                            handleWithdrawRequestFromList(
+                                                payee,
+                                            );
                                         }}
                                         disabled={isActionSubmitting}
                                         title="撤銷申請"

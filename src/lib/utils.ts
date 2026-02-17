@@ -23,6 +23,19 @@ export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
 
+export function formatCurrency(amount: number) {
+	return new Intl.NumberFormat("zh-TW", {
+		style: "currency",
+		currency: "TWD",
+		maximumFractionDigits: 0,
+	}).format(amount).replace("TWD", "").trim();
+}
+
+export function formatDate(date: string | Date | undefined | null) {
+	if (!date) return "-";
+	return new Date(date).toLocaleDateString("zh-TW");
+}
+
 // ========================================
 // TypeScript 輔助型別
 // ========================================

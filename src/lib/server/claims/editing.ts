@@ -130,6 +130,7 @@ export async function persistEditedClaim(
 ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
     const { error: updateClaimError } = await supabase.rpc("update_claim", {
         _claim_id: claimRow.id,
+        _description: "",
         _payee_id: claimRow.claim_type === "employee" ? null : parsed.payeeId,
         _total_amount: parsed.totalAmount,
         _bank_code: parsed.isFloating ? parsed.bankCode : null,
@@ -139,7 +140,7 @@ export async function persistEditedClaim(
     });
     if (updateClaimError) {
         console.error("Error updating claim:", updateClaimError);
-        return { ok: false, status: 500, message: "Failed to update claim" };
+        return { ok: false, status: 500, message: `Failed to update claim: ${updateClaimError.message}` };
     }
 
     const { error: deleteItemsError } = await supabase

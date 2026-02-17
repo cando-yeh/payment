@@ -524,8 +524,8 @@ export const actions: Actions = {
         const { data: claim, error: fetchError } = await getOwnedClaim(supabase, id, session.user.id);
         if (fetchError || !claim) return fail(404, { message: 'Claim not found' });
 
-        if (claim.status !== 'pending_manager') {
-            return fail(400, { message: 'Only pending manager review claims can be withdrawn' });
+        if (claim.status !== 'pending_manager' && claim.status !== 'pending_finance') {
+            return fail(400, { message: '只有等待審核中的單據可以撤回' });
         }
 
         const { error: updateError } = await supabase
@@ -533,10 +533,10 @@ export const actions: Actions = {
             .update({ status: 'draft', updated_at: new Date().toISOString() })
             .eq('id', id)
             .eq('applicant_id', session.user.id)
-            .eq('status', 'pending_manager');
+            .in('status', ['pending_manager', 'pending_finance']);
 
         if (updateError) return fail(500, { message: 'Withdraw failed' });
-        return { success: true };
+        throw redirect(303, '/claims?tab=drafts');
     },
 
     togglePayFirst: async ({ request, params, locals: { supabase, getSession } }) => {

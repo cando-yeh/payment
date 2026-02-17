@@ -90,11 +90,12 @@ export const actions: Actions = {
         }
 
         const items = normalizeItems(itemsJson);
-        if (!items || items.length === 0) {
+        if ((!items || items.length === 0) && shouldSubmitDirectly) {
             return fail(400, { message: 'At least one item is required' });
         }
+        const safeItems = items || [];
 
-        const voucherSelections = items.map((item) => {
+        const voucherSelections = safeItems.map((item) => {
             const statusRaw = String(item.attachment_status || '').trim();
             const exemptReason = String(item.exempt_reason || '').trim();
             const status = ALLOWED_ATTACHMENT_STATUSES.has(statusRaw)
@@ -108,7 +109,7 @@ export const actions: Actions = {
             exemptReason: string;
             file: File | null;
         }[] = [];
-        for (let i = 0; i < items.length; i += 1) {
+        for (let i = 0; i < safeItems.length; i += 1) {
             const selected = voucherSelections[i] || { status: null, exemptReason: '' };
             const file = formData.get(`item_attachment_${i}`) as File | null;
             const hasFile = Boolean(file && file.size > 0);
@@ -117,21 +118,33 @@ export const actions: Actions = {
                 return fail(400, { message: `第 ${i + 1} 筆明細尚未選擇憑證處理方式` });
             }
 
-            const effectiveStatus = selected.status || (hasFile ? 'uploaded' : 'pending_supplement');
-            if (effectiveStatus === 'uploaded' && !hasFile) {
-                return fail(400, { message: `第 ${i + 1} 筆明細已選擇上傳憑證，請選擇附件檔案` });
-            }
-            if (effectiveStatus !== 'uploaded' && hasFile) {
-                return fail(400, { message: `第 ${i + 1} 筆明細已上傳檔案，請將憑證處理方式改為「上傳憑證」` });
-            }
-            if (effectiveStatus === 'exempt' && !selected.exemptReason) {
-                return fail(400, { message: `第 ${i + 1} 筆明細選擇「無憑證」時，必須填寫理由` });
+            let effectiveStatus = selected.status || (hasFile ? 'uploaded' : 'pending_supplement');
+
+            // Validation logic - only strict for direct submit
+            if (shouldSubmitDirectly) {
+                if (effectiveStatus === 'uploaded' && !hasFile) {
+                    return fail(400, { message: `第 ${i + 1} 筆明細已選擇上傳憑證，請選擇附件檔案` });
+                }
+                if (effectiveStatus !== 'uploaded' && hasFile) {
+                    return fail(400, { message: `第 ${i + 1} 筆明細已上傳檔案，請將憑證處理方式改為「上傳憑證」` });
+                }
+                if (effectiveStatus === 'exempt' && !selected.exemptReason) {
+                    return fail(400, { message: `第 ${i + 1} 筆明細選擇「無憑證」時，必須填寫理由` });
+                }
+            } else {
+                // Relaxed logic for drafts: if invalid state, fallback to pending_supplement
+                if (effectiveStatus === 'uploaded' && !hasFile) {
+                    effectiveStatus = 'pending_supplement';
+                }
+                if (effectiveStatus === 'exempt' && !selected.exemptReason) {
+                    effectiveStatus = 'pending_supplement';
+                }
             }
 
             attachmentPlans.push({ effectiveStatus, exemptReason: selected.exemptReason, file });
         }
 
-        const claimItems = items.map((item, index) => {
+        const claimItems = safeItems.map((item, index) => {
             const amount = Number(item.amount);
             return {
                 claim_id: '',
@@ -140,14 +153,14 @@ export const actions: Actions = {
                 date_end: null,
                 category: (item.category || 'general').trim(),
                 description: String(item.description || '').trim(),
-                amount,
+                amount: Number.isFinite(amount) ? amount : 0,
                 invoice_number: item.invoice_number || null,
                 attachment_status: 'pending_supplement',
                 extra: {}
             };
         });
 
-        if (claimItems.some((item) => !Number.isFinite(item.amount) || item.amount <= 0)) {
+        if (shouldSubmitDirectly && claimItems.some((item) => item.amount <= 0)) {
             return fail(400, { message: 'All item amounts must be greater than 0' });
         }
 
@@ -155,17 +168,17 @@ export const actions: Actions = {
 
         let normalizedPayeeId: string | null = null;
         if (claimType !== 'employee') {
-            if (!payeeId) {
+            if (shouldSubmitDirectly && !payeeId) {
                 return fail(400, { message: 'Payee is required for this claim type' });
             }
-            normalizedPayeeId = payeeId;
+            normalizedPayeeId = payeeId || null;
         }
 
         if (isFloatingAccount && claimType === 'employee') {
             return fail(400, { message: 'Employee claim cannot use floating account' });
         }
 
-        if (isFloatingAccount && (!bankCode || !accountName || !bankAccount)) {
+        if (isFloatingAccount && shouldSubmitDirectly && (!bankCode || !accountName || !bankAccount)) {
             return fail(400, { message: 'Missing required bank information for floating account' });
         }
 
@@ -205,7 +218,7 @@ export const actions: Actions = {
             }
         }
 
-        for (let i = 0; i < items.length; i += 1) {
+        for (let i = 0; i < safeItems.length; i += 1) {
             const { effectiveStatus, exemptReason, file } = attachmentPlans[i];
 
             const itemId = itemIdByIndex.get(i);
