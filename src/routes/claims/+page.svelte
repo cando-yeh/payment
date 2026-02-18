@@ -2,7 +2,7 @@
     import { Button } from "$lib/components/ui/button";
     import { Plus, FileText } from "lucide-svelte";
     import { fade } from "svelte/transition";
-    import { cn } from "$lib/utils";
+    import * as Tabs from "$lib/components/ui/tabs";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
@@ -38,42 +38,38 @@
         searchTerm = data.search || "";
     });
 
-    let filteredClaims = $derived.by(() => {
+    let tabClaims = $derived.by(() => {
         if (!data.claims) return [];
+        if (currentTab === "drafts") {
+            return data.claims.filter((claim) =>
+                ["draft", "returned"].includes(claim.status),
+            );
+        }
+        if (currentTab === "processing") {
+            return data.claims.filter((claim) =>
+                ["pending_manager", "pending_finance", "pending_payment"].includes(
+                    claim.status,
+                ),
+            );
+        }
+        if (currentTab === "action_required") {
+            return data.claims.filter((claim) =>
+                ["paid_pending_doc", "pending_doc_review"].includes(claim.status),
+            );
+        }
+        if (currentTab === "history") {
+            return data.claims.filter((claim) =>
+                ["paid", "cancelled"].includes(claim.status),
+            );
+        }
+        return data.claims;
+    });
+
+    let filteredClaims = $derived.by(() => {
         const normalizedSearch = searchTerm.trim().toLowerCase();
-        const tabFiltered = (() => {
-            if (currentTab === "drafts") {
-                return data.claims.filter((claim) =>
-                    ["draft", "returned"].includes(claim.status),
-                );
-            }
-            if (currentTab === "processing") {
-                return data.claims.filter((claim) =>
-                    [
-                        "pending_manager",
-                        "pending_finance",
-                        "pending_payment",
-                    ].includes(claim.status),
-                );
-            }
-            if (currentTab === "action_required") {
-                return data.claims.filter((claim) =>
-                    ["paid_pending_doc", "pending_doc_review"].includes(
-                        claim.status,
-                    ),
-                );
-            }
-            if (currentTab === "history") {
-                return data.claims.filter((claim) =>
-                    ["paid", "cancelled"].includes(claim.status),
-                );
-            }
-            return data.claims;
-        })();
+        if (!normalizedSearch) return tabClaims;
 
-        if (!normalizedSearch) return tabFiltered;
-
-        return tabFiltered.filter((claim) => {
+        return tabClaims.filter((claim) => {
             const id = String(claim.id || "").toLowerCase();
             const payeeName = String(claim.payee?.name || "").toLowerCase();
             return (
@@ -81,6 +77,15 @@
                 payeeName.includes(normalizedSearch)
             );
         });
+    });
+
+    let emptyMessage = $derived.by(() => {
+        const keyword = searchTerm.trim();
+        if ((data.claims?.length || 0) === 0) return "目前尚無請款單";
+        if (keyword && filteredClaims.length === 0)
+            return `找不到符合「${keyword}」的結果`;
+        if (tabClaims.length === 0) return "目前篩選條件下沒有結果";
+        return "目前尚無相關請款紀錄";
     });
 </script>
 
@@ -103,62 +108,36 @@
         <div class="w-full">
             <ListToolbar>
                 {#snippet left()}
-                    <div
-                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1"
-                    >
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={currentTab === "drafts"}
-                            class={cn(
-                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                                currentTab === "drafts"
-                                    ? "bg-background shadow-sm"
-                                    : "",
-                            )}
-                            onclick={() => handleTabChange("drafts")}
-                            >草稿/退回</button
+                    <Tabs.Root value={currentTab} onValueChange={handleTabChange}>
+                        <Tabs.List
+                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
                         >
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={currentTab === "processing"}
-                            class={cn(
-                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                                currentTab === "processing"
-                                    ? "bg-background shadow-sm"
-                                    : "",
-                            )}
-                            onclick={() => handleTabChange("processing")}
-                            >審核中</button
-                        >
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={currentTab === "action_required"}
-                            class={cn(
-                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                                currentTab === "action_required"
-                                    ? "bg-background shadow-sm"
-                                    : "",
-                            )}
-                            onclick={() => handleTabChange("action_required")}
-                            >待補件</button
-                        >
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={currentTab === "history"}
-                            class={cn(
-                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                                currentTab === "history"
-                                    ? "bg-background shadow-sm"
-                                    : "",
-                            )}
-                            onclick={() => handleTabChange("history")}
-                            >歷史紀錄</button
-                        >
-                    </div>
+                            <Tabs.Trigger
+                                value="drafts"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
+                                草稿/退回
+                            </Tabs.Trigger>
+                            <Tabs.Trigger
+                                value="processing"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
+                                審核中
+                            </Tabs.Trigger>
+                            <Tabs.Trigger
+                                value="action_required"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
+                                待補件
+                            </Tabs.Trigger>
+                            <Tabs.Trigger
+                                value="history"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
+                                歷史紀錄
+                            </Tabs.Trigger>
+                        </Tabs.List>
+                    </Tabs.Root>
                 {/snippet}
                 {#snippet right()}
                     <SearchField
@@ -173,16 +152,18 @@
                 <ClaimTable
                     claims={filteredClaims}
                     emptyIcon={FileText}
-                    emptyMessage="目前尚無相關請款紀錄"
+                    emptyMessage={emptyMessage}
                 >
                     {#snippet emptyAction()}
-                        <Button
-                            href="/claims/new"
-                            variant="outline"
-                            class="rounded-xl border-border/50 font-bold h-9 px-6 text-xs"
-                        >
-                            立即建立單據
-                        </Button>
+                        {#if (data.claims?.length || 0) === 0}
+                            <Button
+                                href="/claims/new"
+                                variant="outline"
+                                class="rounded-xl border-border/50 font-bold h-9 px-6 text-xs"
+                            >
+                                立即建立單據
+                            </Button>
+                        {/if}
                     {/snippet}
                 </ClaimTable>
             </div>

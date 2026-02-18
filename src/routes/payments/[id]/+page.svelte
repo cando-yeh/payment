@@ -3,6 +3,7 @@
     import * as Table from "$lib/components/ui/table";
     import * as Card from "$lib/components/ui/card";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
+    import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
     import {
         ArrowLeft,
         CircleAlert,
@@ -15,6 +16,35 @@
 
     let { data }: { data: PageData } = $props();
     let { payment, claims } = $derived(data);
+    let isConfirmOpen = $state(false);
+    let pendingConfirmForm = $state<HTMLFormElement | null>(null);
+    let allowConfirmedSubmitFor = $state<HTMLFormElement | null>(null);
+
+    function requestConfirmSubmit(event: SubmitEvent) {
+        const form = event.currentTarget as HTMLFormElement;
+        if (allowConfirmedSubmitFor === form) {
+            allowConfirmedSubmitFor = null;
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        pendingConfirmForm = form;
+        isConfirmOpen = true;
+    }
+
+    function executeConfirmedSubmit() {
+        const form = pendingConfirmForm;
+        pendingConfirmForm = null;
+        isConfirmOpen = false;
+        if (!form || !form.isConnected) return;
+        allowConfirmedSubmitFor = form;
+        form.requestSubmit();
+    }
+
+    function cancelConfirmedSubmit() {
+        pendingConfirmForm = null;
+        isConfirmOpen = false;
+    }
 
     function formatDate(date: string) {
         if (!date) return "-";
@@ -50,7 +80,12 @@
                 {:else}
                     <StatusBadge status="paid" />
                 {/if}
-                <form action="?/cancelPayment" method="POST" use:enhance>
+                <form
+                    action="?/cancelPayment"
+                    method="POST"
+                    use:enhance
+                    onsubmitcapture={requestConfirmSubmit}
+                >
                     <Button
                         variant="outline"
                         size="sm"
@@ -155,3 +190,13 @@
         </Card.Root>
     </div>
 </div>
+
+<ConfirmActionDialog
+    bind:open={isConfirmOpen}
+    title="確認撤銷撥款"
+    description="確定要撤銷此付款嗎？系統將回滾相關請款單狀態。"
+    confirmLabel="確認撤銷"
+    confirmVariant="destructive"
+    onCancel={cancelConfirmedSubmit}
+    onConfirm={executeConfirmedSubmit}
+/>

@@ -25,6 +25,7 @@
     import PayeeAttachmentTiles from "$lib/components/layout/PayeeAttachmentTiles.svelte";
     import type { AttachmentKey } from "$lib/components/layout/PayeeAttachmentTiles.svelte";
     import { invalidateAll } from "$app/navigation";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     let { payee, open = $bindable(false), isFinance = false } = $props();
 
@@ -341,16 +342,16 @@
                         result.data.decryptedAccount,
                     );
                     if (!nextAccount) {
-                        toast.error("無法讀取帳號資訊");
+                        toast.error(UI_MESSAGES.user.accountReadFailed);
                         return;
                     }
                     decryptedAccount = nextAccount;
                 } else {
-                    toast.error("無法讀取帳號資訊");
+                    toast.error(UI_MESSAGES.user.accountReadFailed);
                     return;
                 }
             } catch {
-                toast.error("無法讀取帳號資訊");
+                toast.error(UI_MESSAGES.user.accountReadFailed);
                 return;
             } finally {
                 revealing = false;
@@ -372,7 +373,7 @@
         cancel: () => void;
     }) {
         if (!hasMeaningfulChanges) {
-            toast.error("至少需修改一項資料後才能提交異動申請");
+            toast.error(UI_MESSAGES.payee.noChanges);
             cancel();
             return;
         }
@@ -401,11 +402,11 @@
                         [payee.id]: nextTaxId,
                     };
                 }
-                toast.success("更新申請已提交，請等待財務審核。");
+                toast.success(UI_MESSAGES.payee.updateRequestSubmitted);
                 await invalidateAll();
                 open = false;
             } else {
-                toast.error(result.data?.message || "提交失敗，請稍後再試。");
+                toast.error(result.data?.message || UI_MESSAGES.common.submitFailed);
             }
         };
     }

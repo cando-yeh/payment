@@ -12,6 +12,7 @@
     import { toast } from "svelte-sonner";
     import { page } from "$app/state";
     import { goto } from "$app/navigation";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     let { data }: { data: PageData } = $props();
 
@@ -57,7 +58,7 @@
             <ListToolbar>
                 {#snippet left()}
                     <Tabs.List
-                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-wrap"
+                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
                     >
                         <Tabs.Trigger
                             value="manager"
@@ -157,9 +158,7 @@
                                                     selectedClaims = [];
                                                     isBatchPayDialogOpen =
                                                         false;
-                                                    toast.success(
-                                                        "批次撥款已完成",
-                                                    );
+                                                    toast.success(UI_MESSAGES.approval.batchPayDone);
                                                 } else if (
                                                     result.type === "failure"
                                                 ) {
@@ -167,7 +166,7 @@
                                                         String(
                                                             result.data
                                                                 ?.message || "",
-                                                        ) || "批次撥款失敗",
+                                                        ) || UI_MESSAGES.approval.batchPayFailed,
                                                     );
                                                 }
                                                 await update();

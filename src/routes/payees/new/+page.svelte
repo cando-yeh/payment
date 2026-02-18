@@ -9,11 +9,13 @@
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import * as Card from "$lib/components/ui/card";
+    import * as Tabs from "$lib/components/ui/tabs";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import { toast } from "svelte-sonner";
     import { ArrowLeft, LoaderCircle } from "lucide-svelte";
     import { goto } from "$app/navigation";
     import { compressFormImageInputs } from "$lib/client/image-compression";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     // Component State
     let isLoading = $state(false);
@@ -39,12 +41,12 @@
             isLoading = false;
 
             if (result.type === "success") {
-                toast.success("收款人申請已提交，請等待財務審核。");
+                toast.success(UI_MESSAGES.payee.requestSubmitted);
                 goto("/payees");
             } else if (result.type === "redirect") {
                 goto(result.location);
             } else {
-                toast.error(result.data?.message || "提交失敗，請稍後再試。");
+                toast.error(result.data?.message || UI_MESSAGES.common.submitFailed);
             }
         };
     }
@@ -79,28 +81,30 @@
                 <!-- Type Selection -->
                 <div class="space-y-3">
                     <Label>收款人類型</Label>
-                    <div class="flex gap-4">
-                        <Button
-                            type="button"
-                            variant={payeeType === "vendor"
-                                ? "default"
-                                : "outline"}
-                            class="flex-1"
-                            onclick={() => (payeeType = "vendor")}
+                    <Tabs.Root
+                        value={payeeType}
+                        onValueChange={(v) =>
+                            (payeeType = v === "personal"
+                                ? "personal"
+                                : "vendor")}
+                    >
+                        <Tabs.List
+                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
                         >
-                            廠商 (公司/行號)
-                        </Button>
-                        <Button
-                            type="button"
-                            variant={payeeType === "personal"
-                                ? "default"
-                                : "outline"}
-                            class="flex-1"
-                            onclick={() => (payeeType = "personal")}
-                        >
-                            個人 (勞務/領據)
-                        </Button>
-                    </div>
+                            <Tabs.Trigger
+                                value="vendor"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
+                                廠商 (公司/行號)
+                            </Tabs.Trigger>
+                            <Tabs.Trigger
+                                value="personal"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
+                                個人 (勞務/領據)
+                            </Tabs.Trigger>
+                        </Tabs.List>
+                    </Tabs.Root>
                     <!-- Hidden input for form submission -->
                     <input type="hidden" name="type" value={payeeType} />
                 </div>

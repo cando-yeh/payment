@@ -86,12 +86,16 @@
                 </Table.Head>
             {/if}
             <Table.Head
+                class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colDate)}
+                >日期</Table.Head
+            >
+            <Table.Head
                 class={cn(
                     LIST_TABLE_TOKENS.headBase,
                     LIST_TABLE_TOKENS.colId,
                     !selectable && "pl-8",
                 )}
-                >單號</Table.Head
+                >ID#</Table.Head
             >
             <Table.Head class={LIST_TABLE_TOKENS.headBase}>類別</Table.Head>
             <Table.Head class={LIST_TABLE_TOKENS.headBase}
@@ -108,10 +112,6 @@
             <Table.Head
                 class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colStatus)}
                 >當前狀態</Table.Head
-            >
-            <Table.Head
-                class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colDate)}
-                >日期</Table.Head
             >
         </Table.Row>
     </Table.Header>
@@ -135,36 +135,42 @@
                             />
                         </Table.Cell>
                     {/if}
-                    <Table.Cell class={cn("py-0", !selectable && "pl-8")}>
+                    <Table.Cell
+                        class={cn(
+                            LIST_TABLE_TOKENS.idCell,
+                            "text-muted-foreground font-bold text-xs",
+                        )}
+                    >
+                        {formatDate(claim.submitted_at || claim.created_at)}
+                    </Table.Cell>
+                    <Table.Cell
+                        class={cn(
+                            "py-0",
+                            LIST_TABLE_TOKENS.idCell,
+                            !selectable && "pl-8",
+                        )}
+                    >
                         <span
-                            class="text-xs font-bold text-foreground opacity-40 select-all"
+                            class={cn(
+                                LIST_TABLE_TOKENS.idText,
+                                "select-all",
+                            )}
                         >
                             #{claim.id.split("-")[0]}
                         </span>
                     </Table.Cell>
-                    <Table.Cell>
-                        <AppBadge
-                            preset="claim.type"
-                            label={getClaimTypeLabel(claim.claim_type)}
-                        />
-                    </Table.Cell>
-                    <Table.Cell>
-                        <div class="flex items-center gap-2">
-                            <div
-                                class="h-7 w-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-muted-foreground"
-                            >
-                                {(claim.payee?.name ||
-                                    claim.applicant?.full_name ||
-                                    claim.approver?.full_name ||
-                                    "本")[0]}
-                            </div>
-                            <span class="text-xs font-bold text-foreground/70">
-                                {claim.payee?.name ||
-                                    claim.applicant?.full_name ||
-                                    claim.approver?.full_name ||
-                                    "本人"}
-                            </span>
+                    <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
+                        <div class={LIST_TABLE_TOKENS.badgeWrap}>
+                            <AppBadge
+                                preset="claim.type"
+                                label={getClaimTypeLabel(claim.claim_type)}
+                            />
                         </div>
+                    </Table.Cell>
+                    <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
+                        {claim.payee?.name ||
+                            claim.applicant?.full_name ||
+                            "—"}
                     </Table.Cell>
                     <Table.Cell class="text-right pr-4">
                         {@const amountParts = splitCurrencyParts(
@@ -183,14 +189,13 @@
                             </span>
                         </div>
                     </Table.Cell>
-                    <Table.Cell>
-                        <StatusBadge
-                            status={claim.status}
-                            className="scale-90 origin-left"
-                        />
-                    </Table.Cell>
-                    <Table.Cell class="text-muted-foreground font-bold text-xs">
-                        {formatDate(claim.submitted_at || claim.created_at)}
+                    <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
+                        <div class={LIST_TABLE_TOKENS.badgeWrap}>
+                            <StatusBadge
+                                status={claim.status}
+                                className="scale-90"
+                            />
+                        </div>
                     </Table.Cell>
                 </Table.Row>
             {/each}

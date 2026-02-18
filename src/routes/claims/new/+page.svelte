@@ -11,7 +11,7 @@
         claim_type: "employee",
         status: "draft",
         created_at: null,
-        applicant_name: "本人",
+        applicant_name: "",
         items: [
             {
                 date: new Date().toISOString().split("T")[0],

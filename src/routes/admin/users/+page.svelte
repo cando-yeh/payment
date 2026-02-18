@@ -21,6 +21,7 @@
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
     import { cn } from "$lib/utils";
     import { fade } from "svelte/transition";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     let { data } = $props();
 
@@ -75,17 +76,31 @@
         users.filter((u) => !isActiveUser(u)).length,
     );
 
-    const filteredUsers = $derived.by(() => {
-        const normalized = searchTerm.trim().toLowerCase();
-        return users.filter((u) => {
+    const tabFilteredUsers = $derived.by(() =>
+        users.filter((u) => {
             const activeMatches =
                 currentTab === "active" ? isActiveUser(u) : !isActiveUser(u);
-            if (!activeMatches) return false;
-            if (!normalized) return true;
+            return activeMatches;
+        }),
+    );
+
+    const filteredUsers = $derived.by(() => {
+        const normalized = searchTerm.trim().toLowerCase();
+        if (!normalized) return tabFilteredUsers;
+        return tabFilteredUsers.filter((u) => {
             const fullName = String(u.full_name || "").toLowerCase();
             const id = String(u.id || "").toLowerCase();
             return fullName.includes(normalized) || id.includes(normalized);
         });
+    });
+
+    const emptyMessage = $derived.by(() => {
+        const keyword = searchTerm.trim();
+        if (users.length === 0) return "目前尚無使用者";
+        if (keyword && filteredUsers.length === 0)
+            return `找不到符合「${keyword}」的結果`;
+        if (tabFilteredUsers.length === 0) return "目前篩選條件下沒有結果";
+        return "目前尚無使用者";
     });
 
     function resolveActionMessage(payload: any, fallback: string) {
@@ -155,9 +170,9 @@
             });
             await parseActionResponse(response, "停用失敗");
             await invalidateAll();
-            toast.success("使用者已停用");
+            toast.success(UI_MESSAGES.user.deactivated);
         } catch (e: any) {
-            toast.error(e?.message || "停用失敗");
+            toast.error(e?.message || UI_MESSAGES.user.deactivateFailed);
         } finally {
             setPending(opKey, false);
         }
@@ -179,9 +194,9 @@
             });
             await parseActionResponse(response, "重新啟用失敗");
             await invalidateAll();
-            toast.success("使用者已重新啟用");
+            toast.success(UI_MESSAGES.user.reactivated);
         } catch (e: any) {
-            toast.error(e?.message || "重新啟用失敗");
+            toast.error(e?.message || UI_MESSAGES.user.reactivateFailed);
         } finally {
             setPending(opKey, false);
         }
@@ -203,9 +218,9 @@
             });
             await parseActionResponse(response, "永久刪除失敗");
             await invalidateAll();
-            toast.success("使用者已永久刪除");
+            toast.success(UI_MESSAGES.user.deleted);
         } catch (e: any) {
-            toast.error(e?.message || "永久刪除失敗");
+            toast.error(e?.message || UI_MESSAGES.user.deleteFailed);
         } finally {
             setPending(opKey, false);
         }
@@ -229,11 +244,19 @@
             >
                 <ListToolbar>
                     {#snippet left()}
-                        <Tabs.List>
-                            <Tabs.Trigger value="active">
+                        <Tabs.List
+                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
+                        >
+                            <Tabs.Trigger
+                                value="active"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
                                 啟用中 ({activeCount})
                             </Tabs.Trigger>
-                            <Tabs.Trigger value="inactive">
+                            <Tabs.Trigger
+                                value="inactive"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            >
                                 已停用 ({inactiveCount})
                             </Tabs.Trigger>
                         </Tabs.List>
@@ -242,7 +265,6 @@
                         <SearchField
                             bind:value={searchTerm}
                             placeholder="搜尋姓名或 ID..."
-                            widthClass="w-full max-w-sm"
                             inputClassName="pl-9 text-sm"
                         />
                     {/snippet}
@@ -309,16 +331,18 @@
                                     >{user.email}</span
                                 >
                             </Table.Cell>
-                            <Table.Cell>
-                                {#if isActiveUser(user)}
-                                    <StatusBadge status="active" />
-                                {:else}
-                                    <StatusBadge status="inactive" />
-                                {/if}
+                            <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
+                                <div class={LIST_TABLE_TOKENS.badgeWrap}>
+                                    {#if isActiveUser(user)}
+                                        <StatusBadge status="active" />
+                                    {:else}
+                                        <StatusBadge status="inactive" />
+                                    {/if}
+                                </div>
                             </Table.Cell>
-                            <Table.Cell>
+                            <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
                                 <div
-                                    class="flex gap-1.5 flex-nowrap items-center"
+                                    class="flex gap-1.5 flex-nowrap items-center justify-center"
                                 >
                                     {#if user.is_admin}
                                         <AppBadge preset="role.admin" />
@@ -331,12 +355,10 @@
                                     {/if}
                                 </div>
                             </Table.Cell>
-                            <Table.Cell>
-                                <span class="text-sm text-muted-foreground">
-                                    {data.approverOptions.find(
-                                        (o) => o.id === user.approver_id,
-                                    )?.full_name || "—"}
-                                </span>
+                            <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
+                                {data.approverOptions.find(
+                                    (o) => o.id === user.approver_id,
+                                )?.full_name || "—"}
                             </Table.Cell>
                             <Table.Cell class="text-right">
                                 <RowActionButtons>
@@ -409,7 +431,7 @@
                     {:else}
                         <ListTableEmptyState
                             icon={Users}
-                            description="無符合條件的使用者"
+                            description={emptyMessage}
                             colspan={6}
                         />
                     {/each}

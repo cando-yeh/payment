@@ -15,14 +15,16 @@
 
 <div
     class={cn(
-        "p-6 border-b border-border/30 flex flex-col md:flex-row md:items-center justify-between gap-6",
+        "p-6 border-b border-border/30 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between",
         className,
     )}
 >
-    <div class="flex items-center gap-3 flex-wrap">
+    <div
+        class="flex min-w-0 items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex-1"
+    >
         {@render left?.()}
     </div>
-    <div class="flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-3 lg:shrink-0">
         {@render right?.()}
     </div>
 </div>

@@ -187,11 +187,22 @@ test.describe.serial('Payment Module E2E', () => {
         // 2. Go to Payment History
         await page.goto('/payments');
         await expect(page.locator(`text=${paymentId.split('-')[0]}`)).toBeVisible();
+        const paidAtCell = page.locator('table tbody tr').first().locator('td').nth(0);
+        await expect(paidAtCell).toBeVisible();
+        await expect(paidAtCell).toContainText(/\d{4}\/\d{2}\/\d{2}/);
+        await expect(paidAtCell).not.toContainText(':');
 
         // 3. Go to Detail
         await page.goto(`/payments/${paymentId}`);
         await expect(page.locator(`text=${paymentId}`)).toBeVisible();
         await expect(page.locator('text=已撥款')).toBeVisible();
+        const detailPaidAt = page
+            .locator('div.flex.items-center.justify-between.text-xs')
+            .filter({ hasText: '撥款時間' })
+            .locator('span')
+            .last();
+        await expect(detailPaidAt).toContainText(/\d{4}\/\d{2}\/\d{2}/);
+        await expect(detailPaidAt).not.toContainText(':');
 
         // 4. Submit reversal action with the same authenticated browser session
         const cancelResult = await page.evaluate(async ({ id }) => {

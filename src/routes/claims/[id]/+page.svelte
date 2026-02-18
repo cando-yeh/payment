@@ -6,6 +6,7 @@
     import * as Dialog from "$lib/components/ui/dialog";
     import { CircleAlert, CircleCheck, Undo2, CircleX } from "lucide-svelte";
     import type { PageData } from "./$types";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     import { page } from "$app/state";
 
@@ -150,7 +151,7 @@
                 toast.success(successMessage);
                 await applyAction(result);
             } else if (result.type === "failure") {
-                toast.error(result.data?.message || "操作失敗");
+                toast.error(result.data?.message || UI_MESSAGES.common.actionFailed);
                 await update();
             } else {
                 await update();
@@ -210,6 +211,13 @@
             action="?/cancel"
             method="POST"
             use:enhance={() => enhanceAction({ successMessage: "申請已撤銷" })}
+            onsubmitcapture={(event) =>
+                requestConfirmSubmit(event, {
+                    title: "確認撤銷申請",
+                    message: "確定要撤銷此申請嗎？撤銷後此單據將不可再送審。",
+                    confirmLabel: "確認撤銷",
+                    confirmVariant: "destructive",
+                })}
         >
             <Button variant="outline" type="submit">
                 <CircleX class="mr-1.5 h-4 w-4" /> 撤銷申請

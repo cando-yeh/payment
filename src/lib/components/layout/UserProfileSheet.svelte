@@ -22,6 +22,7 @@
     import { invalidateAll } from "$app/navigation";
     import RoleApproverPanel from "$lib/components/layout/RoleApproverPanel.svelte";
     import BankAccountSection from "$lib/components/layout/BankAccountSection.svelte";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     let {
         user,
@@ -166,7 +167,9 @@
             loading = false;
             if (result.type === "success") {
                 toast.success(
-                    isManagementMode ? "使用者資料已更新" : "個人資料已成功更新",
+                    isManagementMode
+                        ? UI_MESSAGES.user.profileUpdated
+                        : UI_MESSAGES.user.selfProfileUpdated,
                 );
                 await applyAction(result);
                 if (isManagementMode) {
@@ -176,7 +179,7 @@
                 showAccountValue = false;
                 if (isManagementMode) open = false;
             } else if (result.type === "failure") {
-                toast.error(result.data?.message || "更新失敗，請稍後再試");
+                toast.error(result.data?.message || UI_MESSAGES.common.updateFailed);
             }
         };
     }
@@ -230,16 +233,16 @@
             if (response.ok && result?.type === "success") {
                 optimistic?.();
                 await applyAction(result);
-                toast.success("個人資料已成功更新");
+                toast.success(UI_MESSAGES.user.selfProfileUpdated);
                 await invalidateAll();
                 await refreshUserSnapshot();
                 return true;
             }
 
-            toast.error(result?.data?.message || "更新失敗，請稍後再試");
+            toast.error(result?.data?.message || UI_MESSAGES.common.updateFailed);
             return false;
         } catch {
-            toast.error("更新失敗，請稍後再試");
+            toast.error(UI_MESSAGES.common.updateFailed);
             return false;
         } finally {
             loading = false;
@@ -249,7 +252,7 @@
     async function saveSelfName() {
         const trimmed = fullName.trim();
         if (!trimmed) {
-            toast.error("姓名不可為空");
+            toast.error(UI_MESSAGES.user.nameRequired);
             return;
         }
         const formData = new FormData();
@@ -282,7 +285,7 @@
         const bank = bankName.trim();
         const account = inputBankAccount.trim();
         if (!bank || !account) {
-            toast.error("請完整填寫銀行代碼與銀行帳號");
+            toast.error(UI_MESSAGES.user.bankFieldsRequired);
             return;
         }
 
@@ -338,11 +341,11 @@
                 ) {
                     decryptedAccount = String(result.data.decryptedAccount);
                 } else {
-                    toast.error("無法讀取帳號資訊");
+                    toast.error(UI_MESSAGES.user.accountReadFailed);
                     return;
                 }
             } catch {
-                toast.error("無法讀取帳號資訊");
+                toast.error(UI_MESSAGES.user.accountReadFailed);
                 return;
             } finally {
                 revealing = false;

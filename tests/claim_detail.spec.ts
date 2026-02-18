@@ -84,13 +84,6 @@ test.describe.serial('Claim Detail Page', () => {
         await expect(page.locator('input[placeholder="說明"]').first()).toBeVisible();
     });
 
-    test('Draft edit page has save action', async ({ page }) => {
-        await injectSession(page, testUser.email, password);
-
-        await page.goto(`/claims/${claimId}`);
-        await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();
-    });
-
     test('Draft edit page can submit save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 

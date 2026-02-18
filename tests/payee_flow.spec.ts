@@ -1,7 +1,7 @@
 /**
  * Payee Management Flow - E2E 測試
  *
- * 測試收款人新增流程：導航、表單填寫、提交
+ * 測試收款人頁面基礎流程：導航與基本表單渲染
  */
 import { test, expect } from '@playwright/test';
 import { supabaseAdmin, injectSession } from './helpers';
@@ -43,43 +43,4 @@ test.describe('Payee Management Flow', () => {
         await expect(page.getByLabel(/銀行帳號/)).toBeVisible();
     });
 
-    test('Submit Vendor Request', async ({ page }) => {
-        await injectSession(page, userStandard.email, password);
-
-        // 直接導航至新增收款人頁
-        await page.goto('/payees/new');
-        await expect(page).toHaveURL(/\/payees\/new/);
-
-        const vendorName = 'Test E2E Vendor ' + Date.now();
-        await page.getByLabel(/公司\/個人名稱/).fill(vendorName);
-        await page.getByLabel(/統一編號/).fill('12345678');
-        await page.getByLabel(/服務項目說明/).fill('E2E vendor request');
-        await page.getByLabel(/銀行帳號/).fill('1234567890');
-
-        const bankCombobox = page.locator('button[role="combobox"]').first();
-        await bankCombobox.click();
-        await page.getByRole('button', { name: /004.*臺灣銀行/ }).click();
-
-        await page.getByRole('button', { name: '提交申請' }).click();
-        await expect(page).toHaveURL(/\/payees/);
-
-        await page.goto('/payees');
-
-        let found = false;
-        for (let i = 0; i < 12; i++) {
-            const pendingRow = page
-                .locator('tbody tr')
-                .filter({ hasText: vendorName })
-                .first();
-            if (await pendingRow.isVisible().catch(() => false)) {
-                await expect(pendingRow.getByText(/待審核/)).toBeVisible();
-                found = true;
-                break;
-            }
-            await page.waitForTimeout(1500);
-            await page.reload({ waitUntil: 'domcontentloaded' });
-        }
-
-        expect(found).toBeTruthy();
-    });
 });

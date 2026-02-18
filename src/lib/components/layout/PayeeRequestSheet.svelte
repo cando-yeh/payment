@@ -6,6 +6,7 @@
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Sheet from "$lib/components/ui/sheet";
     import { toast } from "svelte-sonner";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
     import {
         Check,
         X,
@@ -211,7 +212,7 @@
                     open = false;
                     await invalidateAll();
                 } else if (result.type === "failure") {
-                    toast.error(result.data?.message || "操作失敗");
+                    toast.error(result.data?.message || UI_MESSAGES.common.actionFailed);
                 }
             };
         };

@@ -16,6 +16,7 @@
     import * as Sheet from "$lib/components/ui/sheet";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import AuditTimeline from "$lib/components/shared/AuditTimeline.svelte";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
     import {
         ArrowLeft,
         ReceiptText,
@@ -195,7 +196,7 @@
         payees.find((p) => p.id === payeeId)?.name ||
             claim.payee_name ||
             claim.applicant_name ||
-            "本人",
+            "—",
     );
     const totalAmount = $derived(
         items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
@@ -242,16 +243,16 @@
                 status === "exempt" &&
                 !String(item?.exempt_reason || "").trim()
             ) {
-                toast.error(`第 ${i + 1} 筆明細選擇無憑證時必須填寫理由`);
+                toast.error(UI_MESSAGES.claim.exemptReasonRequired(i + 1));
                 return false;
             }
             if (status === "uploaded" && !item?.id && !pendingUpload[i]) {
-                toast.error(`第 ${i + 1} 筆明細選擇上傳憑證，請先選擇附件`);
+                toast.error(UI_MESSAGES.claim.uploadRequired(i + 1));
                 return false;
             }
         }
         if (requireApproverOnDirectSubmit && !hasApprover) {
-            toast.error("尚未設定核准人，無法直接提交。請先聯繫管理員設定。");
+            toast.error(UI_MESSAGES.claim.approverRequired);
             return false;
         }
         return true;
@@ -296,14 +297,14 @@
             });
             const result = deserialize(await response.text()) as any;
             if (result?.type === "failure") {
-                toast.error(result?.data?.message || "提交失敗");
+                toast.error(result?.data?.message || UI_MESSAGES.common.submitFailed);
                 return;
             }
             if (result?.type === "redirect" && result.location) {
                 await goto(result.location);
                 return;
             }
-            toast.success("已送出審核");
+            toast.success(UI_MESSAGES.claim.submitted);
             await goto(`/claims/${claim.id}`, { invalidateAll: true });
         } finally {
             isSubmitting = false;
@@ -326,10 +327,10 @@
         });
         const result = deserialize(await response.text()) as any;
         if (result?.type === "failure") {
-            toast.error(result?.data?.message || "附件上傳失敗");
+            toast.error(result?.data?.message || UI_MESSAGES.attachment.uploadFailed);
             return;
         }
-        toast.success("附件上傳成功");
+        toast.success(UI_MESSAGES.attachment.uploadSuccess);
         await goto(`/claims/${claim.id}`, { invalidateAll: true });
     }
 
@@ -344,10 +345,10 @@
         });
         const result = deserialize(await response.text()) as any;
         if (result?.type === "failure") {
-            toast.error(result?.data?.message || "附件刪除失敗");
+            toast.error(result?.data?.message || UI_MESSAGES.attachment.deleteFailed);
             return;
         }
-        toast.success("附件已刪除");
+        toast.success(UI_MESSAGES.attachment.deleteSuccess);
         await goto(`/claims/${claim.id}`, { invalidateAll: true });
     }
 </script>
@@ -448,7 +449,9 @@
                     return;
                 }
                 if (result.type === "failure") {
-                    toast.error((result.data?.message as string) || "刪除失敗");
+                    toast.error(
+                        (result.data?.message as string) || UI_MESSAGES.common.deleteFailed,
+                    );
                 }
                 await update();
             };
@@ -466,7 +469,9 @@
             return async ({ result }) => {
                 isSubmitting = false;
                 if (result.type === "failure") {
-                    toast.error((result.data?.message as string) || "操作失敗");
+                    toast.error(
+                        (result.data?.message as string) || UI_MESSAGES.common.actionFailed,
+                    );
                 }
                 await applyAction(result);
             };
@@ -524,7 +529,7 @@
                                         ? `${new Date(claim.created_at).toLocaleDateString("zh-TW")} 建立`
                                         : "建立新請款單"}
                                     <span class="mx-1.5 text-border">·</span>
-                                    申請人: {claim.applicant_name || "本人"}
+                                    申請人: {claim.applicant_name || "—"}
                                 </p>
                             </div>
                         </div>
@@ -613,7 +618,7 @@
                             <div>
                                 {#if claimType === "employee"}
                                     <Input
-                                        value={claim.applicant_name || "本人"}
+                                        value={claim.applicant_name || "—"}
                                         disabled={true}
                                         class="w-[220px] text-right text-sm font-medium"
                                     />

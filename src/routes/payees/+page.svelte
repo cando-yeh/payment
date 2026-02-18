@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
+    import * as Tabs from "$lib/components/ui/tabs";
     import {
         Plus,
         Search,
@@ -30,6 +31,7 @@
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
     import { cn } from "$lib/utils";
     import { fade } from "svelte/transition";
+    import { UI_MESSAGES } from "$lib/constants/ui-messages";
 
     let { data } = $props();
 
@@ -108,7 +110,7 @@
     });
 
     let searchTerm = $state("");
-    let typeFilter = $state("all");
+    let typeFilter = $state<"all" | "vendor" | "personal">("all");
     let isActionSubmitting = $state(false);
     let revealedAccounts = $state<Record<string, string>>({});
     let revealingById = $state<Record<string, boolean>>({});
@@ -129,15 +131,24 @@
     let confirmButtonVariant = $state<"default" | "destructive">("default");
     let confirmAction = $state<null | (() => Promise<void>)>(null);
 
-    let filteredPayees = $derived(
-        payees.filter((p) => {
-            const matchesSearch = p.name
-                ?.toLowerCase()
-                .includes(searchTerm.toLowerCase());
-            const matchesType = typeFilter === "all" || p.type === typeFilter;
-            return matchesSearch && matchesType;
-        }),
+    let typeFilteredPayees = $derived(
+        payees.filter((p) => typeFilter === "all" || p.type === typeFilter),
     );
+
+    let filteredPayees = $derived(
+        typeFilteredPayees.filter((p) =>
+            p.name?.toLowerCase().includes(searchTerm.toLowerCase()),
+        ),
+    );
+
+    let emptyMessage = $derived.by(() => {
+        const keyword = searchTerm.trim();
+        if (payees.length === 0) return "目前尚無收款人";
+        if (keyword && filteredPayees.length === 0)
+            return `找不到符合「${keyword}」的結果`;
+        if (typeFilteredPayees.length === 0) return "目前篩選條件下沒有結果";
+        return "目前尚無收款人";
+    });
 
     function getTypeLabel(type: string) {
         switch (type) {
@@ -205,13 +216,15 @@
                     });
                     const result = deserialize(await response.text()) as any;
                     if (result.type === "success") {
-                        toast.success("申請已撤銷");
+                        toast.success(UI_MESSAGES.payee.requestWithdrawn);
                         await invalidateAll();
                     } else {
-                        toast.error(result.data?.message || "撤銷失敗");
+                        toast.error(
+                            result.data?.message || UI_MESSAGES.common.submitFailed,
+                        );
                     }
                 } catch {
-                    toast.error("連線錯誤");
+                    toast.error(UI_MESSAGES.common.networkFailed("撤銷申請"));
                 } finally {
                     isActionSubmitting = false;
                 }
@@ -241,13 +254,16 @@
                     });
                     const result = deserialize(await response.text()) as any;
                     if (result.type === "success") {
-                        toast.success(result.data?.message || `已${action}`);
+                        toast.success(result.data?.message || UI_MESSAGES.payee.statusToggled(action));
                         await invalidateAll();
                     } else {
-                        toast.error(result.data?.message || `${action}失敗`);
+                        toast.error(
+                            result.data?.message ||
+                                UI_MESSAGES.payee.statusToggleFailed(action),
+                        );
                     }
                 } catch {
-                    toast.error("連線錯誤");
+                    toast.error(UI_MESSAGES.common.networkFailed(`${action}收款人`));
                 } finally {
                     isActionSubmitting = false;
                 }
@@ -274,14 +290,16 @@
                     });
                     const result = deserialize(await response.text()) as any;
                     if (result.type === "success") {
-                        toast.success("收款人已永久刪除");
+                        toast.success(UI_MESSAGES.payee.deleted);
                         isDetailOpen = false;
                         await invalidateAll();
                     } else {
-                        toast.error(result.data?.message || "刪除失敗");
+                        toast.error(
+                            result.data?.message || UI_MESSAGES.common.deleteFailed,
+                        );
                     }
                 } catch {
-                    toast.error("連線錯誤");
+                    toast.error(UI_MESSAGES.common.networkFailed("刪除收款人"));
                 } finally {
                     isActionSubmitting = false;
                 }
@@ -311,14 +329,17 @@
                     if (result.type === "success") {
                         toast.success(
                             result.data?.message ||
-                                "停用申請已提交，請等待財務審核",
+                                UI_MESSAGES.payee.disableRequested,
                         );
                         await invalidateAll();
                     } else {
-                        toast.error(result.data?.message || "提交停用申請失敗");
+                        toast.error(
+                            result.data?.message ||
+                                UI_MESSAGES.common.submitFailed,
+                        );
                     }
                 } catch {
-                    toast.error("連線錯誤");
+                    toast.error(UI_MESSAGES.common.networkFailed("提交停用申請"));
                 } finally {
                     isActionSubmitting = false;
                 }
@@ -357,10 +378,12 @@
                     [payee.id]: String(result.data.decryptedAccount),
                 };
             } else {
-                toast.error(result?.data?.message || "無法讀取帳號資訊");
+                toast.error(
+                    result?.data?.message || UI_MESSAGES.payee.accountReadFailed,
+                );
             }
         } catch {
-            toast.error("連線錯誤");
+            toast.error(UI_MESSAGES.common.networkFailed("讀取帳號"));
         } finally {
             const next = { ...revealingById };
             delete next[payee.id];
@@ -385,27 +408,39 @@
         {/snippet}
         <ListToolbar>
             {#snippet left()}
-                <div class="flex items-center rounded-md border p-1">
-                    {#each ["all", "vendor", "personal"] as filter}
-                        <Button
-                            variant={typeFilter === filter ? "secondary" : "ghost"}
-                            size="sm"
-                            onclick={() => (typeFilter = filter)}
+                <Tabs.Root
+                    value={typeFilter}
+                    onValueChange={(value) =>
+                        (typeFilter = value as "all" | "vendor" | "personal")}
+                >
+                    <Tabs.List
+                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
+                    >
+                        <Tabs.Trigger
+                            value="all"
+                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                         >
-                            {filter === "all"
-                                ? "全部"
-                                : filter === "vendor"
-                                  ? "廠商"
-                                  : "個人"}
-                        </Button>
-                    {/each}
-                </div>
+                            全部
+                        </Tabs.Trigger>
+                        <Tabs.Trigger
+                            value="vendor"
+                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                        >
+                            廠商
+                        </Tabs.Trigger>
+                        <Tabs.Trigger
+                            value="personal"
+                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                        >
+                            個人
+                        </Tabs.Trigger>
+                    </Tabs.List>
+                </Tabs.Root>
             {/snippet}
             {#snippet right()}
                 <SearchField
                     placeholder="搜尋名稱..."
                     bind:value={searchTerm}
-                    widthClass="w-full max-w-sm"
                     inputClassName="pl-8 text-sm"
                 />
             {/snippet}
@@ -494,8 +529,10 @@
                                 {/if}
                             </div>
                         </Table.Cell>
-                        <Table.Cell>
-                            <StatusBadge status={payee.status} />
+                        <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
+                            <div class={LIST_TABLE_TOKENS.badgeWrap}>
+                                <StatusBadge status={payee.status} />
+                            </div>
                         </Table.Cell>
                         <Table.Cell class="text-right">
                             <RowActionButtons>
@@ -575,7 +612,7 @@
                 {:else}
                     <ListTableEmptyState
                         icon={Search}
-                        description="無資料"
+                        description={emptyMessage}
                         colspan={6}
                     />
                 {/each}
