@@ -13,7 +13,7 @@
 
 <div
     class={cn(
-        "rounded-3xl border border-border/50 bg-background shadow-sm overflow-hidden",
+        "rounded-3xl border border-border/70 bg-background/95 shadow-md shadow-primary/7 overflow-hidden backdrop-blur-[1px]",
         className,
     )}
 >

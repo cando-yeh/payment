@@ -15,7 +15,7 @@
 
 <div
     class={cn(
-        "p-6 border-b border-border/30 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between",
+        "p-6 border-b border-border bg-background flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between",
         className,
     )}
 >

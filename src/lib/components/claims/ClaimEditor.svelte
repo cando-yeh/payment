@@ -1192,13 +1192,7 @@
                                 >
                             </div>
 
-                            {#if items.length === 0}
-                                <div
-                                    class="px-4 py-8 text-center text-sm text-muted-foreground"
-                                >
-                                    尚未新增費用明細
-                                </div>
-                            {:else}
+                            {#if items.length > 0}
                                 {#each items as item, i}
                                     <div
                                         class="grid grid-cols-[110px_110px_1fr_120px_90px_120px_120px_140px] items-center gap-2 border-b border-border/20 px-4 py-2"
@@ -1293,7 +1287,9 @@
                             {#if isEditable}
                                 <button
                                     type="button"
-                                    class="flex w-full items-center justify-center gap-2 border-t border-border/20 bg-primary/[0.03] py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06]"
+                                    class={`flex w-full items-center justify-center gap-2 bg-primary/[0.03] py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06] ${items.length > 0
+                                        ? "border-t border-border/20"
+                                        : ""}`}
                                     onclick={openCreateItemDrawer}
                                 >
                                     <Plus class="h-4 w-4" />

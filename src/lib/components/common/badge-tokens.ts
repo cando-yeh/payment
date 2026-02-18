@@ -37,12 +37,12 @@ export const APP_BADGE_TONE: Record<
         className: "bg-emerald-50 text-emerald-700 border-emerald-200",
     },
     "status.disabled": {
-        variant: "outline",
-        className: "text-muted-foreground",
+        variant: "secondary",
+        className: "bg-slate-100 text-slate-700 border-slate-200",
     },
     "status.inactive": {
-        variant: "outline",
-        className: "text-muted-foreground",
+        variant: "secondary",
+        className: "bg-slate-100 text-slate-700 border-slate-200",
     },
     "status.pending_create": {
         variant: "secondary",
@@ -50,7 +50,7 @@ export const APP_BADGE_TONE: Record<
     },
     "status.pending_update": {
         variant: "secondary",
-        className: "bg-blue-100 text-blue-700 border-blue-200",
+        className: "bg-cyan-100 text-cyan-800 border-cyan-200",
     },
     "status.pending_disable": {
         variant: "secondary",
@@ -66,11 +66,11 @@ export const APP_BADGE_TONE: Record<
     },
     "status.pending_finance": {
         variant: "secondary",
-        className: "bg-blue-100 text-blue-700 border-blue-200",
+        className: "bg-cyan-100 text-cyan-800 border-cyan-200",
     },
     "status.pending_payment": {
         variant: "secondary",
-        className: "bg-indigo-100 text-indigo-700 border-indigo-200",
+        className: "bg-violet-100 text-violet-700 border-violet-200",
     },
     "status.paid": {
         variant: "secondary",
@@ -78,19 +78,19 @@ export const APP_BADGE_TONE: Record<
     },
     "status.paid_pending_doc": {
         variant: "secondary",
-        className: "bg-orange-100 text-orange-700 border-orange-200",
+        className: "bg-orange-100 text-orange-800 border-orange-200",
     },
     "status.pending_doc_review": {
         variant: "secondary",
-        className: "bg-orange-100 text-orange-700 border-orange-200",
+        className: "bg-orange-100 text-orange-800 border-orange-200",
     },
     "status.returned": {
         variant: "secondary",
-        className: "bg-rose-100 text-rose-700 border-rose-200",
+        className: "bg-rose-100 text-rose-800 border-rose-200",
     },
     "status.cancelled": {
-        variant: "outline",
-        className: "text-muted-foreground",
+        variant: "secondary",
+        className: "bg-slate-100 text-slate-700 border-slate-200",
     },
     "role.admin": {
         variant: "secondary",

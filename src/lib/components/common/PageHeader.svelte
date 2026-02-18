@@ -18,7 +18,7 @@
 
 <div
     class={cn(
-        "flex flex-col md:flex-row md:items-center justify-between gap-8",
+        "flex flex-col md:flex-row md:items-center justify-between gap-8 rounded-2xl border border-border bg-background px-6 py-5 shadow-sm",
         className,
     )}
     in:fade={{ duration: 400 }}

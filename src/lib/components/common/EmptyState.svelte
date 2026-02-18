@@ -23,9 +23,9 @@
     <td {colspan} class="h-72 text-center">
         <div class="flex flex-col items-center justify-center space-y-4">
             <div
-                class="h-16 w-16 rounded-3xl bg-secondary/30 flex items-center justify-center"
+                class="h-16 w-16 rounded-3xl bg-linear-to-br from-primary/14 to-accent/35 flex items-center justify-center border border-border/40"
             >
-                <Icon class="h-8 w-8 text-muted-foreground/20" />
+                <Icon class="h-8 w-8 text-primary/55" />
             </div>
             {#if title || description}
                 <div class="space-y-1">
@@ -35,7 +35,7 @@
                         </h3>
                     {/if}
                     {#if description}
-                        <p class="text-muted-foreground font-bold text-sm">
+                        <p class="text-muted-foreground font-medium text-sm">
                             {description}
                         </p>
                     {/if}

@@ -9,44 +9,44 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.75rem; /* ~12px, closer to Apple standard */
-  --background: oklch(1 0 0); /* Pure White */
-  --foreground: oklch(0 0 0); /* Deep Black */
+  --radius: 0.75rem;
+  --background: oklch(0.99 0.004 248);
+  --foreground: oklch(0.18 0.02 248);
   
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0 0 0);
+  --card-foreground: oklch(0.18 0.02 248);
   
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0 0 0);
+  --popover-foreground: oklch(0.18 0.02 248);
   
-  /* Primary: Apple System Blue */
-  --primary: oklch(0.58 0.18 255);
+  /* Electric Finance palette */
+  --primary: oklch(0.59 0.23 255);
   --primary-foreground: oklch(1 0 0);
   
-  --secondary: oklch(0.96 0.01 255); /* systemGray6 equivalent */
-  --secondary-foreground: oklch(0.2 0.05 255);
+  --secondary: oklch(0.93 0.015 248);
+  --secondary-foreground: oklch(0.22 0.03 248);
   
-  --muted: oklch(0.96 0.01 255);
-  --muted-foreground: oklch(0.4 0.02 255); /* 60% opacity feel */
+  --muted: oklch(0.94 0.015 248);
+  --muted-foreground: oklch(0.36 0.02 248);
   
-  --accent: oklch(0.58 0.18 255 / 0.1);
-  --accent-foreground: oklch(0.58 0.18 255);
+  --accent: oklch(0.92 0.04 190);
+  --accent-foreground: oklch(0.33 0.08 190);
   
-  --destructive: oklch(0.6 0.18 25); /* Apple System Red */
+  --destructive: oklch(0.63 0.2 25);
   --destructive-foreground: oklch(1 0 0);
   
-  --border: oklch(0.92 0.01 255); /* Subtle border */
-  --input: oklch(0.92 0.01 255);
-  --ring: oklch(0.58 0.18 255 / 0.4);
+  --border: oklch(0.84 0.015 248);
+  --input: oklch(0.84 0.015 248);
+  --ring: oklch(0.59 0.23 255 / 0.5);
   
-  --sidebar: oklch(0.98 0.005 255 / 0.8); /* Translucent effect */
-  --sidebar-foreground: oklch(0.2 0.02 255);
-  --sidebar-primary: oklch(0.58 0.18 255);
+  --sidebar: oklch(0.97 0.01 248);
+  --sidebar-foreground: oklch(0.2 0.02 248);
+  --sidebar-primary: oklch(0.59 0.23 255);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.58 0.18 255 / 0.08);
-  --sidebar-accent-foreground: oklch(0.58 0.18 255);
-  --sidebar-border: oklch(0.94 0.01 255);
-  --sidebar-ring: oklch(0.58 0.18 255 / 0.4);
+  --sidebar-accent: oklch(0.92 0.03 248);
+  --sidebar-accent-foreground: oklch(0.22 0.03 248);
+  --sidebar-border: oklch(0.84 0.015 248);
+  --sidebar-ring: oklch(0.59 0.23 255 / 0.5);
 }
 
 .dark {
