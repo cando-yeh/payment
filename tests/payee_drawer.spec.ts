@@ -220,7 +220,7 @@ test.describe('Payee Drawer Functionality', () => {
         await page.locator('input[name="identity_no"]').fill('11223344');
 
         // Select Bank
-        const bankCombobox = page.locator('button[role="combobox"]');
+        const bankCombobox = page.locator('input#bank_code').first();
         await bankCombobox.click();
         await page.getByRole('button', { name: /004.*臺灣銀行/ }).click();
 

@@ -1,7 +1,7 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
     import { Label } from "$lib/components/ui/label";
-    import * as Select from "$lib/components/ui/select";
+    import PayeeCombobox from "$lib/components/layout/PayeeCombobox.svelte";
     import { cn } from "$lib/utils.js";
     import { CreditCard, ShieldCheck, Users, ChevronDown } from "lucide-svelte";
 
@@ -119,42 +119,25 @@
 
         <div class="min-w-0">
             {#if editable}
-                <Select.Root
-                    type="single"
+                <PayeeCombobox
                     name="approverId"
-                    disabled={!isEditing}
+                    required={true}
                     bind:value={approverId}
-                >
-                    <Select.Trigger
-                        id="approverId"
-                        class={cn(
-                            "w-full h-10",
-                            !isEditing &&
-                                "pointer-events-none hover:bg-transparent dark:hover:bg-transparent transition-none",
-                        )}
-                    >
-                        <div class="flex items-center gap-2 truncate">
-                            <span class="truncate">
-                                {approverOptions.find((o) => o.id === approverId)
-                                    ?.full_name || "設定核准人"}
-                            </span>
-                        </div>
-                    </Select.Trigger>
-                    <Select.Content>
-                        {#each approverOptions.filter((o) => o.id !== currentUserId) as option}
-                            <Select.Item
-                                value={option.id}
-                                label={option.full_name}
-                            >
-                                {option.full_name}
-                            </Select.Item>
-                        {:else}
-                            <div class="p-2 text-xs text-muted-foreground">
-                                無預設項目
-                            </div>
-                        {/each}
-                    </Select.Content>
-                </Select.Root>
+                    disabled={!isEditing}
+                    options={approverOptions
+                        .filter((o) => o.id !== currentUserId)
+                        .map((option) => ({
+                            id: option.id,
+                            name: option.full_name,
+                        }))}
+                    placeholder="設定核准人"
+                    emptyText="無預設項目"
+                    inputClass={cn(
+                        "w-full h-10",
+                        !isEditing &&
+                            "pointer-events-none hover:bg-transparent dark:hover:bg-transparent transition-none",
+                    )}
+                />
             {:else}
                 <div
                     class="min-w-0 h-10 rounded-md border bg-background pl-3 pr-9 flex items-center text-sm text-foreground relative"

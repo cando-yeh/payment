@@ -16,7 +16,7 @@
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Sheet from "$lib/components/ui/sheet";
     import { toast } from "svelte-sonner";
-    import { Save, LoaderCircle } from "lucide-svelte";
+    import { Save, LoaderCircle, Eye, EyeOff } from "lucide-svelte";
     import { compressFormImageInputs } from "$lib/client/image-compression";
     import { timedFetch } from "$lib/client/timed-fetch";
     import BankAccountSection from "$lib/components/layout/BankAccountSection.svelte";
@@ -40,6 +40,7 @@
     let address = $state("");
     let bankCode = $state("");
     let bankAccount = $state("");
+    let originalBankAccount = $state("");
     let reason = $state("");
     let isEditing = $state(false);
     let taxIdCache = $state<Record<string, string>>({});
@@ -69,6 +70,9 @@
     let showAccountValue = $state(false);
     let decryptedAccount = $state<string | null>(null);
     let revealing = $state(false);
+    let showTaxIdValue = $state(false);
+    let decryptedTaxId = $state<string | null>(null);
+    let revealingTaxId = $state(false);
 
     // 附件連結 (唯讀)
     let attachmentUrls = $derived(payee?.attachment_urls || {});
@@ -119,8 +123,12 @@
             normalizeComparable(sanitizeEncryptedPlaceholder(taxId)) !==
             normalizeComparable(currentTaxId);
 
-        // 空字串視為「未變更」，只有有輸入才代表申請變更帳號
-        const bankAccountChanged = normalizeComparable(bankAccount).length > 0;
+        const normalizedBankAccount = normalizeComparable(bankAccount);
+        const normalizedOriginalBankAccount =
+            normalizeComparable(originalBankAccount);
+        const bankAccountChanged =
+            normalizedBankAccount.length > 0 &&
+            normalizedBankAccount !== normalizedOriginalBankAccount;
 
         const attachmentChanged =
             type === "personal" &&
@@ -153,8 +161,11 @@
             editableAccount = Boolean(payee.editable_account);
             // 重設敏感資料狀態
             bankAccount = ""; // 不直接顯示原始加密字串
+            originalBankAccount = "";
             showAccountValue = false;
             decryptedAccount = null;
+            showTaxIdValue = false;
+            decryptedTaxId = null;
             reason = ""; // 重設原因
             attachmentFiles = {
                 id_card_front: null,
@@ -177,19 +188,27 @@
             resetFormFromPayee();
             isEditing = false;
             lastSyncedPayeeToken = payeeToken;
-            void ensureTaxIdReady();
         }
     });
 
     $effect(() => {
         if (!open) {
             isEditing = false;
+            showTaxIdValue = false;
+            showAccountValue = false;
         }
     });
 
     function startEditing() {
+        if (type === "personal" && isFinance) {
+            if (decryptedTaxId && !taxId) {
+                taxId = decryptedTaxId;
+            } else if (payee?.id && taxIdCache[payee.id] && !taxId) {
+                taxId = taxIdCache[payee.id];
+            }
+            void ensureTaxIdForEdit();
+        }
         isEditing = true;
-        void ensureTaxIdReady();
     }
 
     function cancelEditing() {
@@ -294,17 +313,52 @@
         };
     });
 
-    /**
-     * 銀行帳號解密流程
-     */
-    async function ensureTaxIdReady() {
-        if (
-            !payee?.id ||
-            type !== "personal" ||
-            !isFinance ||
-            sanitizeEncryptedPlaceholder(taxId).length > 0
-        )
-            return;
+    async function toggleTaxIdReveal() {
+        if (!payee?.id || type !== "personal" || !isFinance || isEditing) return;
+
+        if (!showTaxIdValue && !decryptedTaxId) {
+            revealingTaxId = true;
+            try {
+                const formData = new FormData();
+                formData.append("payeeId", payee.id);
+                const response = await timedFetch("/payees?/revealPayeeTaxId", {
+                    method: "POST",
+                    body: formData,
+                });
+                const result = deserialize(await response.text()) as any;
+                if (
+                    result.type === "success" &&
+                    result.data &&
+                    "taxId" in result.data
+                ) {
+                    const nextTaxId = sanitizeEncryptedPlaceholder(result.data.taxId);
+                    if (!nextTaxId) {
+                        toast.error("讀取身分證字號失敗");
+                        return;
+                    }
+                    decryptedTaxId = nextTaxId;
+                    taxIdCache = {
+                        ...taxIdCache,
+                        [payee.id]: nextTaxId,
+                    };
+                } else {
+                    toast.error("讀取身分證字號失敗");
+                    return;
+                }
+            } catch {
+                toast.error("讀取身分證字號失敗");
+                return;
+            } finally {
+                revealingTaxId = false;
+            }
+        }
+
+        showTaxIdValue = !showTaxIdValue;
+    }
+
+    async function ensureTaxIdForEdit() {
+        if (!payee?.id || type !== "personal" || !isFinance) return;
+        if (sanitizeEncryptedPlaceholder(taxId).length > 0) return;
 
         try {
             const formData = new FormData();
@@ -319,9 +373,10 @@
                 result.data &&
                 "taxId" in result.data
             ) {
-                const nextTaxId = String(result.data.taxId || "").trim();
-                if (nextTaxId.length > 0) {
+                const nextTaxId = sanitizeEncryptedPlaceholder(result.data.taxId);
+                if (nextTaxId) {
                     taxId = nextTaxId;
+                    decryptedTaxId = nextTaxId;
                     taxIdCache = {
                         ...taxIdCache,
                         [payee.id]: nextTaxId,
@@ -329,7 +384,7 @@
                 }
             }
         } catch {
-            // 非阻斷流程：保持現有值，讓使用者可手動輸入
+            // keep empty; backend will still validate on submit
         }
     }
 
@@ -363,6 +418,12 @@
                         return;
                     }
                     decryptedAccount = nextAccount;
+                    if (!originalBankAccount) {
+                        originalBankAccount = nextAccount;
+                    }
+                    if (isEditing && !normalizeComparable(bankAccount)) {
+                        bankAccount = nextAccount;
+                    }
                 } else {
                     toast.error(UI_MESSAGES.user.accountReadFailed);
                     return;
@@ -486,18 +547,55 @@
                                         : "身分證字號"}
                                     <span class="text-red-500">*</span></Label
                                 >
-                                <Input
-                                    id="identity_no"
-                                    name="identity_no"
-                                    bind:value={taxId}
-                                    placeholder={type === "vendor"
-                                        ? "12345678"
-                                        : "A123456789"}
-                                    maxlength={type === "vendor" ? 8 : 10}
-                                    readonly={!isEditing}
-                                    class={viewOnlyFieldClass}
-                                    required={type === "vendor"}
-                                />
+                                {#if type === "personal" && !isEditing}
+                                    <div class="relative">
+                                        <Input
+                                            id="identity_no"
+                                            type="text"
+                                            readonly
+                                            class={viewOnlyFieldClass}
+                                            value={showTaxIdValue
+                                                ? (decryptedTaxId || "**********")
+                                                : "**********"}
+                                        />
+                                        {#if isFinance}
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                class="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                                                onclick={() => void toggleTaxIdReveal()}
+                                                disabled={revealingTaxId}
+                                                aria-label={showTaxIdValue
+                                                    ? "隱藏身分證字號"
+                                                    : "顯示身分證字號"}
+                                            >
+                                                {#if revealingTaxId}
+                                                    <span
+                                                        class="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"
+                                                    ></span>
+                                                {:else if showTaxIdValue}
+                                                    <Eye class="h-4 w-4 text-muted-foreground" />
+                                                {:else}
+                                                    <EyeOff class="h-4 w-4 text-muted-foreground" />
+                                                {/if}
+                                            </Button>
+                                        {/if}
+                                    </div>
+                                {:else}
+                                    <Input
+                                        id="identity_no"
+                                        name="identity_no"
+                                        bind:value={taxId}
+                                        placeholder={type === "vendor"
+                                            ? "12345678"
+                                            : "A123456789"}
+                                        maxlength={type === "vendor" ? 8 : 10}
+                                        readonly={!isEditing}
+                                        class={viewOnlyFieldClass}
+                                        required={type === "vendor"}
+                                    />
+                                {/if}
                             </div>
                             <div class="space-y-2">
                                 <Label for="service_description"
@@ -610,9 +708,7 @@
                     {/if}
 
                     <!-- 按鈕區 -->
-                    <div
-                        class="sticky bottom-0 bg-background/95 backdrop-blur pt-4 pb-4 border-t mt-4 flex gap-3"
-                    >
+                    <div class="pt-4 pb-2 border-t mt-4 flex gap-3">
                         {#if isEditing}
                             <Button
                                 type="button"

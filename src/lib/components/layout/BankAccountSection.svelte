@@ -67,7 +67,7 @@
 
     {#if isManagement || hasBankInfo || isAddingBankAccount}
         <div class="flex gap-4">
-            <div class="flex-[2] space-y-2 min-w-0">
+            <div class="flex-[2.3] space-y-2 min-w-0">
                 <Label for={bankCodeFieldId}>銀行代碼</Label>
                 {#if isPayee && !canEdit}
                     <Input
@@ -87,7 +87,7 @@
                     />
                 {/if}
             </div>
-            <div class="flex-[3] space-y-2 min-w-0">
+            <div class="flex-[2.7] space-y-2 min-w-0">
                 <Label for={bankAccountFieldId}>銀行帳號</Label>
                 <div class="relative">
                     {#if isManagement && isEditing}

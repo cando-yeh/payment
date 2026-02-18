@@ -14,11 +14,11 @@
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Card from "$lib/components/ui/card";
-    import * as Select from "$lib/components/ui/select";
     import * as Tabs from "$lib/components/ui/tabs";
     import * as Sheet from "$lib/components/ui/sheet";
     import * as Dialog from "$lib/components/ui/dialog";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
+    import PayeeCombobox from "$lib/components/layout/PayeeCombobox.svelte";
     import AuditTimeline from "$lib/components/shared/AuditTimeline.svelte";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
     import {
@@ -32,6 +32,7 @@
         EyeOff,
         Upload,
         ClipboardList,
+        FileText,
     } from "lucide-svelte";
 
     export interface ClaimEditorClaim {
@@ -199,6 +200,7 @@
     let itemDrawerIndex = $state<number | null>(null);
     let itemDraft = $state<ClaimEditorItem>(emptyItem());
     let itemDraftUpload = $state<File | null>(null);
+    let itemDraftUploadPreviewUrl = $state<string | null>(null);
     let itemDraftAmountDisplay = $state("");
     let itemDraftSnapshot = $state("");
 
@@ -238,7 +240,7 @@
         claimType === "employee"
             ? String(claim.applicant_bank || "").trim()
             : isEditablePayeeAccount
-              ? (bankCode || String(selectedPayee?.bank || "").trim())
+              ? bankCode || String(selectedPayee?.bank || "").trim()
               : selectedPayee?.bank || claim.payee_bank || "",
     );
     const selectedPayeeId = $derived.by(
@@ -276,6 +278,23 @@
         claimTypeDescriptionMap[claimType] ||
             "請選擇符合此筆請款情境的申請類別。",
     );
+
+    let lastPayeeSelectionKey = $state("");
+    $effect(() => {
+        if (!isEditable || claimType === "employee") return;
+        const selectionKey = `${claimType}:${payeeId}`;
+        if (selectionKey === lastPayeeSelectionKey) return;
+        lastPayeeSelectionKey = selectionKey;
+
+        const selected = payees.find((p) => p.id === payeeId);
+        if (claimType === "vendor" && selected?.editable_account) {
+            bankCode = String(selected?.bank || "").trim();
+            bankAccount = "";
+            return;
+        }
+        bankCode = "";
+        bankAccount = "";
+    });
 
     // Auto-calculate pay_first_patch_doc: true if any item is pending_supplement
     const payFirstPatchDoc = $derived(
@@ -347,6 +366,81 @@
         if (status === "exempt") return "無憑證";
         return "待補件";
     }
+
+    const voucherDecisionOptions: Array<{
+        value: ClaimEditorItem["attachment_status"];
+        label: string;
+        description: string;
+    }> = [
+        {
+            value: "uploaded",
+            label: "上傳憑證",
+            description: "有憑證可上傳，建議優先選擇此模式。",
+        },
+        {
+            value: "pending_supplement",
+            label: "憑證後補",
+            description: "先提單，後續依流程補齊憑證。",
+        },
+        {
+            value: "exempt",
+            label: "無憑證",
+            description: "無法取得憑證時，需填寫合理原因。",
+        },
+    ];
+
+    function voucherDecisionClass(
+        value: ClaimEditorItem["attachment_status"],
+        active: boolean,
+    ) {
+        const base =
+            "w-full justify-start text-left h-auto px-3 py-2.5 rounded-lg border transition-all";
+        if (active) {
+            if (value === "uploaded") {
+                return `${base} border-blue-200 bg-blue-50 text-blue-700`;
+            }
+            if (value === "pending_supplement") {
+                return `${base} border-amber-200 bg-amber-50 text-amber-700`;
+            }
+            return `${base} border-rose-200 bg-rose-50 text-rose-700`;
+        }
+        return `${base} border-muted bg-background text-muted-foreground`;
+    }
+
+    function isImageFile(file: File | null) {
+        return Boolean(file && file.type.startsWith("image/"));
+    }
+
+    function isPdfFile(file: File | null) {
+        return Boolean(file && file.type === "application/pdf");
+    }
+
+    function isImagePath(path: string) {
+        return /\.(png|jpe?g|webp|gif|bmp|svg)(\?.*)?$/i.test(path);
+    }
+
+    function isPdfPath(path: string) {
+        return /\.pdf(\?.*)?$/i.test(path);
+    }
+
+    function getCurrentAttachmentUrl(item: ClaimEditorItem) {
+        if (!item?.id || !item?.extra?.file_path) return "";
+        return `/api/claims/attachment/${item.id}`;
+    }
+
+    function getCurrentAttachmentPath(item: ClaimEditorItem) {
+        return String(item?.extra?.file_path || "");
+    }
+
+    $effect(() => {
+        if (!itemDraftUpload || !isImageFile(itemDraftUpload)) {
+            itemDraftUploadPreviewUrl = null;
+            return;
+        }
+        const url = URL.createObjectURL(itemDraftUpload);
+        itemDraftUploadPreviewUrl = url;
+        return () => URL.revokeObjectURL(url);
+    });
 
     function categoryLabel(value: string) {
         return (
@@ -439,7 +533,27 @@
     async function saveItemDraft() {
         const normalized = normalizeItemForEditor(itemDraft);
         normalized.amount = String(itemDraft.amount || "").replaceAll(",", "");
-        if (normalized.attachment_status !== "exempt") {
+        const status = normalized.attachment_status;
+
+        if (status === "uploaded") {
+            if (!String(normalized.date || "").trim()) {
+                toast.error("上傳憑證時，日期為必填");
+                return;
+            }
+            if (!String(normalized.invoice_number || "").trim()) {
+                toast.error("上傳憑證時，發票號碼為必填");
+                return;
+            }
+            normalized.exempt_reason = "";
+        } else if (status === "exempt") {
+            if (!String(normalized.date || "").trim()) {
+                toast.error("無憑證時，日期為必填");
+                return;
+            }
+            normalized.invoice_number = "";
+        } else {
+            normalized.date = "";
+            normalized.invoice_number = "";
             normalized.exempt_reason = "";
         }
 
@@ -499,11 +613,27 @@
             const status = String(
                 item?.attachment_status || "pending_supplement",
             ).trim();
+            const date = String(item?.date || "").trim();
+            const invoice = String(item?.invoice_number || "").trim();
             if (
                 status === "exempt" &&
                 !String(item?.exempt_reason || "").trim()
             ) {
                 toast.error(UI_MESSAGES.claim.exemptReasonRequired(i + 1));
+                return false;
+            }
+            if (status === "uploaded") {
+                if (!date) {
+                    toast.error(`第 ${i + 1} 筆明細：日期為必填`);
+                    return false;
+                }
+                if (!invoice) {
+                    toast.error(`第 ${i + 1} 筆明細：發票號碼為必填`);
+                    return false;
+                }
+            }
+            if (status === "exempt" && !date) {
+                toast.error(`第 ${i + 1} 筆明細：日期為必填`);
                 return false;
             }
             const hasExistingAttachment = Boolean(item?.extra?.file_path);
@@ -787,7 +917,7 @@
 
             <!-- Header + Basic Info (single container) -->
             <Card.Root
-                class="overflow-hidden rounded-xl border border-border/40 bg-background"
+                class="overflow-visible rounded-xl border border-border/40 bg-background"
             >
                 <div class="px-5 py-3.5">
                     <div class="flex items-center justify-between gap-3">
@@ -898,63 +1028,31 @@
                                             disabled={true}
                                             class="h-8 w-full text-left text-xs font-medium"
                                         />
-                                    {:else}
-                                        <Select.Root
-                                            type="single"
+                                    {:else if isEditable}
+                                        <PayeeCombobox
                                             bind:value={payeeId}
-                                            disabled={!isEditable}
-                                            onValueChange={(value) => {
-                                                if (!isEditable) return;
-                                                const selected = payees.find(
-                                                    (p) => p.id === value,
-                                                );
-                                                if (
-                                                    claimType === "vendor" &&
-                                                    selected?.editable_account
-                                                ) {
-                                                    bankCode = String(
-                                                        selected?.bank || "",
-                                                    ).trim();
-                                                    bankAccount = "";
-                                                } else {
-                                                    bankCode = "";
-                                                    bankAccount = "";
-                                                }
-                                            }}
-                                        >
-                                            <Select.Trigger
-                                                class={`h-8 w-full text-left text-xs ${
-                                                    !isEditable
-                                                        ? "pointer-events-none hover:bg-transparent"
-                                                        : ""
-                                                }`}
-                                            >
-                                                {selectedPayeeName ||
-                                                    "請選擇收款人"}
-                                            </Select.Trigger>
-                                            <Select.Content>
-                                                {#if claimType === "vendor"}
-                                                    {#each vendorPayees as payee}
-                                                        <Select.Item
-                                                            value={payee.id}
-                                                            label={payee.name}
-                                                        />
-                                                    {/each}
-                                                {:else}
-                                                    {#each personalPayees as payee}
-                                                        <Select.Item
-                                                            value={payee.id}
-                                                            label={payee.name}
-                                                        />
-                                                    {/each}
-                                                {/if}
-                                            </Select.Content>
-                                        </Select.Root>
+                                            options={(claimType === "vendor"
+                                                ? vendorPayees
+                                                : personalPayees
+                                            ).map((payee) => ({
+                                                id: payee.id,
+                                                name: payee.name,
+                                            }))}
+                                            placeholder="請選擇收款人"
+                                            inputClass="h-8 text-xs"
+                                        />
+                                    {:else}
+                                        <Input
+                                            value={selectedPayeeName ||
+                                                "請選擇收款人"}
+                                            disabled
+                                            class="h-8 w-full text-left text-xs"
+                                        />
                                     {/if}
                                 </div>
 
                                 <div
-                                    class="min-w-[320px] flex-1 grid grid-cols-2 gap-3"
+                                    class="min-w-[320px] flex-1 grid grid-cols-[1.15fr_1.85fr] gap-3"
                                 >
                                     <div
                                         class="min-w-0 grid grid-cols-1 gap-1.5"
@@ -1025,7 +1123,9 @@
                                                         : "顯示完整帳號"}
                                                 >
                                                     {#if revealedAccounts[bankRevealKey || ""]}
-                                                        <Eye class="h-3.5 w-3.5" />
+                                                        <Eye
+                                                            class="h-3.5 w-3.5"
+                                                        />
                                                     {:else}
                                                         <EyeOff
                                                             class="h-3.5 w-3.5"
@@ -1052,7 +1152,7 @@
                         費用明細
                     </h2>
                     <Card.Root
-                        class="overflow-hidden rounded-xl border border-border/40"
+                        class="overflow-visible rounded-xl border border-border/40"
                     >
                         <Card.Content class="p-0">
                             <div
@@ -1220,16 +1320,7 @@
                 >
             </Dialog.Header>
             <div class="space-y-4 pt-2">
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1.5">
-                        <Label for="item-date">日期</Label>
-                        <Input
-                            id="item-date"
-                            type="date"
-                            bind:value={itemDraft.date}
-                            disabled={!isEditable}
-                        />
-                    </div>
+                <div class="grid grid-cols-3 gap-4">
                     <div class="space-y-1.5">
                         <Label for="item-category">類別</Label>
                         <select
@@ -1243,25 +1334,12 @@
                             {/each}
                         </select>
                     </div>
-                </div>
-
-                <div class="space-y-1.5">
-                    <Label for="item-description">說明</Label>
-                    <Input
-                        id="item-description"
-                        bind:value={itemDraft.description}
-                        placeholder="請輸入費用說明"
-                        disabled={!isEditable}
-                    />
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-1.5">
-                        <Label for="item-invoice">發票號碼</Label>
+                        <Label for="item-description">說明</Label>
                         <Input
-                            id="item-invoice"
-                            bind:value={itemDraft.invoice_number}
-                            placeholder="AB-12345678"
+                            id="item-description"
+                            bind:value={itemDraft.description}
+                            placeholder="請輸入費用說明"
                             disabled={!isEditable}
                         />
                     </div>
@@ -1280,94 +1358,260 @@
                     </div>
                 </div>
 
-                <div class="space-y-1.5 border-t pt-4">
-                    <Label for="item-voucher-status">憑證決策</Label>
-                    <select
-                        id="item-voucher-status"
-                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        bind:value={itemDraft.attachment_status}
-                        disabled={!isEditable}
-                    >
-                        <option value="uploaded">上傳憑證</option>
-                        <option value="pending_supplement">待補件</option>
-                        <option value="exempt">無憑證</option>
-                    </select>
-                </div>
-
-                {#if itemDraft.attachment_status === "uploaded"}
-                    <div
-                        class="space-y-2 rounded-lg border border-border/40 bg-muted/10 p-3"
-                    >
-                        {#if itemDraft.id && itemDraft.extra?.file_path}
-                            <a
-                                href={`/api/claims/attachment/${itemDraft.id}`}
-                                target="_blank"
-                                class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                            >
-                                <Eye class="h-4 w-4" /> 查看目前附件
-                            </a>
-                            {#if isEditable}
-                                <div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        class="h-8 px-2 text-xs text-destructive"
-                                        onclick={() => {
-                                            if (itemDraft.id) {
-                                                void removeAttachment(
-                                                    itemDraft.id,
-                                                );
-                                                itemDraft = {
-                                                    ...itemDraft,
-                                                    extra: {},
-                                                    attachment_status:
-                                                        "pending_supplement",
-                                                };
-                                            }
-                                        }}
-                                    >
-                                        移除附件
-                                    </Button>
-                                </div>
-                            {/if}
-                        {/if}
-                        {#if isEditable}
-                            <label
-                                class="inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline"
-                            >
-                                <Upload class="h-4 w-4" />
-                                {itemDraft.id ? "重新上傳附件" : "選擇附件"}
-                                <input
-                                    type="file"
-                                    class="hidden"
-                                    onchange={(event) => {
-                                        const input =
-                                            event.currentTarget as HTMLInputElement;
-                                        itemDraftUpload =
-                                            input.files?.[0] || null;
+                <div class="space-y-2 border-t pt-4">
+                    <Label>憑證決策</Label>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            {#each voucherDecisionOptions as option}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={!isEditable}
+                                    class={voucherDecisionClass(
+                                        option.value,
+                                        itemDraft.attachment_status ===
+                                            option.value,
+                                    )}
+                                    onclick={() => {
+                                        if (!isEditable) return;
+                                        const nextDate =
+                                            option.value ===
+                                            "pending_supplement"
+                                                ? ""
+                                                : itemDraft.date;
+                                        const nextInvoice =
+                                            option.value === "uploaded"
+                                                ? itemDraft.invoice_number
+                                                : "";
+                                        itemDraft = {
+                                            ...itemDraft,
+                                            attachment_status: option.value,
+                                            date: nextDate,
+                                            invoice_number: nextInvoice,
+                                            exempt_reason:
+                                                option.value === "exempt"
+                                                    ? itemDraft.exempt_reason
+                                                    : "",
+                                        };
+                                        if (option.value !== "uploaded") {
+                                            itemDraftUpload = null;
+                                        }
                                     }}
-                                />
-                            </label>
-                        {/if}
-                        {#if itemDraftUpload}
-                            <p class="text-xs text-muted-foreground">
-                                已選擇：{itemDraftUpload.name}
-                            </p>
-                        {/if}
+                                >
+                                    <div
+                                        class="flex w-full flex-col items-start gap-1 text-left"
+                                    >
+                                        <span class="text-sm font-semibold"
+                                            >{option.label}</span
+                                        >
+                                        <span
+                                            class="text-xs leading-snug whitespace-normal break-words opacity-80"
+                                            >{option.description}</span
+                                        >
+                                    </div>
+                                </Button>
+                            {/each}
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div
+                                class="rounded-lg border border-border/40 bg-muted/10 p-3 md:col-span-1"
+                            >
+                                <div class="space-y-3">
+                                    <div class="space-y-1.5">
+                                        <Label for="item-date">日期</Label>
+                                        <Input
+                                            id="item-date"
+                                            type="date"
+                                            bind:value={itemDraft.date}
+                                            disabled={!isEditable ||
+                                                itemDraft.attachment_status ===
+                                                    "pending_supplement"}
+                                            class={`pr-12 [&::-webkit-calendar-picker-indicator]:-translate-x-2 [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
+                                                itemDraft.attachment_status ===
+                                                "pending_supplement"
+                                                    ? "bg-muted/50 text-muted-foreground"
+                                                    : ""
+                                            }`}
+                                        />
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <Label for="item-invoice"
+                                            >發票號碼</Label
+                                        >
+                                        <Input
+                                            id="item-invoice"
+                                            bind:value={
+                                                itemDraft.invoice_number
+                                            }
+                                            placeholder="AB-12345678"
+                                            disabled={!isEditable ||
+                                                itemDraft.attachment_status !==
+                                                    "uploaded"}
+                                            class={itemDraft.attachment_status !==
+                                            "uploaded"
+                                                ? "bg-muted/50 text-muted-foreground"
+                                                : ""}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                class="rounded-lg border border-border/40 bg-muted/10 p-3 min-h-[170px] md:col-span-2"
+                            >
+                                {#if itemDraft.attachment_status === "uploaded"}
+                                    <div class="space-y-2">
+                                        {#if itemDraft.id && itemDraft.extra?.file_path}
+                                            <a
+                                                href={getCurrentAttachmentUrl(
+                                                    itemDraft,
+                                                )}
+                                                target="_blank"
+                                                class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                                            >
+                                                <Eye class="h-4 w-4" /> 查看目前附件
+                                            </a>
+                                            <div
+                                                class="rounded-md border border-border/50 bg-background/70 p-2"
+                                            >
+                                                {#if isImagePath(getCurrentAttachmentPath(itemDraft))}
+                                                    <img
+                                                        src={getCurrentAttachmentUrl(
+                                                            itemDraft,
+                                                        )}
+                                                        alt="目前附件"
+                                                        class="h-24 w-full rounded object-cover"
+                                                    />
+                                                {:else if isPdfPath(getCurrentAttachmentPath(itemDraft))}
+                                                    <div
+                                                        class="flex h-24 items-center gap-2 rounded bg-muted/40 px-3 text-sm text-muted-foreground"
+                                                    >
+                                                        <FileText
+                                                            class="h-4 w-4"
+                                                        />
+                                                        <span class="truncate"
+                                                            >PDF 檔案</span
+                                                        >
+                                                    </div>
+                                                {/if}
+                                            </div>
+                                            {#if isEditable}
+                                                <div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        class="h-8 px-2 text-xs text-destructive"
+                                                        onclick={() => {
+                                                            if (itemDraft.id) {
+                                                                void removeAttachment(
+                                                                    itemDraft.id,
+                                                                );
+                                                                itemDraft = {
+                                                                    ...itemDraft,
+                                                                    extra: {},
+                                                                    attachment_status:
+                                                                        "pending_supplement",
+                                                                };
+                                                            }
+                                                        }}
+                                                    >
+                                                        移除附件
+                                                    </Button>
+                                                </div>
+                                            {/if}
+                                        {/if}
+                                        {#if isEditable}
+                                            <label
+                                                class="inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline"
+                                            >
+                                                <Upload class="h-4 w-4" />
+                                                {itemDraft.id
+                                                    ? "重新上傳附件"
+                                                    : "選擇附件"}
+                                                <input
+                                                    type="file"
+                                                    class="hidden"
+                                                    onchange={(event) => {
+                                                        const input =
+                                                            event.currentTarget as HTMLInputElement;
+                                                        itemDraftUpload =
+                                                            input.files?.[0] ||
+                                                            null;
+                                                    }}
+                                                />
+                                            </label>
+                                        {/if}
+                                        {#if itemDraftUpload}
+                                            <div
+                                                class="space-y-1.5 rounded-md border border-border/50 bg-background/70 p-2"
+                                            >
+                                                <p
+                                                    class="text-xs text-muted-foreground"
+                                                >
+                                                    已選擇：{itemDraftUpload.name}
+                                                </p>
+                                                {#if isImageFile(itemDraftUpload) && itemDraftUploadPreviewUrl}
+                                                    <img
+                                                        src={itemDraftUploadPreviewUrl}
+                                                        alt="附件預覽"
+                                                        class="h-24 w-full rounded object-cover"
+                                                    />
+                                                {:else if isPdfFile(itemDraftUpload)}
+                                                    <div
+                                                        class="flex h-20 items-center gap-2 rounded bg-muted/40 px-3 text-sm text-muted-foreground"
+                                                    >
+                                                        <FileText
+                                                            class="h-4 w-4"
+                                                        />
+                                                        <span class="truncate"
+                                                            >{itemDraftUpload.name}</span
+                                                        >
+                                                    </div>
+                                                {/if}
+                                            </div>
+                                        {:else if !(itemDraft.id && itemDraft.extra?.file_path)}
+                                            <p class="text-xs text-amber-600">
+                                                尚未上傳憑證。提交前請確認已附上附件。
+                                            </p>
+                                        {/if}
+                                    </div>
+                                {:else if itemDraft.attachment_status === "pending_supplement"}
+                                    <div class="space-y-2 text-sm">
+                                        <p class="font-semibold text-amber-700">
+                                            憑證後補流程
+                                        </p>
+                                        <p class="text-muted-foreground">
+                                            此筆明細先以待補件送出，後續請在規定期限內補上憑證附件。
+                                        </p>
+                                        <p class="text-xs text-amber-600">
+                                            若未如期補件，可能影響撥款或後續核銷作業。
+                                        </p>
+                                    </div>
+                                {:else}
+                                    <div class="space-y-1.5">
+                                        <Label for="item-exempt-reason"
+                                            >無憑證原因</Label
+                                        >
+                                        <Textarea
+                                            id="item-exempt-reason"
+                                            bind:value={itemDraft.exempt_reason}
+                                            placeholder="請填寫無憑證理由"
+                                            class="min-h-[92px]"
+                                            disabled={!isEditable}
+                                        />
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            請具體描述無法提供憑證的情境，供審核時判斷。
+                                        </p>
+                                    </div>
+                                {/if}
+                            </div>
+                        </div>
                     </div>
-                {:else if itemDraft.attachment_status === "exempt"}
-                    <div class="space-y-1.5">
-                        <Label for="item-exempt-reason">無憑證理由</Label>
-                        <Textarea
-                            id="item-exempt-reason"
-                            bind:value={itemDraft.exempt_reason}
-                            placeholder="請填寫無憑證理由"
-                            class="min-h-[92px]"
-                            disabled={!isEditable}
-                        />
-                    </div>
-                {/if}
+                </div>
 
                 <div class="flex items-center justify-end gap-2 border-t pt-4">
                     <Button
