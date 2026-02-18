@@ -12,18 +12,7 @@
         status: "draft",
         created_at: null,
         applicant_name: "",
-        items: [
-            {
-                date: new Date().toISOString().split("T")[0],
-                category: "general",
-                description: "",
-                amount: "",
-                invoice_number: "",
-                attachment_status: "pending_supplement",
-                exempt_reason: "",
-                extra: {},
-            },
-        ],
+        items: [],
     };
 
     let isConfirmModalOpen = $state(false);

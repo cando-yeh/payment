@@ -73,8 +73,6 @@ export const actions: Actions = {
 
         const isFloatingAccount = formData.get('is_floating_account') === 'true';
         const bankCode = String(formData.get('bank_code') || '').trim();
-        const bankBranch = String(formData.get('bank_branch') || '').trim();
-        const accountName = String(formData.get('account_name') || '').trim();
         const bankAccount = String(formData.get('bank_account') || '').trim();
         const payFirstPatchDoc = formData.get('pay_first_patch_doc') === 'true';
 
@@ -179,7 +177,7 @@ export const actions: Actions = {
             return fail(400, { message: 'Employee claim cannot use floating account' });
         }
 
-        if (isFloatingAccount && shouldSubmitDirectly && (!bankCode || !accountName || !bankAccount)) {
+        if (isFloatingAccount && shouldSubmitDirectly && (!bankCode || !bankAccount)) {
             return fail(400, { message: 'Missing required bank information for floating account' });
         }
 
@@ -189,9 +187,7 @@ export const actions: Actions = {
             _payee_id: normalizedPayeeId,
             _total_amount: totalAmount,
             _bank_code: isFloatingAccount ? bankCode : null,
-            _bank_branch: isFloatingAccount ? (bankBranch || null) : null,
             _bank_account: isFloatingAccount ? bankAccount : null,
-            _account_name: isFloatingAccount ? accountName : null,
             _pay_first_patch_doc: payFirstPatchDoc
         });
 

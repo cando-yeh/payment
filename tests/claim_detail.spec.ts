@@ -80,15 +80,19 @@ test.describe.serial('Claim Detail Page', () => {
         // Verify unified layout heading
         await expect(page.locator('h1')).toContainText('請款單');
 
-        // Verify line item remains editable
-        await expect(page.locator('input[placeholder="說明"]').first()).toBeVisible();
+        // Verify expense section exists and can open item drawer
+        await expect(page.getByText('費用明細')).toBeVisible();
+        await page.getByTestId('claim-item-edit-0').click();
+        await expect(page.getByText('編輯費用明細')).toBeVisible();
     });
 
     test('Draft edit page can submit save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await page.fill('input[placeholder="說明"]', 'Updated from edit page');
+        await page.getByTestId('claim-item-edit-0').click();
+        await page.getByLabel('說明').fill('Updated from edit page');
+        await page.getByRole('button', { name: '儲存明細' }).click();
         await page.getByRole('button', { name: '儲存變更' }).click();
         await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
         await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();

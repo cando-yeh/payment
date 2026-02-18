@@ -40,6 +40,14 @@ test.describe('Claim Creation Flow', () => {
         await page.click('a[href="/claims/new"]');
         await expect(page).toHaveURL(/\/claims\/new/);
         await expect(page.locator('text=建立新請款單')).toBeVisible();
+        await expect(page.getByText('尚未新增費用明細')).toBeVisible();
+
+        await page.getByRole('button', { name: '新增明細' }).click();
+        await expect(page.getByRole('heading', { name: '新增費用明細' })).toBeVisible();
+        await page.getByLabel('說明').fill('Taxi to Client');
+        await page.getByLabel('金額').fill('500');
+        await page.getByRole('button', { name: '儲存明細' }).click();
+        await expect(page.getByText('尚未新增費用明細')).not.toBeVisible();
 
         const createRes = await postFormActionDetailed(page, '/claims/new?/create', {
             claim_type: 'employee',

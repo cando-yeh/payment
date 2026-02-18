@@ -23,9 +23,7 @@ export type ParsedEditForm = {
     payeeId: string;
     isFloating: boolean;
     bankCode: string | null;
-    bankBranch: string | null;
     bankAccount: string | null;
-    accountName: string | null;
     normalizedItems: {
         claim_id: string;
         item_index: number;
@@ -73,16 +71,14 @@ export function parseAndValidateEditForm(
     const payeeId = String(formData.get("payee_id") || "");
     const isFloating = formData.get("is_floating") === "on";
     const bankCode = isFloating ? String(formData.get("bank_code") || "").trim() : null;
-    const bankBranch = isFloating ? String(formData.get("bank_branch") || "").trim() : null;
     const bankAccount = isFloating ? String(formData.get("bank_account") || "").trim() : null;
-    const accountName = isFloating ? String(formData.get("account_name") || "").trim() : null;
     const itemsJson = String(formData.get("items") || "[]");
     const payFirstPatchDoc = formData.get("pay_first_patch_doc") === "true";
 
     if (claimRow.claim_type !== "employee" && !payeeId && !options.isDraft) {
         return { ok: false, status: 400, message: "Payee is required for this claim type" };
     }
-    if (isFloating && (!bankCode || !accountName || !bankAccount) && !options.isDraft) {
+    if (isFloating && (!bankCode || !bankAccount) && !options.isDraft) {
         return { ok: false, status: 400, message: "Floating account details are incomplete" };
     }
 
@@ -128,9 +124,7 @@ export function parseAndValidateEditForm(
             payeeId,
             isFloating,
             bankCode,
-            bankBranch,
             bankAccount,
-            accountName,
             normalizedItems,
             totalAmount,
             payFirstPatchDoc
@@ -149,9 +143,7 @@ export async function persistEditedClaim(
         _payee_id: claimRow.claim_type === "employee" ? null : parsed.payeeId,
         _total_amount: parsed.totalAmount,
         _bank_code: parsed.isFloating ? parsed.bankCode : null,
-        _bank_branch: parsed.isFloating ? (parsed.bankBranch || null) : null,
         _bank_account: parsed.isFloating ? parsed.bankAccount : null,
-        _account_name: parsed.isFloating ? parsed.accountName : null,
         _pay_first_patch_doc: parsed.payFirstPatchDoc
     });
 
