@@ -16,6 +16,7 @@ export type EditableClaimRow = {
     applicant_id: string;
     claim_type: string;
     status: string;
+    description?: string | null;
 };
 
 export type ParsedEditForm = {
@@ -79,7 +80,7 @@ export function parseAndValidateEditForm(
     const payFirstPatchDoc = formData.get("pay_first_patch_doc") === "true";
 
     if (claimRow.claim_type !== "employee" && !payeeId && !options.isDraft) {
-        return { ok: false, status: 400, message: "Payee is required" };
+        return { ok: false, status: 400, message: "Payee is required for this claim type" };
     }
     if (isFloating && (!bankCode || !accountName || !bankAccount) && !options.isDraft) {
         return { ok: false, status: 400, message: "Floating account details are incomplete" };
@@ -92,6 +93,15 @@ export function parseAndValidateEditForm(
 
     const normalizedItems = (parsedItems || []).map((item, index) => {
         const amount = Number(item.amount);
+        const rawStatus = item.attachment_status || "pending_supplement";
+        const rawExtra = item.extra || {};
+        const hasAttachmentPath =
+            typeof (rawExtra as Record<string, unknown>).file_path === "string" &&
+            String((rawExtra as Record<string, unknown>).file_path || "").trim().length > 0;
+        const normalizedAttachmentStatus =
+            rawStatus === "uploaded" && !hasAttachmentPath
+                ? "pending_supplement"
+                : rawStatus;
         return {
             claim_id: claimId,
             item_index: index + 1,
@@ -101,8 +111,8 @@ export function parseAndValidateEditForm(
             description: String(item.description || "").trim(),
             amount: Number.isFinite(amount) ? amount : 0,
             invoice_number: item.invoice_number || null,
-            attachment_status: item.attachment_status || "pending_supplement",
-            extra: item.extra || {}
+            attachment_status: normalizedAttachmentStatus,
+            extra: rawExtra
         };
     });
 
@@ -135,7 +145,7 @@ export async function persistEditedClaim(
 ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
     const { error: updateClaimError } = await supabase.rpc("update_claim", {
         _claim_id: claimRow.id,
-        _description: "",
+        _description: claimRow.description ?? "",
         _payee_id: claimRow.claim_type === "employee" ? null : parsed.payeeId,
         _total_amount: parsed.totalAmount,
         _bank_code: parsed.isFloating ? parsed.bankCode : null,
@@ -213,4 +223,3 @@ export async function moveClaimToPendingManager(
     }
     return { ok: true };
 }
-

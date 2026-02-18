@@ -4,14 +4,23 @@
     import * as Avatar from "$lib/components/ui/avatar";
     import * as Tabs from "$lib/components/ui/tabs";
     import * as Dialog from "$lib/components/ui/dialog";
-    import { Badge } from "$lib/components/ui/badge";
+    import AppBadge from "$lib/components/common/AppBadge.svelte";
     import { toast } from "svelte-sonner";
     import { Search, Users, Trash2, UserX, UserCheck } from "lucide-svelte";
-    import { Input } from "$lib/components/ui/input";
     import { timedFetch } from "$lib/client/timed-fetch";
     import { deserialize } from "$app/forms";
     import { invalidateAll } from "$app/navigation";
     import UserProfileSheet from "$lib/components/layout/UserProfileSheet.svelte";
+    import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
+    import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import SearchField from "$lib/components/common/SearchField.svelte";
+    import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
+    import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
+    import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
+    import StatusBadge from "$lib/components/common/StatusBadge.svelte";
+    import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
+    import { cn } from "$lib/utils";
+    import { fade } from "svelte/transition";
 
     let { data } = $props();
 
@@ -203,65 +212,73 @@
     }
 </script>
 
-<div class="container py-10">
-    <div class="flex flex-col gap-8">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-3xl font-bold tracking-tight">使用者管理</h1>
-                <p class="text-muted-foreground">
-                    管理員可停用/啟用/刪除使用者；財務可維護銀行與核准人資訊。
-                </p>
-            </div>
-            <div class="flex items-center gap-2 rounded-lg bg-muted px-4 py-2">
-                <Users class="h-4 w-4 text-muted-foreground" />
-                <span class="text-sm font-medium">{users.length} 位使用者</span>
-            </div>
-        </div>
-
-        <Tabs.Root
-            value={currentTab}
-            onValueChange={(v) =>
-                (currentTab = v === "inactive" ? "inactive" : "active")}
-        >
-            <div class="flex items-center justify-between gap-4">
-                <Tabs.List>
-                    <Tabs.Trigger value="active">
-                        啟用中 ({activeCount})
-                    </Tabs.Trigger>
-                    <Tabs.Trigger value="inactive">
-                        已停用 ({inactiveCount})
-                    </Tabs.Trigger>
-                </Tabs.List>
-                <div class="relative flex-1 max-w-sm">
-                    <Search
-                        class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
-                    />
-                    <Input
-                        placeholder="搜尋姓名或 ID..."
-                        class="pl-9"
-                        bind:value={searchTerm}
-                    />
-                </div>
-            </div>
-        </Tabs.Root>
-
-        <div class="rounded-md border bg-card">
+<div in:fade={{ duration: 400 }}>
+    <ListPageScaffold
+        title="使用者管理"
+        description="管理員可停用/啟用/刪除使用者；財務可維護銀行與核准人資訊。"
+        statText={`${users.length} 位使用者`}
+        shellClassName="bg-card pb-2"
+    >
+        {#snippet statIcon()}
+            <Users class="h-4 w-4 text-muted-foreground" />
+        {/snippet}
+            <Tabs.Root
+                value={currentTab}
+                onValueChange={(v) =>
+                    (currentTab = v === "inactive" ? "inactive" : "active")}
+            >
+                <ListToolbar>
+                    {#snippet left()}
+                        <Tabs.List>
+                            <Tabs.Trigger value="active">
+                                啟用中 ({activeCount})
+                            </Tabs.Trigger>
+                            <Tabs.Trigger value="inactive">
+                                已停用 ({inactiveCount})
+                            </Tabs.Trigger>
+                        </Tabs.List>
+                    {/snippet}
+                    {#snippet right()}
+                        <SearchField
+                            bind:value={searchTerm}
+                            placeholder="搜尋姓名或 ID..."
+                            widthClass="w-full max-w-sm"
+                            inputClassName="pl-9 text-sm"
+                        />
+                    {/snippet}
+                </ListToolbar>
+            </Tabs.Root>
             <Table.Root>
-                <Table.Header>
-                    <Table.Row>
-                        <Table.Head class="w-[200px]">使用者</Table.Head>
-                        <Table.Head>E-MAIL</Table.Head>
-                        <Table.Head>狀態</Table.Head>
-                        <Table.Head>權限</Table.Head>
-                        <Table.Head>核准人</Table.Head>
-                        <Table.Head class="text-right">系統操作</Table.Head>
+                <Table.Header class={LIST_TABLE_TOKENS.header}>
+                    <Table.Row class={LIST_TABLE_TOKENS.headerRow}>
+                        <Table.Head
+                            class={cn(LIST_TABLE_TOKENS.headBase, "w-[200px]")}
+                            >使用者</Table.Head
+                        >
+                        <Table.Head class={LIST_TABLE_TOKENS.headBase}
+                            >E-MAIL</Table.Head
+                        >
+                        <Table.Head
+                            class={cn(
+                                LIST_TABLE_TOKENS.headBase,
+                                LIST_TABLE_TOKENS.colStatus,
+                            )}>狀態</Table.Head
+                        >
+                        <Table.Head class={LIST_TABLE_TOKENS.headBase}>權限</Table.Head>
+                        <Table.Head class={LIST_TABLE_TOKENS.headBase}>核准人</Table.Head>
+                        <Table.Head class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colActions)}
+                            >系統操作</Table.Head
+                        >
                     </Table.Row>
                 </Table.Header>
-                <Table.Body>
+                <Table.Body class={LIST_TABLE_TOKENS.body}>
                     {#each filteredUsers as user}
                         <Table.Row
-                            class="hover:bg-muted/20 cursor-pointer"
-                            on:click={() => {
+                            class={cn(
+                                LIST_TABLE_TOKENS.row,
+                                LIST_TABLE_TOKENS.rowClickable,
+                            )}
+                            onclick={() => {
                                 selectedUser = { ...user };
                                 isSheetOpen = true;
                             }}
@@ -294,17 +311,9 @@
                             </Table.Cell>
                             <Table.Cell>
                                 {#if isActiveUser(user)}
-                                    <Badge
-                                        variant="secondary"
-                                        class="bg-emerald-50 text-emerald-700 border-emerald-200"
-                                        >啟用中</Badge
-                                    >
+                                    <StatusBadge status="active" />
                                 {:else}
-                                    <Badge
-                                        variant="outline"
-                                        class="text-muted-foreground"
-                                        >已停用</Badge
-                                    >
+                                    <StatusBadge status="inactive" />
                                 {/if}
                             </Table.Cell>
                             <Table.Cell>
@@ -312,27 +321,13 @@
                                     class="flex gap-1.5 flex-nowrap items-center"
                                 >
                                     {#if user.is_admin}
-                                        <Badge
-                                            variant="default"
-                                            class="bg-blue-50 text-blue-700 border-blue-200 whitespace-nowrap"
-                                        >
-                                            管理員
-                                        </Badge>
+                                        <AppBadge preset="role.admin" />
                                     {/if}
                                     {#if user.is_finance}
-                                        <Badge
-                                            variant="secondary"
-                                            class="bg-amber-50 text-amber-700 border-amber-200 whitespace-nowrap"
-                                        >
-                                            財務
-                                        </Badge>
+                                        <AppBadge preset="role.finance" />
                                     {/if}
                                     {#if !user.is_admin && !user.is_finance}
-                                        <Badge
-                                            variant="outline"
-                                            class="whitespace-nowrap"
-                                            >員工</Badge
-                                        >
+                                        <AppBadge preset="role.employee" />
                                     {/if}
                                 </div>
                             </Table.Cell>
@@ -344,9 +339,7 @@
                                 </span>
                             </Table.Cell>
                             <Table.Cell class="text-right">
-                                <div
-                                    class="flex items-center justify-end gap-1"
-                                >
+                                <RowActionButtons>
                                     {#if data.canManageLifecycle && isActiveUser(user)}
                                         <Button
                                             variant="ghost"
@@ -410,23 +403,19 @@
                                             <Trash2 class="h-4 w-4" />
                                         </Button>
                                     {/if}
-                                </div>
+                                </RowActionButtons>
                             </Table.Cell>
                         </Table.Row>
                     {:else}
-                        <Table.Row>
-                            <Table.Cell
-                                colspan={6}
-                                class="h-48 text-center text-muted-foreground"
-                            >
-                                無符合條件的使用者
-                            </Table.Cell>
-                        </Table.Row>
+                        <ListTableEmptyState
+                            icon={Users}
+                            description="無符合條件的使用者"
+                            colspan={6}
+                        />
                     {/each}
                 </Table.Body>
             </Table.Root>
-        </div>
-    </div>
+    </ListPageScaffold>
 </div>
 
 {#if selectedUser}
@@ -439,23 +428,13 @@
     />
 {/if}
 
-<Dialog.Root bind:open={isConfirmOpen}>
-    <Dialog.Content class="max-w-md">
-        <Dialog.Header>
-            <Dialog.Title>{confirmTitle}</Dialog.Title>
-            <Dialog.Description>{confirmDescription}</Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Footer>
-            <Button variant="outline" onclick={() => (isConfirmOpen = false)}
-                >取消</Button
-            >
-            <Button
-                variant={confirmButtonVariant}
-                onclick={runConfirmedAction}
-                disabled={!confirmAction}
-            >
-                {confirmButtonLabel}
-            </Button>
-        </Dialog.Footer>
-    </Dialog.Content>
-</Dialog.Root>
+<ConfirmActionDialog
+    bind:open={isConfirmOpen}
+    title={confirmTitle}
+    description={confirmDescription}
+    confirmLabel={confirmButtonLabel}
+    confirmVariant={confirmButtonVariant}
+    disabled={!confirmAction}
+    onCancel={() => (isConfirmOpen = false)}
+    onConfirm={runConfirmedAction}
+/>

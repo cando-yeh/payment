@@ -1,7 +1,7 @@
 <script lang="ts">
     import { cn } from "$lib/utils";
     import { getClaimStatusLabel } from "$lib/claims/constants";
-    import { Badge } from "$lib/components/ui/badge";
+    import AppBadge from "$lib/components/common/AppBadge.svelte";
     import { Clock, User, MessageCircle } from "lucide-svelte";
 
     interface HistoryItem {
@@ -88,22 +88,18 @@
 
                     <div class="flex flex-wrap gap-2 items-center mb-2">
                         {#if item.from_status}
-                            <Badge
-                                variant="outline"
-                                class="text-[10px] py-0 h-4 font-normal opacity-60"
-                            >
-                                {getClaimStatusLabel(item.from_status)}
-                            </Badge>
+                            <AppBadge
+                                preset="timeline.from"
+                                label={getClaimStatusLabel(item.from_status)}
+                            />
                             <span class="text-muted-foreground text-[10px]"
                                 >→</span
                             >
                         {/if}
-                        <Badge
-                            variant="outline"
-                            class="text-[10px] py-0 h-4 font-normal bg-muted/20"
-                        >
-                            {getClaimStatusLabel(item.to_status)}
-                        </Badge>
+                        <AppBadge
+                            preset="timeline.to"
+                            label={getClaimStatusLabel(item.to_status)}
+                        />
                     </div>
 
                     {#if item.comment}

@@ -125,7 +125,7 @@ export const actions: Actions = {
 
         const { data: claimRow, error: claimFetchError } = await supabase
             .from('claims')
-            .select('id, applicant_id, claim_type, status')
+            .select('id, applicant_id, claim_type, status, description')
             .eq('id', params.id)
             .eq('applicant_id', session.user.id)
             .single();
@@ -156,7 +156,7 @@ export const actions: Actions = {
 
         const { data: claimRow, error: claimFetchError } = await supabase
             .from('claims')
-            .select('id, applicant_id, claim_type, status')
+            .select('id, applicant_id, claim_type, status, description')
             .eq('id', params.id)
             .eq('applicant_id', session.user.id)
             .single();

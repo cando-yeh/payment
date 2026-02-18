@@ -405,6 +405,7 @@
                         <Button
                             type="submit"
                             form="claim-editor-form"
+                            formaction={submitAction || undefined}
                             name="submit_intent"
                             value="submit"
                             size="sm"

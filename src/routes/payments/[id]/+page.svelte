@@ -2,12 +2,10 @@
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
     import * as Card from "$lib/components/ui/card";
-    import { Badge } from "$lib/components/ui/badge";
+    import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import {
         ArrowLeft,
-        Calendar,
-        User,
-        AlertCircle,
+        CircleAlert,
         ExternalLink,
         RotateCcw,
     } from "lucide-svelte";
@@ -20,12 +18,10 @@
 
     function formatDate(date: string) {
         if (!date) return "-";
-        return new Date(date).toLocaleString("zh-TW", {
+        return new Date(date).toLocaleDateString("zh-TW", {
             year: "numeric",
             month: "2-digit",
             day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
         });
     }
 
@@ -49,10 +45,11 @@
         </div>
         <div class="ml-auto flex items-center gap-2">
             {#if payment.status === "completed" || payment.status === "paid"}
-                <Badge
-                    class="bg-green-100 text-green-700 hover:bg-green-100 py-1 px-3"
-                    >已撥款</Badge
-                >
+                {#if claims?.some((c: { status: string }) => c.status !== "paid")}
+                    <StatusBadge status="paid_pending_doc" />
+                {:else}
+                    <StatusBadge status="paid" />
+                {/if}
                 <form action="?/cancelPayment" method="POST" use:enhance>
                     <Button
                         variant="outline"
@@ -63,14 +60,11 @@
                     </Button>
                 </form>
             {:else if payment.status === "cancelled"}
-                <Badge
-                    variant="outline"
-                    class="text-muted-foreground italic py-1 px-3">已沖帳</Badge
-                >
+                <StatusBadge status="cancelled" />
                 <div
                     class="text-xs text-muted-foreground flex items-center gap-1"
                 >
-                    <AlertCircle class="h-3 w-3" />
+                    <CircleAlert class="h-3 w-3" />
                     於 {formatDate(payment.cancelled_at)} 撤銷
                 </div>
             {/if}
@@ -132,8 +126,7 @@
                             <Table.Head>單號</Table.Head>
                             <Table.Head>申請人</Table.Head>
                             <Table.Head>摘要</Table.Head>
-                            <Table.Head class="text-right">金額</Table.Head>
-                            <Table.Head class="text-right">操作</Table.Head>
+                            <Table.Head>金額</Table.Head>
                         </Table.Row>
                     </Table.Header>
                     <Table.Body>
@@ -154,16 +147,6 @@
                                         claim.total_amount,
                                     )}</Table.Cell
                                 >
-                                <Table.Cell class="text-right">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onclick={() =>
-                                            goto(`/claims/${claim.id}`)}
-                                    >
-                                        <ExternalLink class="h-4 w-4" />
-                                    </Button>
-                                </Table.Cell>
                             </Table.Row>
                         {/each}
                     </Table.Body>

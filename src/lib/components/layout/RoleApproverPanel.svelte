@@ -99,7 +99,7 @@
                             if (allowRoleEdit) toggleRole(role.key);
                         }}
                     >
-                        <svelte:component this={role.icon} class="h-4 w-4" />
+                        <role.icon class="h-4 w-4" />
                         <span>{role.label}</span>
                     </Button>
                 {:else}
@@ -110,7 +110,7 @@
                             "readonly",
                         )}
                     >
-                        <svelte:component this={role.icon} class="h-4 w-4" />
+                        <role.icon class="h-4 w-4" />
                         {role.label}
                     </div>
                 {/if}

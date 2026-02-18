@@ -1,12 +1,22 @@
 <script lang="ts">
     import { cn } from "$lib/utils";
-    import type { ComponentType } from "svelte";
+    import { type Component, type Snippet } from "svelte";
 
-    export let icon: ComponentType;
-    export let title: string | undefined = undefined;
-    export let description: string | undefined = undefined;
-    export let colspan: number = 1;
-    export let className: string | undefined = undefined;
+    let {
+        icon: Icon,
+        title,
+        description,
+        colspan = 1,
+        className,
+        action,
+    }: {
+        icon: any;
+        title?: string;
+        description?: string;
+        colspan?: number;
+        className?: string;
+        action?: Snippet;
+    } = $props();
 </script>
 
 <tr class={cn("group hover:bg-transparent", className)}>
@@ -15,10 +25,7 @@
             <div
                 class="h-16 w-16 rounded-3xl bg-secondary/30 flex items-center justify-center"
             >
-                <svelte:component
-                    this={icon}
-                    class="h-8 w-8 text-muted-foreground/20"
-                />
+                <Icon class="h-8 w-8 text-muted-foreground/20" />
             </div>
             {#if title || description}
                 <div class="space-y-1">
@@ -34,7 +41,7 @@
                     {/if}
                 </div>
             {/if}
-            <slot name="action" />
+            {@render action?.()}
         </div>
     </td>
 </tr>

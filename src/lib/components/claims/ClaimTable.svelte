@@ -1,44 +1,31 @@
 <script lang="ts">
     import * as Table from "$lib/components/ui/table";
-    import { Badge } from "$lib/components/ui/badge";
-    import EmptyState from "$lib/components/common/EmptyState.svelte";
+    import AppBadge from "$lib/components/common/AppBadge.svelte";
+    import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
+    import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import { formatCurrency, formatDate, cn } from "$lib/utils";
+    import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
     import {
-        getClaimStatusLabel,
         getClaimTypeLabel,
     } from "$lib/claims/constants";
     import { goto } from "$app/navigation";
-    import type { ComponentType } from "svelte";
+    import { type Snippet } from "svelte";
 
-    // Define props
-    export let claims: any[] = [];
-    export let emptyMessage: string = "目前尚無相關請款紀錄";
-    export let emptyIcon: ComponentType;
-    export let selectable: boolean = false;
-    export let selectedClaims: string[] = [];
-    // Callback for selection change - we'll use bind:selectedClaims instead if possible,
-    // or emit an event. For now, let's use two-way binding on the prop.
-
-    const statusColorMap: Record<string, string> = {
-        draft: "bg-slate-100 text-slate-600 border-slate-200",
-        pending_manager: "bg-amber-100 text-amber-700 border-amber-200",
-        pending_finance: "bg-blue-100 text-blue-700 border-blue-200",
-        pending_payment: "bg-indigo-100 text-indigo-700 border-indigo-200",
-        paid: "bg-emerald-100 text-emerald-700 border-emerald-200",
-        paid_pending_doc: "bg-orange-100 text-orange-700 border-orange-200",
-        pending_doc_review: "bg-orange-100 text-orange-700 border-orange-200",
-        returned: "bg-rose-100 text-rose-700 border-rose-200",
-        cancelled: "bg-slate-50 text-slate-400 border-slate-100",
-    };
-
-    function getStatusBadge(status: string) {
-        return {
-            label: getClaimStatusLabel(status),
-            color:
-                statusColorMap[status] ||
-                "bg-slate-100 text-slate-600 border-slate-200",
-        };
-    }
+    let {
+        claims = [],
+        emptyMessage = "目前尚無相關請款紀錄",
+        emptyIcon,
+        selectable = false,
+        selectedClaims = $bindable([]),
+        emptyAction,
+    }: {
+        claims?: any[];
+        emptyMessage?: string;
+        emptyIcon: any;
+        selectable?: boolean;
+        selectedClaims?: string[];
+        emptyAction?: Snippet;
+    } = $props();
 
     function handleRowClick(e: MouseEvent, claimId: string) {
         // Prevent navigation if clicking on checkbox or input
@@ -73,11 +60,20 @@
             selectedClaims = [];
         }
     }
+
+    function splitCurrencyParts(amount: number) {
+        const formatted = formatCurrency(amount);
+        const match = formatted.match(/^([^0-9-]*)(.*)$/);
+        return {
+            symbol: (match?.[1] || "NT$").trim(),
+            value: (match?.[2] || formatted).trim(),
+        };
+    }
 </script>
 
 <Table.Root>
-    <Table.Header class="bg-secondary/20">
-        <Table.Row class="hover:bg-transparent border-none">
+    <Table.Header class={LIST_TABLE_TOKENS.header}>
+        <Table.Row class={LIST_TABLE_TOKENS.headerRow}>
             {#if selectable}
                 <Table.Head class="w-[60px] pl-8 py-4">
                     <input
@@ -91,37 +87,42 @@
             {/if}
             <Table.Head
                 class={cn(
-                    "text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4",
+                    LIST_TABLE_TOKENS.headBase,
+                    LIST_TABLE_TOKENS.colId,
                     !selectable && "pl-8",
-                )}>單號</Table.Head
+                )}
+                >單號</Table.Head
             >
-            <Table.Head
-                class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
-                >類別</Table.Head
-            >
-            <Table.Head
-                class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
+            <Table.Head class={LIST_TABLE_TOKENS.headBase}>類別</Table.Head>
+            <Table.Head class={LIST_TABLE_TOKENS.headBase}
                 >收款對象/申請人</Table.Head
             >
             <Table.Head
-                class="text-right text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
+                class={cn(
+                    LIST_TABLE_TOKENS.headBase,
+                    LIST_TABLE_TOKENS.colAmount,
+                    "text-right",
+                )}
                 >總金額</Table.Head
             >
             <Table.Head
-                class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
+                class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colStatus)}
                 >當前狀態</Table.Head
             >
             <Table.Head
-                class="text-[10px] font-bold text-muted-foreground uppercase tracking-widest py-4"
+                class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colDate)}
                 >日期</Table.Head
             >
         </Table.Row>
     </Table.Header>
-    <Table.Body class="divide-y divide-border/10">
+    <Table.Body class={LIST_TABLE_TOKENS.body}>
         {#if claims.length > 0}
             {#each claims as claim}
                 <Table.Row
-                    class="group border-none hover:bg-secondary/30 transition-all cursor-pointer h-12"
+                    class={cn(
+                        LIST_TABLE_TOKENS.row,
+                        LIST_TABLE_TOKENS.rowClickable,
+                    )}
                     onclick={(e) => handleRowClick(e, claim.id)}
                 >
                     {#if selectable}
@@ -142,12 +143,10 @@
                         </span>
                     </Table.Cell>
                     <Table.Cell>
-                        <Badge
-                            variant="secondary"
-                            class="rounded-md font-bold text-[10px] px-2 py-0"
-                        >
-                            {getClaimTypeLabel(claim.claim_type)}
-                        </Badge>
+                        <AppBadge
+                            preset="claim.type"
+                            label={getClaimTypeLabel(claim.claim_type)}
+                        />
                     </Table.Cell>
                     <Table.Cell>
                         <div class="flex items-center gap-2">
@@ -168,22 +167,27 @@
                         </div>
                     </Table.Cell>
                     <Table.Cell class="text-right pr-4">
-                        <div
-                            class="text-base font-bold text-foreground tracking-tight"
-                        >
-                            {formatCurrency(claim.total_amount)}
+                        {@const amountParts = splitCurrencyParts(
+                            claim.total_amount,
+                        )}
+                        <div class="flex items-center justify-between gap-2">
+                            <span
+                                class="text-[10px] font-bold text-muted-foreground"
+                            >
+                                {amountParts.symbol}
+                            </span>
+                            <span
+                                class="text-base font-bold text-foreground tracking-tight"
+                            >
+                                {amountParts.value}
+                            </span>
                         </div>
                     </Table.Cell>
                     <Table.Cell>
-                        {@const status = getStatusBadge(claim.status)}
-                        <Badge
-                            class={cn(
-                                "rounded-full px-3 py-0 scale-90 origin-left text-[10px] font-bold border-none",
-                                status.color,
-                            )}
-                        >
-                            {status.label}
-                        </Badge>
+                        <StatusBadge
+                            status={claim.status}
+                            className="scale-90 origin-left"
+                        />
                     </Table.Cell>
                     <Table.Cell class="text-muted-foreground font-bold text-xs">
                         {formatDate(claim.submitted_at || claim.created_at)}
@@ -191,15 +195,12 @@
                 </Table.Row>
             {/each}
         {:else}
-            <EmptyState
+            <ListTableEmptyState
                 icon={emptyIcon}
                 description={emptyMessage}
                 colspan={selectable ? 7 : 6}
-            >
-                <div slot="action">
-                    <slot name="empty-action" />
-                </div>
-            </EmptyState>
+                action={emptyAction}
+            />
         {/if}
     </Table.Body>
 </Table.Root>

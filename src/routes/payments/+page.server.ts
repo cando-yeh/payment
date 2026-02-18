@@ -21,7 +21,8 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         .from('payments')
         .select(`
             *,
-            paid_by_profile:profiles!payments_paid_by_fkey(full_name)
+            paid_by_profile:profiles!payments_paid_by_fkey(full_name),
+            claims(status)
         `)
         .order('paid_at', { ascending: false });
 

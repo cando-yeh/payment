@@ -1,10 +1,19 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import { cn } from "$lib/utils";
+    import { type Snippet } from "svelte";
 
-    export let title: string;
-    export let description: string | undefined = undefined;
-    export let className: string | undefined = undefined;
+    let {
+        title,
+        description,
+        className,
+        actions,
+    }: {
+        title: string;
+        description?: string;
+        className?: string;
+        actions?: Snippet;
+    } = $props();
 </script>
 
 <div
@@ -24,5 +33,5 @@
             </p>
         {/if}
     </div>
-    <slot name="actions" />
+    {@render actions?.()}
 </div>

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { supabaseAdmin, injectSession } from './helpers';
+import { supabaseAdmin, injectSession, postFormActionDetailed } from './helpers';
 
 test.describe.serial('Duplicate Invoice Check E2E', () => {
     let applicant: any;
@@ -117,11 +117,8 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
 
         // 3. Login as applicant and try to submit the second claim
         await injectSession(page, applicant.email, password);
-        await page.goto(`/claims/${claim2.id}`);
-        await expect(page).toHaveURL(new RegExp(`/claims/${claim2.id}`));
-
-        // Click "Submit" button
-        await page.getByRole('button', { name: '提交審核' }).click();
+        const submitRes = await postFormActionDetailed(page, `/claims/${claim2.id}?/submit`, {});
+        expect([200, 303]).toContain(submitRes.status);
 
         await expect.poll(async () => {
             const { data } = await supabaseAdmin

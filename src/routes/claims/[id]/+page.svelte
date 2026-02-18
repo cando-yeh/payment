@@ -244,11 +244,11 @@
     {backHref}
     {backLabel}
     formAction="?/editUpdate"
-    submitAction="?/editSubmit"
+    submitAction="?/submit"
     showSaveButton={isEditableApplicant}
     showSubmitButton={isEditableApplicant}
     deleteAction={isEditableApplicant ? "?/delete" : undefined}
-    directSubmitInSameForm={false}
+    directSubmitInSameForm={true}
     {history}
     {headerActions}
     onDeleteSubmit={(e) =>

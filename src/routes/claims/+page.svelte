@@ -1,10 +1,11 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
-    import { Input } from "$lib/components/ui/input";
-    import { Plus, Search, FileText } from "lucide-svelte";
+    import { Plus, FileText } from "lucide-svelte";
     import { fade } from "svelte/transition";
     import { cn } from "$lib/utils";
-    import PageHeader from "$lib/components/common/PageHeader.svelte";
+    import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
+    import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import SearchField from "$lib/components/common/SearchField.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
     import type { PageData } from "./$types";
 
@@ -83,97 +84,90 @@
     });
 </script>
 
-<div class="space-y-10 pb-12" in:fade={{ duration: 400 }}>
-    <!-- Header Area -->
-    <PageHeader title="我的請款單" description="管理與追蹤您的所有請款申請流程">
-        <div slot="actions">
-            <Button
-                href="/claims/new"
-                class="h-10 px-6 rounded-xl shadow-lg shadow-primary/10 gap-2 font-bold text-sm"
-            >
-                <Plus class="h-4 w-4" /> 建立請款單
-            </Button>
-        </div>
-    </PageHeader>
-
-    <!-- Main Content Area -->
-    <div
-        class="bg-background border border-border/50 rounded-3xl shadow-sm overflow-hidden pb-2"
+<div in:fade={{ duration: 400 }}>
+    <ListPageScaffold
+        title="我的請款單"
+        description="管理與追蹤您的所有請款申請流程"
+        shellClassName="pb-2"
     >
-        <div class="w-full">
-            <div
-                class="p-6 border-b border-border/30 flex flex-col md:flex-row md:items-center justify-between gap-6"
-            >
-                <div
-                    class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1"
+        {#snippet headerActions()}
+            <div>
+                <Button
+                    href="/claims/new"
+                    class="h-10 px-6 rounded-xl shadow-lg shadow-primary/10 gap-2 font-bold text-sm"
                 >
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={currentTab === "drafts"}
-                        class={cn(
-                            "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                            currentTab === "drafts"
-                                ? "bg-background shadow-sm"
-                                : "",
-                        )}
-                        onclick={() => handleTabChange("drafts")}
-                        >草稿/退回</button
+                    <Plus class="h-4 w-4" /> 建立請款單
+                </Button>
+            </div>
+        {/snippet}
+        <div class="w-full">
+            <ListToolbar>
+                {#snippet left()}
+                    <div
+                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1"
                     >
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={currentTab === "processing"}
-                        class={cn(
-                            "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                            currentTab === "processing"
-                                ? "bg-background shadow-sm"
-                                : "",
-                        )}
-                        onclick={() => handleTabChange("processing")}
-                        >審核中</button
-                    >
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={currentTab === "action_required"}
-                        class={cn(
-                            "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                            currentTab === "action_required"
-                                ? "bg-background shadow-sm"
-                                : "",
-                        )}
-                        onclick={() => handleTabChange("action_required")}
-                        >待補件</button
-                    >
-                    <button
-                        type="button"
-                        role="tab"
-                        aria-selected={currentTab === "history"}
-                        class={cn(
-                            "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
-                            currentTab === "history"
-                                ? "bg-background shadow-sm"
-                                : "",
-                        )}
-                        onclick={() => handleTabChange("history")}
-                        >歷史紀錄</button
-                    >
-                </div>
-
-                <div class="relative group">
-                    <Search
-                        class="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50 group-focus-within:text-primary transition-colors"
-                    />
-                    <Input
-                        type="search"
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={currentTab === "drafts"}
+                            class={cn(
+                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
+                                currentTab === "drafts"
+                                    ? "bg-background shadow-sm"
+                                    : "",
+                            )}
+                            onclick={() => handleTabChange("drafts")}
+                            >草稿/退回</button
+                        >
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={currentTab === "processing"}
+                            class={cn(
+                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
+                                currentTab === "processing"
+                                    ? "bg-background shadow-sm"
+                                    : "",
+                            )}
+                            onclick={() => handleTabChange("processing")}
+                            >審核中</button
+                        >
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={currentTab === "action_required"}
+                            class={cn(
+                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
+                                currentTab === "action_required"
+                                    ? "bg-background shadow-sm"
+                                    : "",
+                            )}
+                            onclick={() => handleTabChange("action_required")}
+                            >待補件</button
+                        >
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={currentTab === "history"}
+                            class={cn(
+                                "rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap",
+                                currentTab === "history"
+                                    ? "bg-background shadow-sm"
+                                    : "",
+                            )}
+                            onclick={() => handleTabChange("history")}
+                            >歷史紀錄</button
+                        >
+                    </div>
+                {/snippet}
+                {#snippet right()}
+                    <SearchField
                         placeholder="搜尋單號或收款人..."
-                        class="pl-10 pr-4 h-10 w-full md:w-[280px] rounded-xl bg-secondary/30 border-none focus:ring-primary/10 transition-all text-xs font-medium"
-                        value={searchTerm}
+                        bind:value={searchTerm}
                         oninput={handleSearch}
                     />
-                </div>
-            </div>
+                {/snippet}
+            </ListToolbar>
 
             <div class="m-0">
                 <ClaimTable
@@ -181,7 +175,7 @@
                     emptyIcon={FileText}
                     emptyMessage="目前尚無相關請款紀錄"
                 >
-                    <div slot="empty-action">
+                    {#snippet emptyAction()}
                         <Button
                             href="/claims/new"
                             variant="outline"
@@ -189,9 +183,9 @@
                         >
                             立即建立單據
                         </Button>
-                    </div>
+                    {/snippet}
                 </ClaimTable>
             </div>
         </div>
-    </div>
+    </ListPageScaffold>
 </div>

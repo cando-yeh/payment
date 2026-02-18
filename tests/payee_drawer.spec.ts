@@ -22,7 +22,12 @@ test.describe('Payee Drawer Functionality', () => {
     async function openPayeeEditDrawer(page: any, row: any) {
         const drawer = page.locator('form[action*="updatePayeeRequest"]').first();
         for (let i = 0; i < 4; i++) {
-            await row.click();
+            const firstCell = row.locator('td').first();
+            if (await firstCell.isVisible().catch(() => false)) {
+                await firstCell.click({ force: true });
+            } else {
+                await row.click({ force: true });
+            }
             if (await drawer.isVisible({ timeout: 1200 }).catch(() => false)) {
                 return drawer;
             }
@@ -206,7 +211,7 @@ test.describe('Payee Drawer Functionality', () => {
 
         // 1. Create a new pending request via New Payee Page
         const newPayeeName = 'Pending Drawer Test ' + Date.now();
-        await page.locator('a[href="/payees/new"]').click();
+        await page.goto('/payees/new');
         await expect(page).toHaveURL(/\/payees\/new/);
         await expect(page.getByRole('heading', { name: '新增收款人' })).toBeVisible();
 

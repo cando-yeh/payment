@@ -1,9 +1,6 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
-    import { Badge } from "$lib/components/ui/badge";
-    import { Input } from "$lib/components/ui/input";
-    import * as Dialog from "$lib/components/ui/dialog";
     import {
         Plus,
         Search,
@@ -23,6 +20,16 @@
     import { toast } from "svelte-sonner";
     import PayeeSheet from "$lib/components/layout/PayeeSheet.svelte";
     import PayeeRequestSheet from "$lib/components/layout/PayeeRequestSheet.svelte";
+    import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
+    import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import SearchField from "$lib/components/common/SearchField.svelte";
+    import StatusBadge from "$lib/components/common/StatusBadge.svelte";
+    import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
+    import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
+    import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
+    import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
+    import { cn } from "$lib/utils";
+    import { fade } from "svelte/transition";
 
     let { data } = $props();
 
@@ -132,23 +139,6 @@
         }),
     );
 
-    function getStatusBadge(status: string) {
-        switch (status) {
-            case "available":
-                return { variant: "default", label: "已啟用" };
-            case "disabled":
-                return { variant: "destructive", label: "已停用" };
-            case "pending_create":
-                return { variant: "secondary", label: "待審核 (新增)" };
-            case "pending_update":
-                return { variant: "outline", label: "待審核 (更新)" };
-            case "pending_disable":
-                return { variant: "destructive", label: "待審核 (停用)" };
-            default:
-                return { variant: "outline", label: status };
-        }
-    }
-
     function getTypeLabel(type: string) {
         switch (type) {
             case "vendor":
@@ -164,16 +154,12 @@
 
     function openDetail(payee: any) {
         selectedPayee = payee;
-        queueMicrotask(() => {
-            isDetailOpen = true;
-        });
+        isDetailOpen = true;
     }
 
     function openEditSheet(payee: any) {
         editingPayee = payee;
-        queueMicrotask(() => {
-            isSheetOpen = true;
-        });
+        isSheetOpen = true;
     }
 
     function openSystemConfirm(options: {
@@ -196,25 +182,6 @@
         isConfirmOpen = false;
         confirmAction = null;
         if (action) await action();
-    }
-
-    /**
-     * Common form submission handler for actions (Withdraw, Approve)
-     */
-    function handleAction(successMsg: string) {
-        return () => {
-            isActionSubmitting = true;
-            return async ({ result }: { result: any }) => {
-                isActionSubmitting = false;
-                if (result.type === "success") {
-                    toast.success(successMsg);
-                    isDetailOpen = false;
-                    await invalidateAll();
-                } else if (result.type === "failure") {
-                    toast.error(result.data?.message || "操作失敗");
-                }
-            };
-        };
     }
 
     async function handleWithdrawRequestFromList(payee: any) {
@@ -402,65 +369,72 @@
     }
 </script>
 
-<div class="flex flex-col gap-6 p-6">
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-3xl font-bold tracking-tight">收款人管理</h1>
-            <p class="text-muted-foreground mt-2">
-                管理所有廠商與個人收款對象。
-            </p>
-        </div>
-        <Button href="/payees/new" role="button">
-            <Plus class="mr-2 h-4 w-4" />
-            新增收款人
-        </Button>
-    </div>
-
-    <div class="flex items-center gap-4">
-        <div class="relative w-full max-w-sm">
-            <Search
-                class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
-            />
-            <Input
-                type="search"
-                placeholder="搜尋名稱..."
-                class="pl-8"
-                bind:value={searchTerm}
-            />
-        </div>
-        <div class="flex items-center rounded-md border p-1">
-            {#each ["all", "vendor", "personal"] as filter}
-                <Button
-                    variant={typeFilter === filter ? "secondary" : "ghost"}
-                    size="sm"
-                    onclick={() => (typeFilter = filter)}
-                >
-                    {filter === "all"
-                        ? "全部"
-                        : filter === "vendor"
-                          ? "廠商"
-                          : "個人"}
+<div in:fade={{ duration: 400 }}>
+    <ListPageScaffold
+        title="收款人管理"
+        description="管理所有廠商與個人收款對象。"
+        shellClassName="pb-2"
+    >
+        {#snippet headerActions()}
+            <div>
+                <Button href="/payees/new" role="button">
+                    <Plus class="mr-2 h-4 w-4" />
+                    新增收款人
                 </Button>
-            {/each}
-        </div>
-    </div>
+            </div>
+        {/snippet}
+        <ListToolbar>
+            {#snippet left()}
+                <div class="flex items-center rounded-md border p-1">
+                    {#each ["all", "vendor", "personal"] as filter}
+                        <Button
+                            variant={typeFilter === filter ? "secondary" : "ghost"}
+                            size="sm"
+                            onclick={() => (typeFilter = filter)}
+                        >
+                            {filter === "all"
+                                ? "全部"
+                                : filter === "vendor"
+                                  ? "廠商"
+                                  : "個人"}
+                        </Button>
+                    {/each}
+                </div>
+            {/snippet}
+            {#snippet right()}
+                <SearchField
+                    placeholder="搜尋名稱..."
+                    bind:value={searchTerm}
+                    widthClass="w-full max-w-sm"
+                    inputClassName="pl-8 text-sm"
+                />
+            {/snippet}
+        </ListToolbar>
 
-    <div class="rounded-md border">
         <Table.Root>
-            <Table.Header>
-                <Table.Row>
-                    <Table.Head>名稱</Table.Head>
-                    <Table.Head>類型</Table.Head>
-                    <Table.Head>銀行</Table.Head>
-                    <Table.Head>銀行帳號</Table.Head>
-                    <Table.Head>狀態</Table.Head>
-                    <Table.Head class="text-right">操作</Table.Head>
+            <Table.Header class={LIST_TABLE_TOKENS.header}>
+                <Table.Row class={LIST_TABLE_TOKENS.headerRow}>
+                    <Table.Head class={LIST_TABLE_TOKENS.headBase}>名稱</Table.Head>
+                    <Table.Head class={LIST_TABLE_TOKENS.headBase}>類型</Table.Head>
+                    <Table.Head class={LIST_TABLE_TOKENS.headBase}>銀行</Table.Head>
+                    <Table.Head class={LIST_TABLE_TOKENS.headBase}
+                        >銀行帳號</Table.Head
+                    >
+                    <Table.Head class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colStatus)}
+                        >狀態</Table.Head
+                    >
+                    <Table.Head class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colActions)}
+                        >操作</Table.Head
+                    >
                 </Table.Row>
             </Table.Header>
-            <Table.Body>
+            <Table.Body class={LIST_TABLE_TOKENS.body}>
                 {#each filteredPayees as payee}
                     <Table.Row
-                        class="cursor-pointer hover:bg-muted/50 transition-colors"
+                        class={cn(
+                            LIST_TABLE_TOKENS.row,
+                            LIST_TABLE_TOKENS.rowClickable,
+                        )}
                         data-testid={`payee-row-${payee.id}`}
                         onclick={() => {
                             if (payee.source === "active") {
@@ -521,13 +495,10 @@
                             </div>
                         </Table.Cell>
                         <Table.Cell>
-                            {@const badge = getStatusBadge(payee.status)}
-                            <Badge variant={badge.variant as any}
-                                >{badge.label}</Badge
-                            >
+                            <StatusBadge status={payee.status} />
                         </Table.Cell>
                         <Table.Cell class="text-right">
-                            <div class="flex items-center justify-end gap-1">
+                            <RowActionButtons>
                                 {#if payee.source === "active" && data.is_finance}
                                     <Button
                                         variant="ghost"
@@ -598,21 +569,20 @@
                                         <Undo2 class="h-4 w-4" />
                                     </Button>
                                 {/if}
-                            </div>
+                            </RowActionButtons>
                         </Table.Cell>
                     </Table.Row>
                 {:else}
-                    <Table.Row>
-                        <Table.Cell
-                            colspan={6}
-                            class="h-24 text-center text-muted-foreground"
-                            >無資料</Table.Cell
-                        >
-                    </Table.Row>
+                    <ListTableEmptyState
+                        icon={Search}
+                        description="無資料"
+                        colspan={6}
+                    />
                 {/each}
             </Table.Body>
         </Table.Root>
-    </div>
+    
+    </ListPageScaffold>
 </div>
 
 <!-- Request Drawer -->
@@ -628,26 +598,15 @@
     isFinance={data.is_finance}
 />
 
-<Dialog.Root bind:open={isConfirmOpen}>
-    <Dialog.Content class="max-w-md">
-        <Dialog.Header>
-            <Dialog.Title>{confirmTitle}</Dialog.Title>
-            <Dialog.Description>{confirmDescription}</Dialog.Description>
-        </Dialog.Header>
-        <Dialog.Footer>
-            <Button
-                variant="outline"
-                data-testid="system-confirm-cancel"
-                onclick={() => (isConfirmOpen = false)}>取消</Button
-            >
-            <Button
-                variant={confirmButtonVariant}
-                data-testid="system-confirm-submit"
-                onclick={runConfirmedAction}
-                disabled={!confirmAction}
-            >
-                {confirmButtonLabel}
-            </Button>
-        </Dialog.Footer>
-    </Dialog.Content>
-</Dialog.Root>
+<ConfirmActionDialog
+    bind:open={isConfirmOpen}
+    title={confirmTitle}
+    description={confirmDescription}
+    confirmLabel={confirmButtonLabel}
+    confirmVariant={confirmButtonVariant}
+    disabled={!confirmAction}
+    cancelTestId="system-confirm-cancel"
+    confirmTestId="system-confirm-submit"
+    onCancel={() => (isConfirmOpen = false)}
+    onConfirm={runConfirmedAction}
+/>

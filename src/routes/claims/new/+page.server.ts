@@ -169,10 +169,10 @@ export const actions: Actions = {
 
         let normalizedPayeeId: string | null = null;
         if (claimType !== 'employee') {
-            if (shouldSubmitDirectly && !payeeId) {
+            if (!payeeId) {
                 return fail(400, { message: 'Payee is required for this claim type' });
             }
-            normalizedPayeeId = payeeId || null;
+            normalizedPayeeId = payeeId;
         }
 
         if (isFloatingAccount && claimType === 'employee') {
