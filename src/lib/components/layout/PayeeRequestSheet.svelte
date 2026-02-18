@@ -138,7 +138,7 @@
         hasOwn(proposedData, "name") && changed(beforeName, displayName),
     );
     let isTaxIdChanged = $derived(
-        hasOwn(proposedData, "identity_no") &&
+        (Boolean(request?.payload?.proposed_unified_no) || hasOwn(proposedData, "identity_no")) &&
             changed(taxIdDisplayBefore, taxIdDisplayAfter),
     );
     let isServiceChanged = $derived(

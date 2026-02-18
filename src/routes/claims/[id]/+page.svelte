@@ -83,7 +83,11 @@
     const editorClaim = $derived({
         ...claim,
         applicant_name: claim.applicant?.full_name || "",
+        applicant_bank: claim.applicant?.bank || "",
+        applicant_bank_account_tail: claim.applicant?.bank_account_tail || "",
         payee_name: claim.payee?.name || "",
+        payee_bank: claim.payee?.bank || "",
+        payee_bank_account_tail: claim.payee?.bank_account_tail || "",
         items: claim.items || [],
     });
 

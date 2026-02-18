@@ -12,13 +12,11 @@
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
+    import { Switch } from "$lib/components/ui/switch";
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Sheet from "$lib/components/ui/sheet";
     import { toast } from "svelte-sonner";
-    import {
-        Save,
-        LoaderCircle,
-    } from "lucide-svelte";
+    import { Save, LoaderCircle } from "lucide-svelte";
     import { compressFormImageInputs } from "$lib/client/image-compression";
     import { timedFetch } from "$lib/client/timed-fetch";
     import BankAccountSection from "$lib/components/layout/BankAccountSection.svelte";
@@ -37,6 +35,7 @@
     let type = $state("vendor");
     let taxId = $state("");
     let serviceDescription = $state("");
+    let editableAccount = $state(false);
     let email = $state("");
     let address = $state("");
     let bankCode = $state("");
@@ -105,13 +104,16 @@
             normalizeComparable(name) !== normalizeComparable(payee.name) ||
             normalizeComparable(type) !== normalizeComparable(payee.type) ||
             normalizeComparable(bankCode) !== normalizeComparable(payee.bank) ||
+            Boolean(editableAccount) !== Boolean(payee.editable_account) ||
             normalizeComparable(serviceDescription) !==
                 normalizeComparable(payee.service_description);
 
         const personalChanged =
             type === "personal" &&
-            (normalizeComparable(email) !== normalizeComparable(currentExtra.email) ||
-                normalizeComparable(address) !== normalizeComparable(currentExtra.address));
+            (normalizeComparable(email) !==
+                normalizeComparable(currentExtra.email) ||
+                normalizeComparable(address) !==
+                    normalizeComparable(currentExtra.address));
 
         const taxChanged =
             normalizeComparable(sanitizeEncryptedPlaceholder(taxId)) !==
@@ -148,6 +150,7 @@
             email = payee.extra_info?.email || "";
             address = payee.extra_info?.address || "";
             bankCode = payee.bank || "";
+            editableAccount = Boolean(payee.editable_account);
             // 重設敏感資料狀態
             bankAccount = ""; // 不直接顯示原始加密字串
             showAccountValue = false;
@@ -167,7 +170,9 @@
     }
 
     $effect(() => {
-        const payeeToken = payee ? `${payee.id}:${payee.updated_at || ""}` : null;
+        const payeeToken = payee
+            ? `${payee.id}:${payee.updated_at || ""}`
+            : null;
         if (payeeToken !== lastSyncedPayeeToken) {
             resetFormFromPayee();
             isEditing = false;
@@ -204,10 +209,7 @@
         return hasAttachment(key) || isEditing;
     }
 
-    function handleAttachmentSelected(
-        key: AttachmentKey,
-        event: Event,
-    ) {
+    function handleAttachmentSelected(key: AttachmentKey, event: Event) {
         const input = event.currentTarget as HTMLInputElement;
         const file = input.files?.[0] || null;
         attachmentFiles = {
@@ -245,19 +247,28 @@
     function isAttachmentImage(key: AttachmentKey) {
         const file = attachmentFiles[key];
         if (file) return file.type.startsWith("image/");
-        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || attachmentMeta[key] || "") : "";
+        const url = hasExistingAttachment(key)
+            ? String(attachmentUrls[key] || attachmentMeta[key] || "")
+            : "";
         return Boolean(url && isImageUrl(url));
     }
 
     function isAttachmentPdf(key: AttachmentKey) {
         const file = attachmentFiles[key];
         if (file) return file.type === "application/pdf";
-        const url = hasExistingAttachment(key) ? String(attachmentUrls[key] || attachmentMeta[key] || "") : "";
+        const url = hasExistingAttachment(key)
+            ? String(attachmentUrls[key] || attachmentMeta[key] || "")
+            : "";
         return Boolean(url && isPdfUrl(url));
     }
 
     function getAttachmentPreviewUrl(key: AttachmentKey) {
-        return localPreviewUrls[key] || (hasExistingAttachment(key) ? String(attachmentUrls[key] || "") : null);
+        return (
+            localPreviewUrls[key] ||
+            (hasExistingAttachment(key)
+                ? String(attachmentUrls[key] || "")
+                : null)
+        );
     }
 
     $effect(() => {
@@ -287,7 +298,13 @@
      * 銀行帳號解密流程
      */
     async function ensureTaxIdReady() {
-        if (!payee?.id || type !== "personal" || !isFinance || sanitizeEncryptedPlaceholder(taxId).length > 0) return;
+        if (
+            !payee?.id ||
+            type !== "personal" ||
+            !isFinance ||
+            sanitizeEncryptedPlaceholder(taxId).length > 0
+        )
+            return;
 
         try {
             const formData = new FormData();
@@ -406,20 +423,21 @@
                 await invalidateAll();
                 open = false;
             } else {
-                toast.error(result.data?.message || UI_MESSAGES.common.submitFailed);
+                toast.error(
+                    result.data?.message || UI_MESSAGES.common.submitFailed,
+                );
             }
         };
     }
-
 </script>
 
 <Sheet.Root bind:open>
     <Sheet.Content class="sm:max-w-md overflow-y-auto">
         <Sheet.Header>
-        <Sheet.Title>收款人資訊</Sheet.Title>
-        <Sheet.Description>
+            <Sheet.Title>收款人資訊</Sheet.Title>
+            <Sheet.Description>
                 檢視或修改收款人資料。修改後將建立異動申請單。
-        </Sheet.Description>
+            </Sheet.Description>
         </Sheet.Header>
 
         {#if payee}
@@ -432,15 +450,20 @@
                     class="space-y-6"
                 >
                     <input type="hidden" name="type" value={type} />
+                    <input
+                        type="hidden"
+                        name="editable_account"
+                        value={type === "vendor" && editableAccount
+                            ? "true"
+                            : "false"}
+                    />
 
                     <!-- 基本資料欄位 -->
                     <div class="space-y-4">
                         <div class="space-y-2">
                             <Label for="name"
-                                >{type === "vendor"
-                                    ? "公司名稱"
-                                    : "姓名"} <span class="text-red-500">*</span
-                                ></Label
+                                >{type === "vendor" ? "公司名稱" : "姓名"}
+                                <span class="text-red-500">*</span></Label
                             >
                             <Input
                                 id="name"
@@ -460,9 +483,8 @@
                                 <Label for="identity_no"
                                     >{type === "vendor"
                                         ? "統一編號 (8碼)"
-                                        : "身分證字號"} <span
-                                        class="text-red-500">*</span
-                                    ></Label
+                                        : "身分證字號"}
+                                    <span class="text-red-500">*</span></Label
                                 >
                                 <Input
                                     id="identity_no"
@@ -533,9 +555,25 @@
                         {revealing}
                         {showAccountValue}
                         {decryptedAccount}
-                        viewOnlyFieldClass={viewOnlyFieldClass}
+                        {viewOnlyFieldClass}
                         onToggleReveal={toggleReveal}
                     />
+                    {#if type === "vendor"}
+                        <div class="flex items-center gap-2">
+                            <Switch
+                                id="editable_account_toggle"
+                                aria-label="非固定帳號"
+                                bind:checked={editableAccount}
+                                disabled={!isEditing}
+                            />
+                            <Label for="editable_account_toggle"
+                                >非固定帳號</Label
+                            >
+                            <span class="text-xs text-muted-foreground"
+                                >{editableAccount ? "ON" : "OFF"}</span
+                            >
+                        </div>
+                    {/if}
 
                     {#if type === "personal"}
                         <PayeeAttachmentTiles

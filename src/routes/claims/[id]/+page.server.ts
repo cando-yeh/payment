@@ -34,8 +34,8 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         .from('claims')
         .select(`
             *,
-            payee:payees(id, name, type, bank),
-            applicant:profiles!claims_applicant_id_fkey(id, full_name, approver_id),
+            payee:payees(id, name, type, bank, bank_account_tail, editable_account),
+            applicant:profiles!claims_applicant_id_fkey(id, full_name, approver_id, bank, bank_account_tail),
             items:claim_items(*)
         `)
         .eq('id', id)
@@ -95,7 +95,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
     if (canEditAsApplicant) {
         const { data: payeesData, error: payeesError } = await supabase
             .from('payees')
-            .select('id, name, type')
+            .select('id, name, type, bank, bank_account_tail, editable_account')
             .eq('status', 'available')
             .order('name');
         if (payeesError) {
@@ -119,6 +119,44 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
 };
 
 export const actions: Actions = {
+    revealApplicantAccount: async ({ request, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: '未登入' });
+
+        const formData = await request.formData();
+        const targetId = String(formData.get('targetId') || '').trim();
+        if (!targetId) return fail(400, { message: 'Missing targetId' });
+
+        const { data, error } = await supabase.rpc('reveal_profile_bank_account', {
+            target_id: targetId
+        });
+
+        if (error) {
+            console.error('Reveal Applicant Account Error:', error);
+            return fail(500, { message: '解密失敗' });
+        }
+
+        return { success: true, decryptedAccount: data };
+    },
+    revealPayeeAccount: async ({ request, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: '未登入' });
+
+        const formData = await request.formData();
+        const payeeId = String(formData.get('payeeId') || '').trim();
+        if (!payeeId) return fail(400, { message: 'Missing payeeId' });
+
+        const { data, error } = await supabase.rpc('reveal_payee_bank_account', {
+            _payee_id: payeeId
+        });
+
+        if (error) {
+            console.error('Reveal Account Error:', error);
+            return fail(500, { message: '解密失敗' });
+        }
+
+        return { success: true, decryptedAccount: data };
+    },
     editUpdate: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: 'Unauthorized' });

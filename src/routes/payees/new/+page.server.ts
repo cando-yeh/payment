@@ -30,6 +30,7 @@ export const actions: Actions = {
         // Extract basic fields
         const type = (formData.get('type') as string || '').trim();
         const name = (formData.get('name') as string || '').trim();
+        const editable_account = String(formData.get('editable_account') || '').trim() === 'true';
 
         // Extract identity field (vendor: unified_no, personal: national_id)
         const identity_no = ((formData.get('identity_no') as string) || '').trim();
@@ -120,6 +121,9 @@ export const actions: Actions = {
             email,
             address
         };
+        if (type === 'vendor') {
+            proposed_data.editable_account = editable_account ? 'true' : 'false';
+        }
 
         // Call the RPC to submit the request
         // The RPC handles:

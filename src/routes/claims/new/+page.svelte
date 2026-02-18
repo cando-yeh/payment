@@ -6,14 +6,17 @@
 
     let { data }: { data: PageData } = $props();
 
-    const draftClaim = {
+    const draftClaim = $derived({
         id: "",
+        applicant_id: data.applicantId || "",
         claim_type: "employee",
         status: "draft",
         created_at: null,
-        applicant_name: "",
+        applicant_name: data.applicantName || "",
+        applicant_bank: data.applicantBank || "",
+        applicant_bank_account_tail: data.applicantBankAccountTail || "",
         items: [],
-    };
+    });
 
     let isConfirmModalOpen = $state(false);
     let confirmTitle = $state("確認操作");

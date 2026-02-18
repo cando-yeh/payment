@@ -6,14 +6,16 @@
     import {
         CLAIM_ITEM_CATEGORIES,
         CLAIM_TYPE_OPTIONS,
-        getClaimStatusLabel,
+        getClaimTypeLabel,
     } from "$lib/claims/constants";
+    import AppBadge from "$lib/components/common/AppBadge.svelte";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
     import * as Card from "$lib/components/ui/card";
     import * as Select from "$lib/components/ui/select";
+    import * as Tabs from "$lib/components/ui/tabs";
     import * as Sheet from "$lib/components/ui/sheet";
     import * as Dialog from "$lib/components/ui/dialog";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
@@ -27,18 +29,24 @@
         Plus,
         Trash2,
         Eye,
+        EyeOff,
         Upload,
         ClipboardList,
     } from "lucide-svelte";
 
     export interface ClaimEditorClaim {
         id?: string;
+        applicant_id?: string | null;
         claim_type: string;
         status?: string;
         payee_id?: string | null;
         payee_name?: string | null;
+        applicant_bank?: string | null;
+        applicant_bank_account_tail?: string | null;
         bank_code?: string | null;
         bank_account?: string | null;
+        payee_bank?: string | null;
+        payee_bank_account_tail?: string | null;
         created_at?: string | null;
         applicant_name?: string | null;
         total_amount?: number | null;
@@ -49,18 +57,15 @@
         id: string;
         name: string;
         type: string;
+        bank?: string | null;
+        bank_account_tail?: string | null;
+        editable_account?: boolean | null;
     }
 
-    const statusColorMap: Record<string, string> = {
-        draft: "bg-slate-100 text-slate-700",
-        pending_manager: "bg-amber-100 text-amber-700",
-        pending_finance: "bg-blue-100 text-blue-700",
-        pending_payment: "bg-indigo-100 text-indigo-700",
-        paid: "bg-emerald-100 text-emerald-700",
-        paid_pending_doc: "bg-orange-100 text-orange-700",
-        pending_doc_review: "bg-orange-100 text-orange-700",
-        returned: "bg-rose-100 text-rose-700",
-        cancelled: "bg-slate-100 text-slate-600",
+    const claimTypeDescriptionMap: Record<string, string> = {
+        employee: "用於員工本人報銷日常費用，收款對象固定為申請人本人。",
+        vendor: "用於公司對廠商付款，需指定已建檔的廠商收款對象。",
+        personal_service: "用於個人勞務給付，需指定已建檔的個人收款對象。",
     };
 
     let {
@@ -84,6 +89,8 @@
         headerActions,
         sidePanel,
         onDeleteSubmit = undefined,
+        revealPayeeAccountAction = "?/revealPayeeAccount",
+        revealApplicantAccountAction = "?/revealApplicantAccount",
     }: {
         claim: ClaimEditorClaim;
         payees?: ClaimEditorPayee[];
@@ -108,6 +115,8 @@
         headerActions?: Snippet;
         sidePanel?: Snippet;
         onDeleteSubmit?: (e: SubmitEvent) => void;
+        revealPayeeAccountAction?: string;
+        revealApplicantAccountAction?: string;
     } = $props();
 
     type ClaimEditorItem = {
@@ -179,11 +188,12 @@
             return parsed.map(normalizeItemForEditor);
         }),
     );
-    let isFloatingAccount = $state(untrack(() => !!claim.bank_code));
     let bankCode = $state(untrack(() => claim.bank_code || ""));
     let bankAccount = $state(untrack(() => claim.bank_account || ""));
     let pendingUpload = $state<Record<number, File | null>>({});
     let isSubmitting = $state(false);
+    let revealedAccounts = $state<Record<string, string>>({});
+    let revealingById = $state<Record<string, boolean>>({});
     let auditDrawerOpen = $state(false);
     let itemDrawerOpen = $state(false);
     let itemDrawerIndex = $state<number | null>(null);
@@ -200,7 +210,6 @@
             : JSON.parse(claim.items || "[]");
         items =
             newItems.length === 0 ? [] : newItems.map(normalizeItemForEditor);
-        isFloatingAccount = !!claim.bank_code;
         bankCode = claim.bank_code || "";
         bankAccount = claim.bank_account || "";
     });
@@ -211,19 +220,61 @@
     const personalPayees = $derived(
         payees.filter((p) => p.type === "personal"),
     );
-    const selectedPayeeName = $derived(
-        payees.find((p) => p.id === payeeId)?.name ||
-            claim.payee_name ||
-            claim.applicant_name ||
-            "—",
+    const selectedPayeeName = $derived.by(() => {
+        if (claimType === "employee") return claim.applicant_name || "—";
+        const selected = payees.find((p) => p.id === payeeId)?.name;
+        if (selected) return selected;
+        if (!isCreate && claim.payee_name) return claim.payee_name;
+        return "";
+    });
+    const selectedPayee = $derived(
+        payees.find((p) => p.id === payeeId) || null,
     );
+    const isEditablePayeeAccount = $derived(
+        claimType === "vendor" && Boolean(selectedPayee?.editable_account),
+    );
+    const applicantRevealId = $derived(String(claim.applicant_id || "").trim());
+    const selectedPayeeBankLabel = $derived(
+        claimType === "employee"
+            ? String(claim.applicant_bank || "").trim()
+            : isEditablePayeeAccount
+              ? (bankCode || String(selectedPayee?.bank || "").trim())
+              : selectedPayee?.bank || claim.payee_bank || "",
+    );
+    const selectedPayeeId = $derived.by(
+        () =>
+            selectedPayee?.id || (isCreate ? "" : String(claim.payee_id || "")),
+    );
+    const bankRevealKey = $derived(
+        claimType === "employee" ? applicantRevealId : selectedPayeeId,
+    );
+    const selectedPayeeBankAccountMasked = $derived.by(() => {
+        const tail =
+            claimType === "employee"
+                ? String(claim.applicant_bank_account_tail || "").trim()
+                : String(
+                      selectedPayee?.bank_account_tail ||
+                          claim.payee_bank_account_tail ||
+                          "",
+                  ).trim();
+        return tail ? `*******${tail.slice(-5)}` : "";
+    });
+    const selectedPayeeBankAccountDisplay = $derived.by(() => {
+        if (isEditablePayeeAccount) return bankAccount;
+        const id = bankRevealKey;
+        if (id && revealedAccounts[id]) return revealedAccounts[id];
+        return selectedPayeeBankAccountMasked;
+    });
+    const canToggleBankReveal = $derived(Boolean(bankRevealKey));
+    const showReadonlyHover = $derived(isEditable && canToggleBankReveal);
     const totalAmount = $derived(
         items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
     );
-    const displayStatus = $derived(getClaimStatusLabel(claim.status));
-    const displayStatusClass = $derived(
-        statusColorMap[claim.status || "draft"] ||
-            "bg-slate-100 text-slate-700",
+    const statusPreset = $derived(`status.${claim.status || "draft"}`);
+    const displayClaimType = $derived(getClaimTypeLabel(claimType));
+    const claimTypeDescription = $derived(
+        claimTypeDescriptionMap[claimType] ||
+            "請選擇符合此筆請款情境的申請類別。",
     );
 
     // Auto-calculate pay_first_patch_doc: true if any item is pending_supplement
@@ -233,6 +284,62 @@
 
     function submitButtonText() {
         return isCreate ? "直接提交" : "提交審核";
+    }
+
+    function handleClaimTypeChange(nextType: string) {
+        if (!canEditClaimType || claimType === nextType) return;
+        claimType = nextType;
+        payeeId = "";
+        bankCode = "";
+        bankAccount = "";
+    }
+
+    async function togglePayeeBankAccountReveal() {
+        const id = bankRevealKey;
+        if (!id) return;
+
+        if (revealedAccounts[id]) {
+            const next = { ...revealedAccounts };
+            delete next[id];
+            revealedAccounts = next;
+            return;
+        }
+
+        revealingById = { ...revealingById, [id]: true };
+        try {
+            const formData = new FormData();
+            let action = revealPayeeAccountAction;
+            if (claimType === "employee") {
+                formData.append("targetId", id);
+                action = revealApplicantAccountAction;
+            } else {
+                formData.append("payeeId", id);
+            }
+            const response = await fetch(action, {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const result = deserialize(await response.text()) as any;
+            if (
+                result?.type === "success" &&
+                result?.data &&
+                "decryptedAccount" in result.data
+            ) {
+                revealedAccounts = {
+                    ...revealedAccounts,
+                    [id]: String(result.data.decryptedAccount),
+                };
+            } else {
+                toast.error(result?.data?.message || "讀取銀行帳號失敗");
+            }
+        } catch {
+            toast.error(UI_MESSAGES.common.networkFailed("讀取銀行帳號"));
+        } finally {
+            const next = { ...revealingById };
+            delete next[id];
+            revealingById = next;
+        }
     }
 
     function voucherStatusLabel(status: string) {
@@ -435,7 +542,7 @@
         try {
             const fd = new FormData();
             fd.append("payee_id", payeeId);
-            if (isFloatingAccount) {
+            if (isEditablePayeeAccount) {
                 fd.append("is_floating", "on");
                 fd.append("bank_code", bankCode);
                 fd.append("bank_account", bankAccount);
@@ -630,7 +737,17 @@
         <input
             type="hidden"
             name="is_floating_account"
-            value={isFloatingAccount ? "true" : "false"}
+            value={isEditablePayeeAccount ? "true" : "false"}
+        />
+        <input
+            type="hidden"
+            name="bank_code"
+            value={isEditablePayeeAccount ? bankCode : ""}
+        />
+        <input
+            type="hidden"
+            name="bank_account"
+            value={isEditablePayeeAccount ? bankAccount : ""}
         />
         <input type="hidden" name="total_amount" value={totalAmount} />
         <input
@@ -640,6 +757,34 @@
         />
 
         <div class="space-y-4">
+            {#if canEditClaimType}
+                <div class="space-y-3 px-1">
+                    <Tabs.Root
+                        value={claimType}
+                        onValueChange={(value) => {
+                            handleClaimTypeChange(value);
+                        }}
+                    >
+                        <Tabs.List
+                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
+                        >
+                            {#each CLAIM_TYPE_OPTIONS as option}
+                                <Tabs.Trigger
+                                    value={option.value}
+                                    class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                    disabled={!canEditClaimType}
+                                >
+                                    {option.label}
+                                </Tabs.Trigger>
+                            {/each}
+                        </Tabs.List>
+                    </Tabs.Root>
+                    <p class="text-xs text-muted-foreground">
+                        {claimTypeDescription}
+                    </p>
+                </div>
+            {/if}
+
             <!-- Header + Basic Info (single container) -->
             <Card.Root
                 class="overflow-hidden rounded-xl border border-border/40 bg-background"
@@ -665,11 +810,17 @@
                                                 : "NEW"}</span
                                         >
                                     </h1>
-                                    <span
-                                        class={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${displayStatusClass}`}
-                                    >
-                                        {displayStatus}
-                                    </span>
+                                    <div class="flex items-center gap-1.5">
+                                        <AppBadge
+                                            preset={statusPreset}
+                                            className="font-semibold"
+                                        />
+                                        <AppBadge
+                                            preset="claim.type"
+                                            label={displayClaimType}
+                                            className="font-semibold"
+                                        />
+                                    </div>
                                 </div>
                                 <p class="text-xs text-muted-foreground">
                                     {claim.created_at
@@ -716,86 +867,175 @@
 
                 <div class="border-t border-border/30">
                     <div class="flex flex-wrap items-center gap-3 px-5 py-3">
-                        <div
-                            class="flex min-w-[320px] flex-1 items-center gap-2"
-                        >
-                            <Label
-                                class="shrink-0 text-xs font-medium text-muted-foreground"
-                                >申請類別</Label
-                            >
+                        {#if !canEditClaimType}
                             <div
-                                class={`inline-flex rounded-lg border border-border/50 bg-muted/30 p-0.5 ${
-                                    !canEditClaimType ? "opacity-60" : ""
-                                }`}
+                                class="flex min-w-[240px] flex-1 items-center gap-2"
                             >
-                                {#each CLAIM_TYPE_OPTIONS as option}
-                                    <button
-                                        type="button"
-                                        disabled={!canEditClaimType}
-                                        class={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
-                                            claimType === option.value
-                                                ? "bg-background text-foreground shadow-sm"
-                                                : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                        onclick={() =>
-                                            (claimType = option.value)}
-                                    >
-                                        {option.label}
-                                    </button>
-                                {/each}
+                                <Label
+                                    class="shrink-0 text-xs font-medium text-muted-foreground"
+                                    >申請類別</Label
+                                >
+                                <AppBadge
+                                    preset="claim.type"
+                                    label={displayClaimType}
+                                    className="font-semibold"
+                                />
                             </div>
-                        </div>
+                        {/if}
 
-                        <div
-                            class="flex min-w-[280px] flex-1 items-center gap-2"
-                        >
-                            <Label
-                                class="shrink-0 text-xs font-medium text-muted-foreground"
-                                >收款對象</Label
-                            >
-                            <div class="min-w-0 flex-1">
-                                {#if claimType === "employee"}
-                                    <Input
-                                        value={claim.applicant_name || "—"}
-                                        disabled={true}
-                                        class="h-8 w-full text-right text-xs font-medium"
-                                    />
-                                {:else}
-                                    <Select.Root
-                                        type="single"
-                                        bind:value={payeeId}
-                                        disabled={!isEditable}
-                                        onValueChange={() => {
-                                            if (!isEditable) return;
-                                            isFloatingAccount = false;
-                                            bankCode = "";
-                                            bankAccount = "";
-                                        }}
+                        <div class="min-w-[280px] flex-1">
+                            <div class="flex flex-wrap gap-3">
+                                <div
+                                    class="min-w-[280px] flex-1 grid grid-cols-1 gap-1.5"
+                                >
+                                    <Label
+                                        class="text-xs font-medium text-muted-foreground"
+                                        >收款人</Label
                                     >
-                                        <Select.Trigger
-                                            class="h-8 w-full text-left text-xs"
+                                    {#if claimType === "employee"}
+                                        <Input
+                                            value={claim.applicant_name || "—"}
+                                            disabled={true}
+                                            class="h-8 w-full text-left text-xs font-medium"
+                                        />
+                                    {:else}
+                                        <Select.Root
+                                            type="single"
+                                            bind:value={payeeId}
+                                            disabled={!isEditable}
+                                            onValueChange={(value) => {
+                                                if (!isEditable) return;
+                                                const selected = payees.find(
+                                                    (p) => p.id === value,
+                                                );
+                                                if (
+                                                    claimType === "vendor" &&
+                                                    selected?.editable_account
+                                                ) {
+                                                    bankCode = String(
+                                                        selected?.bank || "",
+                                                    ).trim();
+                                                    bankAccount = "";
+                                                } else {
+                                                    bankCode = "";
+                                                    bankAccount = "";
+                                                }
+                                            }}
                                         >
-                                            {selectedPayeeName || "選擇收款人"}
-                                        </Select.Trigger>
-                                        <Select.Content>
-                                            {#if claimType === "vendor"}
-                                                {#each vendorPayees as payee}
-                                                    <Select.Item
-                                                        value={payee.id}
-                                                        label={payee.name}
-                                                    />
-                                                {/each}
-                                            {:else}
-                                                {#each personalPayees as payee}
-                                                    <Select.Item
-                                                        value={payee.id}
-                                                        label={payee.name}
-                                                    />
-                                                {/each}
-                                            {/if}
-                                        </Select.Content>
-                                    </Select.Root>
-                                {/if}
+                                            <Select.Trigger
+                                                class={`h-8 w-full text-left text-xs ${
+                                                    !isEditable
+                                                        ? "pointer-events-none hover:bg-transparent"
+                                                        : ""
+                                                }`}
+                                            >
+                                                {selectedPayeeName ||
+                                                    "請選擇收款人"}
+                                            </Select.Trigger>
+                                            <Select.Content>
+                                                {#if claimType === "vendor"}
+                                                    {#each vendorPayees as payee}
+                                                        <Select.Item
+                                                            value={payee.id}
+                                                            label={payee.name}
+                                                        />
+                                                    {/each}
+                                                {:else}
+                                                    {#each personalPayees as payee}
+                                                        <Select.Item
+                                                            value={payee.id}
+                                                            label={payee.name}
+                                                        />
+                                                    {/each}
+                                                {/if}
+                                            </Select.Content>
+                                        </Select.Root>
+                                    {/if}
+                                </div>
+
+                                <div
+                                    class="min-w-[320px] flex-1 grid grid-cols-2 gap-3"
+                                >
+                                    <div
+                                        class="min-w-0 grid grid-cols-1 gap-1.5"
+                                    >
+                                        <Label
+                                            class="text-xs font-medium text-muted-foreground"
+                                            >銀行代碼</Label
+                                        >
+                                        {#if isEditablePayeeAccount && isEditable}
+                                            <BankCodeCombobox
+                                                id="inline_bank_code"
+                                                name="inline_bank_code"
+                                                bind:value={bankCode}
+                                                required
+                                            />
+                                        {:else}
+                                            <Input
+                                                value={selectedPayeeBankLabel ||
+                                                    "-"}
+                                                disabled
+                                                class="h-8 w-full text-xs"
+                                            />
+                                        {/if}
+                                    </div>
+
+                                    <div
+                                        class="min-w-0 grid grid-cols-1 gap-1.5"
+                                    >
+                                        <Label
+                                            class="text-xs font-medium text-muted-foreground"
+                                            >銀行帳號</Label
+                                        >
+                                        {#if isEditablePayeeAccount && isEditable}
+                                            <Input
+                                                value={bankAccount}
+                                                oninput={(event) => {
+                                                    bankAccount = (
+                                                        event.currentTarget as HTMLInputElement
+                                                    ).value;
+                                                }}
+                                                placeholder="請輸入本次匯款帳號"
+                                                class="h-8 w-full text-xs"
+                                            />
+                                        {:else}
+                                            <div class="relative">
+                                                <Input
+                                                    value={selectedPayeeBankAccountDisplay ||
+                                                        "-"}
+                                                    disabled
+                                                    class="h-8 w-full pr-10 text-xs"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    class={`absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground ${
+                                                        showReadonlyHover
+                                                            ? "hover:bg-muted/60 hover:text-foreground"
+                                                            : "cursor-not-allowed opacity-60"
+                                                    }`}
+                                                    onclick={togglePayeeBankAccountReveal}
+                                                    disabled={!bankRevealKey ||
+                                                        revealingById[
+                                                            bankRevealKey || ""
+                                                        ]}
+                                                    title={revealedAccounts[
+                                                        bankRevealKey || ""
+                                                    ]
+                                                        ? "隱藏完整帳號"
+                                                        : "顯示完整帳號"}
+                                                >
+                                                    {#if revealedAccounts[bankRevealKey || ""]}
+                                                        <Eye class="h-3.5 w-3.5" />
+                                                    {:else}
+                                                        <EyeOff
+                                                            class="h-3.5 w-3.5"
+                                                        />
+                                                    {/if}
+                                                </button>
+                                            </div>
+                                        {/if}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -804,67 +1044,6 @@
 
             <!-- Main Content (single column) -->
             <div class="space-y-5">
-                <!-- 匯款帳號資訊 -->
-                {#if claimType !== "employee" && (isEditable || isFloatingAccount || bankCode || bankAccount)}
-                    <section class="space-y-2">
-                        <h2
-                            class="text-[13px] font-semibold uppercase tracking-wide text-muted-foreground"
-                        >
-                            匯款帳號資訊
-                        </h2>
-                        <Card.Root class="rounded-xl border border-border/40">
-                            <Card.Content class="space-y-4 p-5">
-                                <div class="flex items-center gap-2">
-                                    <input
-                                        id="is_floating"
-                                        type="checkbox"
-                                        bind:checked={isFloatingAccount}
-                                        disabled={!isEditable}
-                                        class="h-4 w-4 rounded border"
-                                    />
-                                    <Label
-                                        for="is_floating"
-                                        class="text-sm font-medium"
-                                        >指定本次匯款帳號（浮動帳號）</Label
-                                    >
-                                </div>
-                                {#if isFloatingAccount}
-                                    <div class="grid gap-4 md:grid-cols-2">
-                                        <div class="space-y-1.5">
-                                            <Label
-                                                for="bank_code"
-                                                class="text-xs text-muted-foreground"
-                                                >銀行代碼</Label
-                                            >
-                                            <BankCodeCombobox
-                                                id="bank_code"
-                                                name="bank_code"
-                                                bind:value={bankCode}
-                                                disabled={!isEditable}
-                                                required
-                                            />
-                                        </div>
-                                        <div class="space-y-1.5">
-                                            <Label
-                                                for="bank_account"
-                                                class="text-xs text-muted-foreground"
-                                                >銀行帳號</Label
-                                            >
-                                            <Input
-                                                id="bank_account"
-                                                name="bank_account"
-                                                bind:value={bankAccount}
-                                                disabled={!isEditable}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                {/if}
-                            </Card.Content>
-                        </Card.Root>
-                    </section>
-                {/if}
-
                 <!-- 費用明細 -->
                 <section class="space-y-2">
                     <h2

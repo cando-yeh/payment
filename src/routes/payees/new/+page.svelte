@@ -7,6 +7,7 @@
     import { enhance } from "$app/forms";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
+    import { Switch } from "$lib/components/ui/switch";
     import { Label } from "$lib/components/ui/label";
     import * as Card from "$lib/components/ui/card";
     import * as Tabs from "$lib/components/ui/tabs";
@@ -20,6 +21,7 @@
     // Component State
     let isLoading = $state(false);
     let payeeType = $state("vendor"); // "vendor" | "personal" - Controls dynamic form fields
+    let editableAccount = $state(false);
 
     /**
      * Handles the form submission using SvelteKit's standard `enhance` action.
@@ -46,7 +48,9 @@
             } else if (result.type === "redirect") {
                 goto(result.location);
             } else {
-                toast.error(result.data?.message || UI_MESSAGES.common.submitFailed);
+                toast.error(
+                    result.data?.message || UI_MESSAGES.common.submitFailed,
+                );
             }
         };
     }
@@ -83,10 +87,13 @@
                     <Label>收款人類型</Label>
                     <Tabs.Root
                         value={payeeType}
-                        onValueChange={(v) =>
-                            (payeeType = v === "personal"
-                                ? "personal"
-                                : "vendor")}
+                        onValueChange={(v) => {
+                            payeeType =
+                                v === "personal" ? "personal" : "vendor";
+                            if (payeeType !== "vendor") {
+                                editableAccount = false;
+                            }
+                        }}
                     >
                         <Tabs.List
                             class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
@@ -107,6 +114,11 @@
                     </Tabs.Root>
                     <!-- Hidden input for form submission -->
                     <input type="hidden" name="type" value={payeeType} />
+                    <input
+                        type="hidden"
+                        name="editable_account"
+                        value={editableAccount ? "true" : "false"}
+                    />
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
@@ -202,6 +214,7 @@
                     <!-- Bank Information Section -->
                     <div class="md:col-span-2 border-t pt-6 mt-2">
                         <h3 class="font-semibold mb-4 text-lg">銀行匯款資訊</h3>
+
                         <div class="grid gap-4 md:grid-cols-2">
                             <div class="space-y-2">
                                 <Label for="bank_code"
@@ -214,6 +227,25 @@
                                     placeholder="請選擇銀行"
                                     required
                                 />
+                                {#if payeeType === "vendor"}
+                                    <div class="mb-4 flex flex-col gap-1.5">
+                                        <div class="flex items-center gap-2">
+                                            <Label for="editable_account"
+                                                >非固定帳號</Label
+                                            >
+                                            <Switch
+                                                id="editable_account"
+                                                aria-label="非固定帳號"
+                                                bind:checked={editableAccount}
+                                            />
+                                        </div>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            若開啟，則請款時可修改銀行帳號。
+                                        </p>
+                                    </div>
+                                {/if}
                             </div>
                             <div class="space-y-2">
                                 <Label for="bank_account"

@@ -7,15 +7,14 @@ import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upl
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
-const PAYEE_SELECT_PRIMARY = 'id, name, type, status, bank, unified_no, national_id_tail, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at';
-const PAYEE_SELECT_FALLBACK = 'id, name, type, status, bank, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at';
+const PAYEE_SELECT_PRIMARY = 'id, name, type, status, bank, editable_account, unified_no, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at';
+const PAYEE_SELECT_FALLBACK = 'id, name, type, status, bank, editable_account, bank_account, bank_account_tail, service_description, extra_info, attachments, created_at, updated_at';
 const REQUEST_SELECT_PRIMARY = `
             id,
             change_type,
             status,
             proposed_data,
             proposed_unified_no,
-            proposed_national_id_tail,
             proposed_bank_account,
             proposed_bank_account_tail,
             proposed_attachments,
@@ -37,8 +36,8 @@ const REQUEST_SELECT_FALLBACK = `
             requested_by,
             payee_id
         `;
-const PAYEE_UPDATE_SELECT_PRIMARY = 'id, name, type, bank, unified_no, national_id_tail, service_description, extra_info, attachments';
-const PAYEE_UPDATE_SELECT_FALLBACK = 'id, name, type, bank, service_description, extra_info, attachments';
+const PAYEE_UPDATE_SELECT_PRIMARY = 'id, name, type, bank, editable_account, unified_no, service_description, extra_info, attachments';
+const PAYEE_UPDATE_SELECT_FALLBACK = 'id, name, type, bank, editable_account, service_description, extra_info, attachments';
 
 function normalizeComparable(value: unknown): string {
     if (value == null) return '';
@@ -201,7 +200,7 @@ export const load: PageServerLoad = async ({ locals }) => {
                     req.proposed_attachment_urls.bank_passbook = bank;
                 }
 
-                if (isFinance && req?.proposed_national_id_tail && !req?.proposed_data?.identity_no) {
+                if (isFinance && !req?.proposed_data?.identity_no) {
                     try {
                         const { data: proposedTaxId } = await supabase.rpc(
                             'reveal_payee_change_request_tax_id',
@@ -301,6 +300,7 @@ export const actions: Actions = {
         const rawBankAccount = (formData.get('bank_account') as string || '').trim();
         const bank_account = sanitizeEncryptedPlaceholder(rawBankAccount);
         const bank_code = (formData.get('bank_code') as string || '').trim();
+        const editable_account = String(formData.get('editable_account') || '').trim() === 'true';
         const email = (formData.get('email') as string || '').trim();
         const address = (formData.get('address') as string || '').trim();
         const service_description = (formData.get('service_description') as string || '').trim();
@@ -439,6 +439,13 @@ export const actions: Actions = {
         }
         if (normalizeComparable(service_description) !== normalizeComparable(resolvedCurrentPayee.service_description)) {
             proposed_data.service_description = service_description;
+        }
+        if (type === 'vendor') {
+            if (Boolean(editable_account) !== Boolean(resolvedCurrentPayee.editable_account)) {
+                proposed_data.editable_account = editable_account ? 'true' : 'false';
+            }
+        } else if (Boolean(resolvedCurrentPayee.editable_account)) {
+            proposed_data.editable_account = 'false';
         }
         if (type === 'personal') {
             if (normalizeComparable(email) !== normalizeComparable(currentExtra.email)) {
