@@ -334,11 +334,22 @@ export const actions: Actions = {
 
         // --- Basic Validation ---
         if (!name) return fail(400, { message: '收款人名稱為必填' });
+        if (!service_description) return fail(400, { message: '服務項目說明為必填' });
+        if (!bank_code) return fail(400, { message: '銀行代碼為必填' });
+        if (!bank_account) return fail(400, { message: '銀行帳號為必填' });
+        if (!identity_no) {
+            return fail(
+                400,
+                { message: type === 'vendor' ? '統一編號為必填' : '身分證字號為必填' }
+            );
+        }
+        if (type === 'personal' && !email) return fail(400, { message: '電子郵件為必填' });
+        if (type === 'personal' && !address) return fail(400, { message: '戶籍/通訊地址為必填' });
 
-        if (type === 'vendor' && identity_no && !/^\d{8}$/.test(identity_no)) {
+        if (type === 'vendor' && !/^\d{8}$/.test(identity_no)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });
         }
-        if (type === 'personal' && identity_no && !/^[A-Z][0-9]{9}$/.test(identity_no)) {
+        if (type === 'personal' && !/^[A-Z][0-9]{9}$/.test(identity_no)) {
             return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
         }
         // --- Handle Attachments for Personal Payees ---
@@ -407,9 +418,9 @@ export const actions: Actions = {
                     };
 
                     // Validate that we have all required attachments (either new or existing)
-                    if (!newPaths.id_card_front) return fail(400, { message: '請上傳身分證正面' });
-                    if (!newPaths.id_card_back) return fail(400, { message: '請上傳身分證反面' });
-                    if (!newPaths.bank_passbook) return fail(400, { message: '請上傳存摺封面' });
+                    if (!newPaths.id_card_front) return fail(400, { message: '身分證正面附件為必填' });
+                    if (!newPaths.id_card_back) return fail(400, { message: '身分證反面附件為必填' });
+                    if (!newPaths.bank_passbook) return fail(400, { message: '存摺封面附件為必填' });
 
                     attachmentsChanged =
                         normalizeComparable(newPaths.id_card_front) !== normalizeComparable(currentAttachments.id_card_front) ||
@@ -521,7 +532,7 @@ export const actions: Actions = {
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
 
-        if (!payeeId) return fail(400, { message: 'Missing payeeId' });
+        if (!payeeId) return fail(400, { message: '收款人 ID 為必填' });
 
         const { data, error } = await supabase.rpc('reveal_payee_bank_account', {
             _payee_id: payeeId
@@ -541,7 +552,7 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const payeeId = formData.get('payeeId') as string;
-        if (!payeeId) return fail(400, { message: 'Missing payeeId' });
+        if (!payeeId) return fail(400, { message: '收款人 ID 為必填' });
 
         const { data, error } = await supabase.rpc('reveal_payee_tax_id', {
             _payee_id: payeeId

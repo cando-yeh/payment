@@ -41,11 +41,12 @@ export function canRejectClaim(claim: ReviewClaim, flags: ReviewerFlags): boolea
     return (
         (claim.status === "pending_manager" && flags.isApprover) ||
         (claim.status === "pending_finance" && flags.isFinance) ||
-        (claim.status === "pending_doc_review" && flags.isFinance)
+        (claim.status === "pending_doc_review" && flags.isFinance) ||
+        (claim.status === "pending_payment" && (flags.isFinance || flags.isAdmin))
     );
 }
 
 export function resolveRejectNextStatus(status: string): string {
+    if (status === "pending_payment") return "pending_finance";
     return status === "pending_doc_review" ? "paid_pending_doc" : "returned";
 }
-

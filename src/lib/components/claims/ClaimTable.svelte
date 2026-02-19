@@ -97,9 +97,7 @@
                 )}>ID#</Table.Head
             >
             <Table.Head class={LIST_TABLE_TOKENS.headBase}>類別</Table.Head>
-            <Table.Head class={LIST_TABLE_TOKENS.headBase}
-                >收款對象/申請人</Table.Head
-            >
+            <Table.Head class={LIST_TABLE_TOKENS.headBase}>收款人</Table.Head>
             <Table.Head
                 class={cn(
                     LIST_TABLE_TOKENS.headBase,

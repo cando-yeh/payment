@@ -132,6 +132,8 @@
             approver_name?: string;
             bank?: string;
             bankAccountTail?: string;
+            myClaimsPendingCount?: number;
+            approvalPendingCount?: number;
         };
         /** 額外的 CSS 類別 */
         class?: string;
@@ -240,6 +242,12 @@
             pendingNavTimer = null;
         }, 320);
     }
+
+    function getNavBadge(item: NavItem): number {
+        if (item.href === "/claims") return user.myClaimsPendingCount || 0;
+        if (item.href === "/approval") return user.approvalPendingCount || 0;
+        return item.badge || 0;
+    }
 </script>
 
 <!-- 側邊欄容器：macOS 風格設計，高透明度、細緻邊框 -->
@@ -298,11 +306,11 @@
                     {item.label}
 
                     <!-- 待辦數量徽章 (若有) -->
-                    {#if item.badge}
+                    {#if getNavBadge(item) > 0}
                         <span
-                            class="ml-auto flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-primary/20 px-1 text-[10px] font-bold text-primary"
+                            class="ml-auto flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white"
                         >
-                            {item.badge}
+                            {getNavBadge(item)}
                         </span>
                     {/if}
                 </a>

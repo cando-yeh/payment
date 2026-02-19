@@ -27,7 +27,6 @@
         Save,
         Send,
         Plus,
-        Pencil,
         Trash2,
         Eye,
         EyeOff,
@@ -85,6 +84,7 @@
         directSubmitInSameForm = false,
         requireApproverOnDirectSubmit = false,
         hasApprover = true,
+        submitButtonLabel,
         timelineTitle = "審核歷程",
         history = [],
         deleteAction,
@@ -93,12 +93,13 @@
         onDeleteSubmit = undefined,
         revealPayeeAccountAction = "?/revealPayeeAccount",
         revealApplicantAccountAction = "?/revealApplicantAccount",
+        supplementItemAction = "?/updateItemVoucher",
     }: {
         claim: ClaimEditorClaim;
         payees?: ClaimEditorPayee[];
         backHref?: string;
         backLabel?: string;
-        mode?: "edit" | "view";
+        mode?: "edit" | "supplement" | "view";
         isCreate?: boolean;
         formAction?: string;
         formEnctype?:
@@ -111,6 +112,7 @@
         directSubmitInSameForm?: boolean;
         requireApproverOnDirectSubmit?: boolean;
         hasApprover?: boolean;
+        submitButtonLabel?: string;
         timelineTitle?: string;
         history?: any[];
         deleteAction?: string; // New prop for delete action URL
@@ -119,6 +121,7 @@
         onDeleteSubmit?: (e: SubmitEvent) => void;
         revealPayeeAccountAction?: string;
         revealApplicantAccountAction?: string;
+        supplementItemAction?: string;
     } = $props();
 
     type ClaimEditorItem = {
@@ -218,6 +221,9 @@
     });
 
     const isEditable = $derived(mode === "edit");
+    const isSupplementMode = $derived(mode === "supplement");
+    const canOperateItems = $derived(isEditable || isSupplementMode);
+    const canEditVoucherSection = $derived(isEditable || isSupplementMode);
     const canEditClaimType = $derived(isEditable && isCreate);
     const vendorPayees = $derived(payees.filter((p) => p.type === "vendor"));
     const personalPayees = $derived(
@@ -279,6 +285,11 @@
         claimTypeDescriptionMap[claimType] ||
             "請選擇符合此筆請款情境的申請類別。",
     );
+    const expenseGridColumns = $derived(
+        isEditable
+            ? "82px 82px minmax(140px,1.2fr) 96px 92px minmax(170px,1.4fr) 72px"
+            : "82px 82px minmax(140px,1.2fr) 96px 92px minmax(170px,1.4fr)",
+    );
 
     let lastPayeeSelectionKey = $state("");
 
@@ -333,6 +344,7 @@
     );
 
     function submitButtonText() {
+        if (submitButtonLabel) return submitButtonLabel;
         return isCreate ? "直接提交" : "提交審核";
     }
 
@@ -392,12 +404,6 @@
         }
     }
 
-    function voucherStatusLabel(status: string) {
-        if (status === "uploaded") return "上傳憑證";
-        if (status === "exempt") return "無憑證";
-        return "待補件";
-    }
-
     const voucherDecisionOptions: Array<{
         value: ClaimEditorItem["attachment_status"];
         label: string;
@@ -419,6 +425,13 @@
             description: "無法取得憑證時，需填寫合理原因。",
         },
     ];
+    const voucherDecisionChoices = $derived(
+        isSupplementMode
+            ? voucherDecisionOptions.filter(
+                  (option) => option.value !== "pending_supplement",
+              )
+            : voucherDecisionOptions,
+    );
 
     function voucherDecisionClass(
         value: ClaimEditorItem["attachment_status"],
@@ -539,7 +552,11 @@
         reindexPendingUploadsAfterRemove(index);
     }
 
-    async function uploadAttachmentForItem(itemId: string, file: File) {
+    async function uploadAttachmentForItem(
+        itemId: string,
+        file: File,
+        navigateAfter = true,
+    ) {
         const fd = new FormData();
         fd.append("item_id", itemId);
         fd.append("file", file);
@@ -557,7 +574,30 @@
             return false;
         }
         toast.success(UI_MESSAGES.attachment.uploadSuccess);
-        await goto(`/claims/${claim.id}`, { invalidateAll: true });
+        if (navigateAfter) {
+            await goto(`/claims/${claim.id}`, { invalidateAll: true });
+        }
+        return true;
+    }
+
+    async function updateItemVoucherDecision(item: ClaimEditorItem) {
+        const fd = new FormData();
+        fd.append("item_id", String(item.id || ""));
+        fd.append("attachment_status", item.attachment_status);
+        fd.append("date", String(item.date || ""));
+        fd.append("invoice_number", String(item.invoice_number || ""));
+        fd.append("exempt_reason", String(item.exempt_reason || ""));
+
+        const response = await fetch(`/claims/${claim.id}${supplementItemAction}`, {
+            method: "POST",
+            body: fd,
+            headers: { "x-sveltekit-action": "true" },
+        });
+        const result = deserialize(await response.text()) as any;
+        if (result?.type === "failure") {
+            toast.error(result?.data?.message || "更新憑證決策失敗");
+            return false;
+        }
         return true;
     }
 
@@ -565,6 +605,8 @@
         const normalized = normalizeItemForEditor(itemDraft);
         normalized.amount = String(itemDraft.amount || "").replaceAll(",", "");
         const status = normalized.attachment_status;
+        const hasExistingAttachment = Boolean(normalized.id && normalized.extra?.file_path);
+        const hasNewAttachment = Boolean(itemDraftUpload);
 
         if (status === "uploaded") {
             if (!String(normalized.date || "").trim()) {
@@ -573,6 +615,10 @@
             }
             if (!String(normalized.invoice_number || "").trim()) {
                 toast.error("上傳憑證時，發票號碼為必填");
+                return;
+            }
+            if (!hasExistingAttachment && !hasNewAttachment) {
+                toast.error("上傳憑證時，請先上傳附件才能儲存明細");
                 return;
             }
             normalized.exempt_reason = "";
@@ -586,6 +632,30 @@
             normalized.date = "";
             normalized.invoice_number = "";
             normalized.exempt_reason = "";
+        }
+
+        if (isSupplementMode) {
+            if (status === "pending_supplement") {
+                toast.error("補件階段不可再選擇「憑證後補」");
+                return;
+            }
+            if (!normalized.id) {
+                toast.error("補件階段僅可編輯既有明細");
+                return;
+            }
+            if (status === "uploaded" && itemDraftUpload) {
+                const uploaded = await uploadAttachmentForItem(
+                    String(normalized.id),
+                    itemDraftUpload,
+                    false,
+                );
+                if (!uploaded) return;
+            }
+            const saved = await updateItemVoucherDecision(normalized);
+            if (!saved) return;
+            itemDrawerOpen = false;
+            await goto(`/claims/${claim.id}`, { invalidateAll: true });
+            return;
         }
 
         if (itemDrawerIndex === null) {
@@ -674,6 +744,10 @@
                 !pendingUpload[i]
             ) {
                 toast.error(UI_MESSAGES.claim.uploadRequired(i + 1));
+                return false;
+            }
+            if (isSupplementMode && status === "pending_supplement") {
+                toast.error(`第 ${i + 1} 筆明細仍為「憑證後補」，請完成補件後再送出`);
                 return false;
             }
         }
@@ -771,7 +845,8 @@
 
         <div class="flex items-center gap-2">
             {@render headerActions?.()}
-            {#if isEditable && (showSaveButton || showSubmitButton)}
+            {#if (isEditable || isSupplementMode) &&
+                (showSaveButton || showSubmitButton)}
                 {#if isEditable && !isCreate && deleteAction}
                     <Button
                         type="submit"
@@ -1171,16 +1246,17 @@
                     >
                         <Card.Content class="p-0">
                             <div class="overflow-x-auto">
-                                <div class="min-w-[820px]">
+                                <div class="min-w-[760px]">
                                     <div
-                                        class="grid grid-cols-[110px_110px_1fr_120px_90px_90px_90px_90px] items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
+                                        class="grid items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
+                                        style={`grid-template-columns:${expenseGridColumns};`}
                                     >
                                         <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
                                             >日期</span
                                         >
                                         <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
                                             >類別</span
                                         >
                                         <span
@@ -1188,122 +1264,139 @@
                                             >說明</span
                                         >
                                         <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
                                             >發票號碼</span
                                         >
                                         <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
                                             >金額</span
                                         >
                                         <span
                                             class="text-center text-xs font-semibold text-muted-foreground"
                                             >憑證</span
                                         >
-                                        <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
-                                            >備注</span
-                                        >
-                                        <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
-                                            >操作</span
-                                        >
+                                        {#if isEditable}
+                                            <span
+                                                class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                                >操作</span
+                                            >
+                                        {/if}
                                     </div>
 
                                     {#if items.length > 0}
                                         {#each items as item, i}
                                             <div
-                                                class="grid grid-cols-[110px_110px_1fr_120px_90px_90px_90px_90px] items-center gap-2 border-b border-border/20 px-4 py-2"
+                                                class={`grid items-center gap-2 border-b border-border/20 px-4 py-2 ${
+                                                    canOperateItems
+                                                        ? "cursor-pointer hover:bg-muted/20"
+                                                        : ""
+                                                }`}
+                                                style={`grid-template-columns:${expenseGridColumns};`}
+                                                data-testid={`claim-item-row-${i}`}
+                                                role={canOperateItems
+                                                    ? "button"
+                                                    : undefined}
+                                                tabindex={canOperateItems
+                                                    ? 0
+                                                    : undefined}
+                                                onclick={() =>
+                                                    canOperateItems &&
+                                                    openEditItemDrawer(i)}
+                                                onkeydown={(event) => {
+                                                    if (!canOperateItems) return;
+                                                    if (
+                                                        event.key === "Enter" ||
+                                                        event.key === " "
+                                                    ) {
+                                                        event.preventDefault();
+                                                        openEditItemDrawer(i);
+                                                    }
+                                                }}
                                             >
-                                        <span class="text-center text-xs"
-                                            >{item.date || "—"}</span
-                                        >
-                                        <span class="text-center text-xs"
-                                            >{categoryLabel(
-                                                item.category,
-                                            )}</span
-                                        >
-                                        <span class="truncate text-xs"
-                                            >{item.description || "—"}</span
-                                        >
-                                        <span class="text-center text-xs"
-                                            >{item.invoice_number || "—"}</span
-                                        >
-                                        <span
-                                            class="text-center text-xs tabular-nums"
-                                            >NT${new Intl.NumberFormat(
-                                                "en-US",
-                                                { maximumFractionDigits: 0 },
-                                            ).format(
-                                                Number(item.amount) || 0,
-                                            )}</span
-                                        >
-                                        <span class="text-center text-xs"
-                                            >{voucherStatusLabel(
-                                                item.attachment_status,
-                                            )}</span
-                                        >
-                                        <div class="text-center text-xs">
-                                            {#if item.attachment_status === "exempt"}
                                                 <span
-                                                    class="text-muted-foreground"
-                                                    >無憑證</span
+                                                    class="whitespace-nowrap text-center text-xs"
+                                                    >{item.date || "—"}</span
                                                 >
-                                            {:else if item.extra?.file_path && item.id}
-                                                <a
-                                                    href={`/api/claims/attachment/${item.id}`}
-                                                    target="_blank"
-                                                    class="inline-flex items-center gap-1 text-primary hover:underline"
-                                                >
-                                                    <Eye class="h-3 w-3" /> 查看
-                                                </a>
-                                            {:else if pendingUpload[i]}
                                                 <span
-                                                    class="text-muted-foreground"
-                                                    >已選擇檔案</span
+                                                    class="whitespace-nowrap text-center text-xs"
+                                                    >{categoryLabel(
+                                                        item.category,
+                                                    )}</span
                                                 >
-                                            {:else}
+                                                <span class="truncate text-xs"
+                                                    >{item.description ||
+                                                        "—"}</span
+                                                >
                                                 <span
-                                                    class="text-muted-foreground"
-                                                    >待補件</span
+                                                    class="whitespace-nowrap text-center text-xs"
+                                                    >{item.invoice_number ||
+                                                        "—"}</span
                                                 >
-                                            {/if}
-                                        </div>
                                                 <div
-                                                    class="flex items-center justify-center gap-1"
+                                                    class="flex items-center justify-between gap-1 whitespace-nowrap text-xs tabular-nums"
                                                 >
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon-sm"
-                                                        class="h-7 w-7"
-                                                        data-testid={`claim-item-edit-${i}`}
-                                                        onclick={() =>
-                                                            openEditItemDrawer(i)}
-                                                        title={isEditable
-                                                            ? "編輯"
-                                                            : "檢視"}
+                                                    <span
+                                                        class="text-muted-foreground"
+                                                        >NT$</span
                                                     >
-                                                        {#if isEditable}
-                                                            <Pencil class="h-3.5 w-3.5" />
+                                                    <span
+                                                        class="font-medium text-foreground"
+                                                    >
+                                                        {new Intl.NumberFormat(
+                                                            "en-US",
+                                                            {
+                                                                maximumFractionDigits: 0,
+                                                            },
+                                                        ).format(
+                                                            Number(
+                                                                item.amount,
+                                                            ) || 0,
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div class="text-center text-xs">
+                                                    {#if item.attachment_status === "uploaded"}
+                                                        {#if item.extra?.file_path && item.id}
+                                                            <a
+                                                                href={`/api/claims/attachment/${item.id}`}
+                                                                target="_blank"
+                                                                class="inline-flex items-center gap-1 whitespace-nowrap text-primary hover:underline"
+                                                            >
+                                                                <Eye class="h-3 w-3" /> 查看憑證
+                                                            </a>
+                                                        {:else if pendingUpload[i]}
+                                                            <span class="whitespace-nowrap text-muted-foreground">已選擇附件</span>
                                                         {:else}
-                                                            <Eye class="h-3.5 w-3.5" />
+                                                            <span class="whitespace-nowrap text-destructive">未上傳憑證</span>
                                                         {/if}
-                                                    </Button>
-                                            {#if isEditable}
+                                                    {:else if item.attachment_status === "pending_supplement"}
+                                                        <span class="whitespace-nowrap text-muted-foreground">憑證後補</span>
+                                                    {:else}
+                                                        <span class="line-clamp-2 break-words text-muted-foreground">
+                                                            {item.exempt_reason || "無憑證"}
+                                                        </span>
+                                                    {/if}
+                                                </div>
+                                                {#if isEditable}
+                                                    <div
+                                                        class="flex items-center justify-center gap-1"
+                                                    >
                                                         <Button
                                                             type="button"
                                                             variant="ghost"
                                                             size="icon"
                                                             class="h-7 w-7"
-                                                            onclick={() =>
-                                                                removeItem(i)}
+                                                            onclick={(event) => {
+                                                                event.stopPropagation();
+                                                                removeItem(i);
+                                                            }}
                                                         >
                                                             <Trash2
                                                                 class="h-3.5 w-3.5 text-destructive"
                                                             />
                                                         </Button>
-                                                    {/if}
-                                                </div>
+                                                    </div>
+                                                {/if}
                                             </div>
                                         {/each}
                                     {/if}
@@ -1321,7 +1414,7 @@
                                             <Plus class="h-4 w-4" />
                                             新增明細
                                         </button>
-                                            {/if}
+                                    {/if}
                                 </div>
                             </div>
                         </Card.Content>
@@ -1386,18 +1479,18 @@
                     <Label>憑證決策</Label>
                     <div class="space-y-3">
                         <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            {#each voucherDecisionOptions as option}
+                            {#each voucherDecisionChoices as option}
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    disabled={!isEditable}
+                                    disabled={!canEditVoucherSection}
                                     class={voucherDecisionClass(
                                         option.value,
                                         itemDraft.attachment_status ===
                                             option.value,
                                     )}
                                     onclick={() => {
-                                        if (!isEditable) return;
+                                        if (!canEditVoucherSection) return;
                                         const nextDate =
                                             option.value ===
                                             "pending_supplement"
@@ -1448,7 +1541,7 @@
                                             id="item-date"
                                             type="date"
                                             bind:value={itemDraft.date}
-                                            disabled={!isEditable ||
+                                            disabled={!canEditVoucherSection ||
                                                 itemDraft.attachment_status ===
                                                     "pending_supplement"}
                                             class={`pr-12 [&::-webkit-calendar-picker-indicator]:-translate-x-2 [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
@@ -1469,7 +1562,7 @@
                                                 itemDraft.invoice_number
                                             }
                                             placeholder="AB-12345678"
-                                            disabled={!isEditable ||
+                                            disabled={!canEditVoucherSection ||
                                                 itemDraft.attachment_status !==
                                                     "uploaded"}
                                             class={itemDraft.attachment_status !==
@@ -1520,7 +1613,7 @@
                                                     </div>
                                                 {/if}
                                             </div>
-                                            {#if isEditable}
+                                            {#if canEditVoucherSection && !isSupplementMode}
                                                 <div>
                                                     <Button
                                                         type="button"
@@ -1546,7 +1639,7 @@
                                                 </div>
                                             {/if}
                                         {/if}
-                                        {#if isEditable}
+                                        {#if canEditVoucherSection}
                                             <label
                                                 class="inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline"
                                             >
@@ -1623,7 +1716,7 @@
                                             bind:value={itemDraft.exempt_reason}
                                             placeholder="請填寫無憑證理由"
                                             class="min-h-[92px]"
-                                            disabled={!isEditable}
+                                            disabled={!canEditVoucherSection}
                                         />
                                         <p
                                             class="text-xs text-muted-foreground"
@@ -1642,9 +1735,9 @@
                         type="button"
                         variant="outline"
                         onclick={closeItemDrawer}
-                        >{isEditable ? "取消" : "關閉"}</Button
+                        >{canEditVoucherSection ? "取消" : "關閉"}</Button
                     >
-                    {#if isEditable}
+                    {#if canEditVoucherSection}
                         <Button
                             type="button"
                             onclick={() => void saveItemDraft()}

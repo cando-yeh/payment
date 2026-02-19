@@ -17,9 +17,10 @@
 	import { Toaster } from "svelte-sonner";
 	import Sidebar from "$lib/components/layout/Sidebar.svelte";
 	import { Menu, X } from "lucide-svelte";
+	import type { LayoutData } from "./$types";
 
 	// 接收來自 +layout.server.ts 的資料 (data) 及其子頁面 (children)
-	let { data, children }: { data: App.LayoutData; children: any } = $props();
+	let { data, children }: { data: LayoutData; children: any } = $props();
 
 	// 初始化瀏覽器端 Supabase Client
 	const supabase = createBrowserSupabaseClient();
@@ -62,6 +63,10 @@
 					approver_name: data.profile?.approver_name || "",
 					bank: data.profile?.bank || "",
 					bankAccountTail: data.profile?.bank_account_tail || "",
+					myClaimsPendingCount:
+						data.pendingCounters?.myClaimsActionRequired || 0,
+					approvalPendingCount:
+						data.pendingCounters?.approvalPendingTotal || 0,
 				}
 			: null,
 	);

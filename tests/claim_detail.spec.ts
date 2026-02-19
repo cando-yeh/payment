@@ -82,8 +82,8 @@ test.describe.serial('Claim Detail Page', () => {
 
         // Verify expense section exists and can open item drawer
         await expect(page.getByText('費用明細')).toBeVisible();
-        await expect(page.getByTestId('claim-item-edit-0')).toBeVisible();
-        await page.getByTestId('claim-item-edit-0').click();
+        await expect(page.getByTestId('claim-item-row-0')).toBeVisible();
+        await page.getByTestId('claim-item-row-0').click();
         await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
     });
 
@@ -91,12 +91,20 @@ test.describe.serial('Claim Detail Page', () => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
-        await expect(page.getByTestId('claim-item-edit-0')).toBeVisible();
-        await page.getByTestId('claim-item-edit-0').click();
+        await expect(page.getByTestId('claim-item-row-0')).toBeVisible();
+        await page.getByTestId('claim-item-row-0').click();
         const dialog = page.locator('[data-slot="dialog-content"]');
         await expect(dialog).toBeVisible();
         await dialog.getByLabel('說明').fill('Updated from edit page');
         await dialog.getByLabel('發票號碼').fill('AB-12345678');
+        await dialog.locator('input[type="file"]').setInputFiles({
+            name: 'voucher.png',
+            mimeType: 'image/png',
+            buffer: Buffer.from(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnI7S8AAAAASUVORK5CYII=',
+                'base64'
+            )
+        });
         await dialog.getByRole('button', { name: '儲存明細' }).click();
         await expect(dialog).not.toBeVisible();
         await page.getByRole('button', { name: '儲存變更' }).click();

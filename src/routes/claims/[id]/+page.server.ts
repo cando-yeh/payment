@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
     // RBAC Check for View
     const isApplicant = claim.applicant_id === session.user.id;
     const canEditAsApplicant = isApplicant && EDITABLE_CLAIM_STATUSES.has(claim.status);
+    const canSupplementAsApplicant = isApplicant && claim.status === 'paid_pending_doc';
 
     const { data: profile } = await supabase
         .from('profiles')
@@ -113,7 +114,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         user: { id: session.user.id, isFinance, isAdmin, isApprover },
         duplicateWarnings,
         payees,
-        viewMode: canEditAsApplicant ? 'edit' : 'view'
+        viewMode: canEditAsApplicant ? 'edit' : canSupplementAsApplicant ? 'supplement' : 'view'
     };
 
 };
@@ -299,6 +300,79 @@ export const actions: Actions = {
         if (!moveResult.ok) {
             return fail(moveResult.status, { message: moveResult.message });
         }
+
+        throw redirect(303, '/claims?tab=processing');
+    },
+
+    submitSupplement: async ({ params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { id } = params;
+        const { data: claim, error: claimError } = await supabase
+            .from('claims')
+            .select('id, applicant_id, status')
+            .eq('id', id)
+            .single();
+
+        if (claimError || !claim || claim.applicant_id !== session.user.id) {
+            return fail(404, { message: 'Claim not found' });
+        }
+        if (claim.status !== 'paid_pending_doc') {
+            return fail(400, { message: 'Only pending supplement claims can be submitted' });
+        }
+
+        const { data: items, error: itemsError } = await supabase
+            .from('claim_items')
+            .select('id, attachment_status, date_start, invoice_number, extra')
+            .eq('claim_id', id);
+
+        if (itemsError) return fail(500, { message: '讀取請款項目失敗' });
+        if (!items || items.length === 0) {
+            return fail(400, { message: '請款單必須包含至少一個項目' });
+        }
+
+        for (const item of items) {
+            if (item.attachment_status === 'pending_supplement') {
+                return fail(400, { message: '仍有明細為「憑證後補」，請完成補件後再送審' });
+            }
+            if (!item.date_start) {
+                return fail(400, { message: '所有明細都必須填寫日期後才能提交補件審核' });
+            }
+            if (item.attachment_status === 'uploaded') {
+                const hasFilePath = Boolean(
+                    item?.extra &&
+                    typeof (item.extra as Record<string, unknown>).file_path === 'string' &&
+                    String((item.extra as Record<string, unknown>).file_path || '').trim().length > 0
+                );
+                if (!hasFilePath) {
+                    return fail(400, { message: '上傳憑證的明細必須附上附件後才能送審' });
+                }
+                if (!String(item.invoice_number || '').trim()) {
+                    return fail(400, { message: '上傳憑證的明細必須填寫發票號碼後才能送審' });
+                }
+            }
+            if (item.attachment_status === 'exempt') {
+                const exemptReason = String(
+                    ((item.extra as Record<string, unknown> | null)?.exempt_reason as string) || ''
+                ).trim();
+                if (!exemptReason) {
+                    return fail(400, { message: '無憑證的明細必須填寫無憑證理由後才能送審' });
+                }
+            }
+        }
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({
+                status: 'pending_doc_review',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .eq('applicant_id', session.user.id)
+            .eq('status', 'paid_pending_doc');
+
+        if (updateError) return fail(500, { message: '提交補件審核失敗' });
 
         throw redirect(303, '/claims?tab=processing');
     },
@@ -549,6 +623,89 @@ export const actions: Actions = {
             .eq('claim_id', id);
 
         if (updateError) return fail(500, { message: 'Failed to update attachment status' });
+
+        return { success: true };
+    },
+
+    updateItemVoucher: async ({ request, params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { data: claim, error: claimError } = await supabase
+            .from('claims')
+            .select('id, applicant_id, status')
+            .eq('id', params.id)
+            .single();
+
+        if (claimError || !claim || claim.applicant_id !== session.user.id) {
+            return fail(404, { message: 'Claim not found' });
+        }
+
+        if (claim.status !== 'paid_pending_doc') {
+            return fail(400, { message: 'Only pending supplement claims can update voucher decisions' });
+        }
+
+        const formData = await request.formData();
+        const itemId = String(formData.get('item_id') || '').trim();
+        const status = String(formData.get('attachment_status') || '').trim();
+        const date = String(formData.get('date') || '').trim();
+        const invoiceNumber = String(formData.get('invoice_number') || '').trim();
+        const exemptReason = String(formData.get('exempt_reason') || '').trim();
+
+        if (!itemId) return fail(400, { message: 'Missing item_id' });
+        if (!['uploaded', 'exempt'].includes(status)) {
+            return fail(400, { message: '補件階段僅可選擇「上傳憑證」或「無憑證」' });
+        }
+        if (!date) return fail(400, { message: '日期為必填' });
+        if (status === 'uploaded' && !invoiceNumber) {
+            return fail(400, { message: '上傳憑證時，發票號碼為必填' });
+        }
+        if (status === 'exempt' && !exemptReason) {
+            return fail(400, { message: '無憑證時，必須填寫理由' });
+        }
+
+        const { data: item, error: itemError } = await supabase
+            .from('claim_items')
+            .select('id, claim_id, extra')
+            .eq('id', itemId)
+            .eq('claim_id', params.id)
+            .single();
+        if (itemError || !item) return fail(404, { message: 'Claim item not found' });
+
+        const currentExtra = (item.extra || {}) as Record<string, unknown>;
+        const currentPath = typeof currentExtra.file_path === 'string' ? String(currentExtra.file_path) : '';
+        const currentOriginalName =
+            typeof currentExtra.original_name === 'string' ? String(currentExtra.original_name) : '';
+
+        if (status === 'uploaded' && !currentPath) {
+            return fail(400, { message: '上傳憑證時，請先上傳附件檔案' });
+        }
+
+        const nextExtra =
+            status === 'uploaded'
+                ? {
+                    file_path: currentPath,
+                    original_name: currentOriginalName
+                }
+                : {
+                    exempt_reason: exemptReason
+                };
+
+        const { error: updateError } = await supabase
+            .from('claim_items')
+            .update({
+                date_start: date,
+                invoice_number: status === 'uploaded' ? invoiceNumber : null,
+                attachment_status: status,
+                extra: nextExtra
+            })
+            .eq('id', itemId)
+            .eq('claim_id', params.id);
+
+        if (updateError) {
+            console.error('Update Item Voucher Error:', updateError);
+            return fail(500, { message: '更新憑證決策失敗' });
+        }
 
         return { success: true };
     },

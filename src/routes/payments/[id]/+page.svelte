@@ -87,6 +87,7 @@
                     onsubmitcapture={requestConfirmSubmit}
                 >
                     <Button
+                        type="submit"
                         variant="outline"
                         size="sm"
                         class="text-destructive hover:bg-destructive/10 hover:text-destructive gap-1"

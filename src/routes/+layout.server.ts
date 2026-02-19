@@ -17,6 +17,10 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 
     const session = await getSession();
     let profile = null;
+    let pendingCounters = {
+        myClaimsActionRequired: 0,
+        approvalPendingTotal: 0
+    };
 
     if (session) {
         const [profileResponse, approverResponse] = await Promise.all([
@@ -56,6 +60,39 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
                 is_finance: locals.user?.is_finance ?? false,
                 is_approver: (approverResponse.count || 0) > 0
             };
+
+            const myClaimsPromise = locals.supabase
+                .from('claims')
+                .select('id', { count: 'exact', head: true })
+                .eq('applicant_id', session.user.id)
+                .in('status', ['returned', 'paid_pending_doc']);
+
+            const managerPendingPromise = locals.supabase
+                .from('claims')
+                .select(`
+                    id,
+                    applicant:profiles!claims_applicant_id_fkey!inner(approver_id)
+                `, { count: 'exact', head: true })
+                .eq('status', 'pending_manager')
+                .eq('applicant.approver_id', session.user.id);
+
+            const financePendingPromise = (profile.is_finance || profile.is_admin)
+                ? locals.supabase
+                    .from('claims')
+                    .select('id', { count: 'exact', head: true })
+                    .in('status', ['pending_finance', 'pending_payment', 'pending_doc_review'])
+                : Promise.resolve({ count: 0, error: null } as any);
+
+            const [myClaimsResult, managerPendingResult, financePendingResult] = await Promise.all([
+                myClaimsPromise,
+                managerPendingPromise,
+                financePendingPromise
+            ]);
+
+            pendingCounters = {
+                myClaimsActionRequired: myClaimsResult.count || 0,
+                approvalPendingTotal: (managerPendingResult.count || 0) + (financePendingResult.count || 0)
+            };
         } else {
             // fallback: profile 讀取失敗時，至少保留 session 與 hooks 注入的角色資訊
             profile = {
@@ -76,6 +113,7 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
 
     return {
         session,
-        profile
+        profile,
+        pendingCounters
     };
 };

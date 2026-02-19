@@ -87,6 +87,6 @@ export const actions: Actions = {
             return fail(500, { message: '請款單狀態回滾失敗' });
         }
 
-        return { success: true };
+        throw redirect(303, `/payments/${id}`);
     }
 };

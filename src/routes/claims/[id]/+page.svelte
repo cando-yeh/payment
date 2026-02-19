@@ -64,6 +64,7 @@
     );
 
     const isEditableApplicant = $derived(data.viewMode === "edit");
+    const isSupplementApplicant = $derived(data.viewMode === "supplement");
     const canWithdraw = $derived(
         !isEditableApplicant &&
             claim.applicant_id === currentUser.id &&
@@ -78,6 +79,13 @@
         (claim.status === "pending_manager" && currentUser.isApprover) ||
             (claim.status === "pending_finance" && currentUser.isFinance) ||
             (claim.status === "pending_doc_review" && currentUser.isFinance),
+    );
+    const canReject = $derived(
+        (claim.status === "pending_manager" && currentUser.isApprover) ||
+            (claim.status === "pending_finance" && currentUser.isFinance) ||
+            (claim.status === "pending_doc_review" && currentUser.isFinance) ||
+            (claim.status === "pending_payment" &&
+                (currentUser.isFinance || currentUser.isAdmin)),
     );
 
     const editorClaim = $derived({
@@ -229,7 +237,7 @@
         </form>
     {/if}
 
-    {#if canApprove}
+    {#if canReject}
         <Button
             variant="outline"
             class="border-destructive/20 text-destructive hover:bg-destructive/5"
@@ -237,6 +245,8 @@
         >
             <CircleX class="mr-1.5 h-4 w-4" /> 駁回
         </Button>
+    {/if}
+    {#if canApprove}
         <form
             action="?/approve"
             method="POST"
@@ -252,13 +262,18 @@
 <ClaimEditor
     claim={editorClaim}
     payees={data.payees}
-    mode={isEditableApplicant ? "edit" : "view"}
+    mode={isEditableApplicant
+        ? "edit"
+        : isSupplementApplicant
+          ? "supplement"
+          : "view"}
     {backHref}
     {backLabel}
     formAction="?/editUpdate"
-    submitAction="?/submit"
+    submitAction={isSupplementApplicant ? "?/submitSupplement" : "?/submit"}
     showSaveButton={isEditableApplicant}
-    showSubmitButton={isEditableApplicant}
+    showSubmitButton={isEditableApplicant || isSupplementApplicant}
+    submitButtonLabel={isSupplementApplicant ? "提交補件審核" : undefined}
     deleteAction={isEditableApplicant ? "?/delete" : undefined}
     directSubmitInSameForm={true}
     {history}

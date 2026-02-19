@@ -49,11 +49,29 @@ export const actions: Actions = {
         if (!['vendor', 'personal'].includes(type)) {
             return fail(400, { message: '無效的收款人類型' });
         }
+        if (!service_description) {
+            return fail(400, { message: '服務項目說明為必填' });
+        }
+        if (!bank_code) {
+            return fail(400, { message: '銀行代碼為必填' });
+        }
+        if (!identity_no) {
+            return fail(
+                400,
+                { message: type === 'vendor' ? '統一編號為必填' : '身分證字號為必填' }
+            );
+        }
         if (type === 'vendor' && !/^\d{8}$/.test(identity_no)) {
             return fail(400, { message: '統一編號格式不正確：須為 8 碼數字' });
         }
         // Match frontend validation
         if (type === 'personal') {
+            if (!email) {
+                return fail(400, { message: '電子郵件為必填' });
+            }
+            if (!address) {
+                return fail(400, { message: '戶籍/通訊地址為必填' });
+            }
             if (!/^[A-Z][0-9]{9}$/.test(identity_no)) {
                 return fail(400, { message: '身分證字號格式不正確：須為「1 碼大寫英文字母」+「9 碼數字」' });
             }

@@ -19,14 +19,35 @@
     let { history }: { history: HistoryItem[] } = $props();
 
     const actionMap: Record<string, string> = {
-        submit: "提交申請",
-        approve: "核准通過",
-        reject: "駁回申請",
-        pay: "完成付款",
+        submit: "送出申請",
+        approve: "審核通過",
+        reject: "審核駁回",
+        pay: "完成撥款",
         withdraw: "撤回草稿",
         cancel: "撤銷申請",
-        status_change: "狀態變更",
     };
+
+    function getStatusChangeLabel(item: HistoryItem): string {
+        const from = item.from_status;
+        const to = item.to_status;
+
+        if (from === "paid" && to === "pending_payment") return "撤銷撥款";
+        if (from === "pending_payment" && to === "pending_finance")
+            return "退回財審";
+        if (from === "pending_payment" && to === "paid") return "完成撥款";
+        if (from === "pending_payment" && to === "paid_pending_doc")
+            return "完成撥款";
+        if (from === "paid_pending_doc" && to === "pending_doc_review")
+            return "補件送審";
+        if (from === "pending_doc_review" && to === "paid_pending_doc")
+            return "退回補件";
+        return "狀態異動";
+    }
+
+    function getActionLabel(item: HistoryItem): string {
+        if (item.action === "status_change") return getStatusChangeLabel(item);
+        return actionMap[item.action] || "狀態異動";
+    }
 
     function formatDate(date: string) {
         return new Date(date).toLocaleString("zh-TW", {
@@ -75,7 +96,7 @@
                     <div class="flex items-center justify-between mb-1">
                         <div class="flex items-center gap-2">
                             <span class="font-bold text-sm">
-                                {actionMap[item.action] || item.action}
+                                {getActionLabel(item)}
                             </span>
                             <span class="text-xs text-muted-foreground">
                                 • {item.actor?.full_name || "系統"}

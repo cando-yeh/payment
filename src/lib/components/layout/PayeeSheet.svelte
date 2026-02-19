@@ -593,13 +593,14 @@
                                         maxlength={type === "vendor" ? 8 : 10}
                                         readonly={!isEditing}
                                         class={viewOnlyFieldClass}
-                                        required={type === "vendor"}
+                                        required
                                     />
                                 {/if}
                             </div>
                             <div class="space-y-2">
                                 <Label for="service_description"
-                                    >服務項目說明</Label
+                                    >服務項目說明
+                                    <span class="text-red-500">*</span></Label
                                 >
                                 <Input
                                     id="service_description"
@@ -608,13 +609,17 @@
                                     placeholder="例：網站維護費..."
                                     readonly={!isEditing}
                                     class={viewOnlyFieldClass}
+                                    required
                                 />
                             </div>
                         </div>
 
                         {#if type === "personal"}
                             <div class="space-y-2">
-                                <Label for="email">電子郵件</Label>
+                                <Label for="email"
+                                    >電子郵件
+                                    <span class="text-red-500">*</span></Label
+                                >
                                 <Input
                                     id="email"
                                     name="email"
@@ -623,10 +628,14 @@
                                     placeholder="example@email.com"
                                     readonly={!isEditing}
                                     class={viewOnlyFieldClass}
+                                    required
                                 />
                             </div>
                             <div class="space-y-2">
-                                <Label for="address">戶籍/通訊地址</Label>
+                                <Label for="address"
+                                    >戶籍/通訊地址
+                                    <span class="text-red-500">*</span></Label
+                                >
                                 <Input
                                     id="address"
                                     name="address"
@@ -634,6 +643,7 @@
                                     placeholder="請填寫完整地址"
                                     readonly={!isEditing}
                                     class={viewOnlyFieldClass}
+                                    required
                                 />
                             </div>
                         {/if}

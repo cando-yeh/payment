@@ -139,7 +139,6 @@ export async function persistEditedClaim(
 ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
     const { error: updateClaimError } = await supabase.rpc("update_claim", {
         _claim_id: claimRow.id,
-        _description: claimRow.description ?? "",
         _payee_id: claimRow.claim_type === "employee" ? null : parsed.payeeId,
         _total_amount: parsed.totalAmount,
         _bank_code: parsed.isFloating ? parsed.bankCode : null,

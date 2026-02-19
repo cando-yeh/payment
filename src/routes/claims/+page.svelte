@@ -47,14 +47,19 @@
         }
         if (currentTab === "processing") {
             return data.claims.filter((claim) =>
-                ["pending_manager", "pending_finance", "pending_payment"].includes(
-                    claim.status,
-                ),
+                [
+                    "pending_manager",
+                    "pending_finance",
+                    "pending_payment",
+                    "pending_doc_review",
+                ].includes(claim.status),
             );
         }
         if (currentTab === "action_required") {
             return data.claims.filter((claim) =>
-                ["paid_pending_doc", "pending_doc_review"].includes(claim.status),
+                ["paid_pending_doc", "pending_doc_review"].includes(
+                    claim.status,
+                ),
             );
         }
         if (currentTab === "history") {
@@ -72,9 +77,13 @@
         return tabClaims.filter((claim) => {
             const id = String(claim.id || "").toLowerCase();
             const payeeName = String(claim.payee?.name || "").toLowerCase();
+            const applicantName = String(
+                claim.applicant?.full_name || "",
+            ).toLowerCase();
             return (
                 id.includes(normalizedSearch) ||
-                payeeName.includes(normalizedSearch)
+                payeeName.includes(normalizedSearch) ||
+                applicantName.includes(normalizedSearch)
             );
         });
     });
@@ -87,6 +96,14 @@
         if (tabClaims.length === 0) return "目前篩選條件下沒有結果";
         return "目前尚無相關請款紀錄";
     });
+
+    const returnedCount = $derived(
+        (data.claims || []).filter((claim) => claim.status === "returned").length,
+    );
+    const pendingDocCount = $derived(
+        (data.claims || []).filter((claim) => claim.status === "paid_pending_doc")
+            .length,
+    );
 </script>
 
 <div in:fade={{ duration: 400 }}>
@@ -108,15 +125,25 @@
         <div class="w-full">
             <ListToolbar>
                 {#snippet left()}
-                    <Tabs.Root value={currentTab} onValueChange={handleTabChange}>
+                    <Tabs.Root
+                        value={currentTab}
+                        onValueChange={handleTabChange}
+                    >
                         <Tabs.List
-                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
+                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap overflow-visible"
                         >
                             <Tabs.Trigger
                                 value="drafts"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
                             >
                                 草稿/退回
+                                {#if returnedCount > 0}
+                                    <span
+                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                    >
+                                        {returnedCount}
+                                    </span>
+                                {/if}
                             </Tabs.Trigger>
                             <Tabs.Trigger
                                 value="processing"
@@ -126,15 +153,22 @@
                             </Tabs.Trigger>
                             <Tabs.Trigger
                                 value="action_required"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
                             >
                                 待補件
+                                {#if pendingDocCount > 0}
+                                    <span
+                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                    >
+                                        {pendingDocCount}
+                                    </span>
+                                {/if}
                             </Tabs.Trigger>
                             <Tabs.Trigger
                                 value="history"
                                 class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                             >
-                                歷史紀錄
+                                已結案
                             </Tabs.Trigger>
                         </Tabs.List>
                     </Tabs.Root>
@@ -152,7 +186,7 @@
                 <ClaimTable
                     claims={filteredClaims}
                     emptyIcon={FileText}
-                    emptyMessage={emptyMessage}
+                    {emptyMessage}
                 >
                     {#snippet emptyAction()}
                         {#if (data.claims?.length || 0) === 0}

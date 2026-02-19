@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession }, u
             *,
             payee:payees(name),
             items:claim_items(count),
-            approver:profiles!claims_applicant_id_fkey(full_name)
+            applicant:profiles!claims_applicant_id_fkey(full_name)
         `)
         .eq('applicant_id', session.user.id)
         .order('created_at', { ascending: false });

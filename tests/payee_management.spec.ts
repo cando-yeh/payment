@@ -88,6 +88,7 @@ test.describe('Payee Management Extended Flow', () => {
         const updatedName = testPayeeName + ' (Updated)';
         await drawer.locator('input[name="name"]').fill(updatedName);
         await drawer.locator('input[name="identity_no"]').fill('12345678');
+        await drawer.locator('input[name="service_description"]').fill('E2E service');
         await page.evaluate(() => {
             const bankCodeInput = document.querySelector('input[name="bank_code"]') as HTMLInputElement | null;
             if (!bankCodeInput) throw new Error('bank_code input not found');
