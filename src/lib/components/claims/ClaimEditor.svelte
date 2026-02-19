@@ -27,6 +27,7 @@
         Save,
         Send,
         Plus,
+        Pencil,
         Trash2,
         Eye,
         EyeOff,
@@ -280,6 +281,30 @@
     );
 
     let lastPayeeSelectionKey = $state("");
+
+    async function preloadEditablePayeeBankAccount(targetPayeeId: string) {
+        if (!targetPayeeId) return;
+        try {
+            const formData = new FormData();
+            formData.append("payeeId", targetPayeeId);
+            const response = await fetch(revealPayeeAccountAction, {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const result = deserialize(await response.text()) as any;
+            if (
+                result?.type === "success" &&
+                result?.data &&
+                "decryptedAccount" in result.data
+            ) {
+                bankAccount = String(result.data.decryptedAccount || "").trim();
+            }
+        } catch {
+            // 靜默失敗：無法預載時維持可手動輸入
+        }
+    }
+
     $effect(() => {
         if (!isEditable || claimType === "employee") return;
         const selectionKey = `${claimType}:${payeeId}`;
@@ -289,7 +314,13 @@
         const selected = payees.find((p) => p.id === payeeId);
         if (claimType === "vendor" && selected?.editable_account) {
             bankCode = String(selected?.bank || "").trim();
-            bankAccount = "";
+            const existingFloatingAccount = String(
+                claim.bank_account || "",
+            ).trim();
+            bankAccount = existingFloatingAccount;
+            if (!existingFloatingAccount && selected?.id) {
+                void preloadEditablePayeeBankAccount(selected.id);
+            }
             return;
         }
         bankCode = "";
@@ -997,22 +1028,6 @@
 
                 <div class="border-t border-border/30">
                     <div class="flex flex-wrap items-center gap-3 px-5 py-3">
-                        {#if !canEditClaimType}
-                            <div
-                                class="flex min-w-[240px] flex-1 items-center gap-2"
-                            >
-                                <Label
-                                    class="shrink-0 text-xs font-medium text-muted-foreground"
-                                    >申請類別</Label
-                                >
-                                <AppBadge
-                                    preset="claim.type"
-                                    label={displayClaimType}
-                                    className="font-semibold"
-                                />
-                            </div>
-                        {/if}
-
                         <div class="min-w-[280px] flex-1">
                             <div class="flex flex-wrap gap-3">
                                 <div
@@ -1155,48 +1170,50 @@
                         class="overflow-visible rounded-xl border border-border/40"
                     >
                         <Card.Content class="p-0">
-                            <div
-                                class="grid grid-cols-[110px_110px_1fr_120px_90px_120px_120px_140px] items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
-                            >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >日期</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >類別</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >說明</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >發票號碼</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >金額</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >憑證處理</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >附件</span
-                                >
-                                <span
-                                    class="text-center text-xs font-semibold text-muted-foreground"
-                                    >操作</span
-                                >
-                            </div>
-
-                            {#if items.length > 0}
-                                {#each items as item, i}
+                            <div class="overflow-x-auto">
+                                <div class="min-w-[820px]">
                                     <div
-                                        class="grid grid-cols-[110px_110px_1fr_120px_90px_120px_120px_140px] items-center gap-2 border-b border-border/20 px-4 py-2"
+                                        class="grid grid-cols-[110px_110px_1fr_120px_90px_90px_90px_90px] items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
                                     >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >日期</span
+                                        >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >類別</span
+                                        >
+                                        <span
+                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                            >說明</span
+                                        >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >發票號碼</span
+                                        >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >金額</span
+                                        >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >憑證</span
+                                        >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >備注</span
+                                        >
+                                        <span
+                                            class="text-center text-xs font-semibold text-muted-foreground"
+                                            >操作</span
+                                        >
+                                    </div>
+
+                                    {#if items.length > 0}
+                                        {#each items as item, i}
+                                            <div
+                                                class="grid grid-cols-[110px_110px_1fr_120px_90px_90px_90px_90px] items-center gap-2 border-b border-border/20 px-4 py-2"
+                                            >
                                         <span class="text-center text-xs"
                                             >{item.date || "—"}</span
                                         >
@@ -1229,7 +1246,7 @@
                                             {#if item.attachment_status === "exempt"}
                                                 <span
                                                     class="text-muted-foreground"
-                                                    >不需附件</span
+                                                    >無憑證</span
                                                 >
                                             {:else if item.extra?.file_path && item.id}
                                                 <a
@@ -1251,51 +1268,62 @@
                                                 >
                                             {/if}
                                         </div>
-                                        <div
-                                            class="flex items-center justify-center gap-1"
-                                        >
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                class="h-7 px-2 text-xs"
-                                                data-testid={`claim-item-edit-${i}`}
-                                                onclick={() =>
-                                                    openEditItemDrawer(i)}
-                                            >
-                                                {isEditable ? "編輯" : "檢視"}
-                                            </Button>
-                                            {#if isEditable}
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    class="h-7 w-7"
-                                                    onclick={() =>
-                                                        removeItem(i)}
+                                                <div
+                                                    class="flex items-center justify-center gap-1"
                                                 >
-                                                    <Trash2
-                                                        class="h-3.5 w-3.5 text-destructive"
-                                                    />
-                                                </Button>
-                                            {/if}
-                                        </div>
-                                    </div>
-                                {/each}
-                            {/if}
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon-sm"
+                                                        class="h-7 w-7"
+                                                        data-testid={`claim-item-edit-${i}`}
+                                                        onclick={() =>
+                                                            openEditItemDrawer(i)}
+                                                        title={isEditable
+                                                            ? "編輯"
+                                                            : "檢視"}
+                                                    >
+                                                        {#if isEditable}
+                                                            <Pencil class="h-3.5 w-3.5" />
+                                                        {:else}
+                                                            <Eye class="h-3.5 w-3.5" />
+                                                        {/if}
+                                                    </Button>
+                                            {#if isEditable}
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            class="h-7 w-7"
+                                                            onclick={() =>
+                                                                removeItem(i)}
+                                                        >
+                                                            <Trash2
+                                                                class="h-3.5 w-3.5 text-destructive"
+                                                            />
+                                                        </Button>
+                                                    {/if}
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    {/if}
 
-                            {#if isEditable}
-                                <button
-                                    type="button"
-                                    class={`flex w-full items-center justify-center gap-2 bg-primary/[0.03] py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06] ${items.length > 0
-                                        ? "border-t border-border/20"
-                                        : ""}`}
-                                    onclick={openCreateItemDrawer}
-                                >
-                                    <Plus class="h-4 w-4" />
-                                    新增明細
-                                </button>
-                            {/if}
+                                    {#if isEditable}
+                                        <button
+                                            type="button"
+                                            class={`flex w-full items-center justify-center gap-2 bg-primary/[0.03] py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06] ${
+                                                items.length > 0
+                                                    ? "border-t border-border/20"
+                                                    : ""
+                                            }`}
+                                            onclick={openCreateItemDrawer}
+                                        >
+                                            <Plus class="h-4 w-4" />
+                                            新增明細
+                                        </button>
+                                            {/if}
+                                </div>
+                            </div>
                         </Card.Content>
                     </Card.Root>
                 </section>

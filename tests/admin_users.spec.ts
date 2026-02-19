@@ -137,6 +137,12 @@ test.describe('Admin Users Page', () => {
         await injectSession(page, financeUser.email, password);
         await page.goto('/admin/users');
 
+        const { error: seedTailError } = await supabaseAdmin
+            .from('profiles')
+            .update({ bank_account_tail: '77777' })
+            .eq('id', standardUser.id);
+        expect(seedTailError).toBeNull();
+
         const bankName = '004-臺灣銀行';
         const bankAccount = '';
 
@@ -220,7 +226,11 @@ test.describe('Admin Users Page', () => {
         // Reset baseline for deterministic assertions
         const { error: resetError } = await supabaseAdmin
             .from('profiles')
-            .update({ is_finance: false })
+            .update({
+                is_finance: false,
+                bank: '004-臺灣銀行',
+                bank_account_tail: '77777'
+            })
             .eq('id', standardUser.id);
         expect(resetError).toBeNull();
 
@@ -239,7 +249,9 @@ test.describe('Admin Users Page', () => {
         await expect(sheet).toBeVisible();
         await sheet.getByRole('button', { name: '編輯個人資訊' }).click();
         await sheet.getByRole('button', { name: '財務' }).click();
-        await sheet.getByRole('button', { name: '確認儲存變更' }).click();
+        await sheet
+            .locator('form[action="/admin/users?/updateUserProfile"] button[type="submit"]')
+            .click();
 
         await expect(page.locator('text=使用者資料已更新')).toBeVisible();
         await expect(sheet).toHaveCount(0);

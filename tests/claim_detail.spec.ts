@@ -82,17 +82,23 @@ test.describe.serial('Claim Detail Page', () => {
 
         // Verify expense section exists and can open item drawer
         await expect(page.getByText('費用明細')).toBeVisible();
+        await expect(page.getByTestId('claim-item-edit-0')).toBeVisible();
         await page.getByTestId('claim-item-edit-0').click();
-        await expect(page.getByText('編輯費用明細')).toBeVisible();
+        await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
     });
 
     test('Draft edit page can submit save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
         await page.goto(`/claims/${claimId}`);
+        await expect(page.getByTestId('claim-item-edit-0')).toBeVisible();
         await page.getByTestId('claim-item-edit-0').click();
-        await page.getByLabel('說明').fill('Updated from edit page');
-        await page.getByRole('button', { name: '儲存明細' }).click();
+        const dialog = page.locator('[data-slot="dialog-content"]');
+        await expect(dialog).toBeVisible();
+        await dialog.getByLabel('說明').fill('Updated from edit page');
+        await dialog.getByLabel('發票號碼').fill('AB-12345678');
+        await dialog.getByRole('button', { name: '儲存明細' }).click();
+        await expect(dialog).not.toBeVisible();
         await page.getByRole('button', { name: '儲存變更' }).click();
         await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
         await expect(page.getByRole('button', { name: '儲存變更' })).toBeVisible();

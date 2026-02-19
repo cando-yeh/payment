@@ -379,6 +379,30 @@ export const actions: Actions = {
             return fail(400, { message: '核准人為必填，不能為空' });
         }
 
+        const serviceRoleClient = getServiceRoleClient();
+        const { data: currentProfile, error: currentProfileError } = await serviceRoleClient
+            .from('profiles')
+            .select('id, full_name, bank, bank_account_tail')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (currentProfileError || !currentProfile) {
+            return fail(404, { message: '找不到使用者資料，請重新整理後再試。' });
+        }
+
+        const effectiveBank = bankName || String(currentProfile.bank || '').trim();
+        const hasEffectiveBankAccount =
+            Boolean(bankAccount) ||
+            Boolean(String(currentProfile.bank_account_tail || '').trim());
+
+        if (!effectiveBank) {
+            return fail(400, { message: '銀行代碼為必填，不能為空' });
+        }
+
+        if (!hasEffectiveBankAccount) {
+            return fail(400, { message: '銀行帳號為必填，不能為空' });
+        }
+
         const updatePayload: Record<string, any> = {
             approver_id: approverId
         };
@@ -398,9 +422,7 @@ export const actions: Actions = {
             }
         }
 
-        if (typeof bankNameRaw === 'string') {
-            updatePayload.bank = bankName || null;
-        }
+        updatePayload.bank = effectiveBank;
 
         if (isAdmin) {
             updatePayload.is_admin = nextIsAdmin;
@@ -409,7 +431,6 @@ export const actions: Actions = {
 
         // 1. 更新基本資料與權限
         // 使用 service role 繞過 profiles RLS，實際授權由上方 admin/finance 邏輯控管。
-        const serviceRoleClient = getServiceRoleClient();
         const { data: updatedRow, error: updateError } = await serviceRoleClient
             .from('profiles')
             .update(updatePayload)

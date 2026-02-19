@@ -123,13 +123,16 @@
         () =>
             Boolean(String(user?.bank || "").trim()) ||
             Boolean(
-                String(user?.bank_account_tail || user?.bankAccountTail || "")
-                    .trim(),
+                String(
+                    user?.bank_account_tail || user?.bankAccountTail || "",
+                ).trim(),
             ),
     );
 
     const approverName = $derived.by(() => {
-        const found = approverOptions.find((o) => o.id === approverId)?.full_name;
+        const found = approverOptions.find(
+            (o) => o.id === approverId,
+        )?.full_name;
         if (found) return found;
         return user?.approver_name || user?.approver?.full_name || "(無)";
     });
@@ -179,7 +182,9 @@
                 showAccountValue = false;
                 if (isManagementMode) open = false;
             } else if (result.type === "failure") {
-                toast.error(result.data?.message || UI_MESSAGES.common.updateFailed);
+                toast.error(
+                    result.data?.message || UI_MESSAGES.common.updateFailed,
+                );
             }
         };
     }
@@ -188,7 +193,9 @@
         isEditing = true;
 
         if (isManagementMode && !approverId) {
-            const fallbackApprover = approverOptions.find((o) => o.id !== user.id);
+            const fallbackApprover = approverOptions.find(
+                (o) => o.id !== user.id,
+            );
             if (fallbackApprover) {
                 approverId = fallbackApprover.id;
             }
@@ -239,7 +246,9 @@
                 return true;
             }
 
-            toast.error(result?.data?.message || UI_MESSAGES.common.updateFailed);
+            toast.error(
+                result?.data?.message || UI_MESSAGES.common.updateFailed,
+            );
             return false;
         } catch {
             toast.error(UI_MESSAGES.common.updateFailed);
@@ -340,6 +349,13 @@
                     "decryptedAccount" in result.data
                 ) {
                     decryptedAccount = String(result.data.decryptedAccount);
+                    if (
+                        isManagementMode &&
+                        isEditing &&
+                        !inputBankAccount.trim()
+                    ) {
+                        inputBankAccount = decryptedAccount;
+                    }
                 } else {
                     toast.error(UI_MESSAGES.user.accountReadFailed);
                     return;
@@ -358,7 +374,9 @@
 <Sheet.Root bind:open>
     <Sheet.Content class="sm:max-w-sm overflow-y-auto">
         <Sheet.Header>
-            <Sheet.Title>{isManagementMode ? "編輯使用者" : "個人帳戶設定"}</Sheet.Title>
+            <Sheet.Title
+                >{isManagementMode ? "編輯使用者" : "個人帳戶設定"}</Sheet.Title
+            >
             <Sheet.Description>
                 {isManagementMode
                     ? "管理使用者的基本資訊、全域權限與核准流程。"
@@ -368,15 +386,21 @@
 
         <div class="mt-4 space-y-4 pb-4">
             <div class="flex flex-col items-center gap-4">
-                <Avatar.Root class="h-16 w-16 border-2 border-background shadow-md">
+                <Avatar.Root
+                    class="h-16 w-16 border-2 border-background shadow-md"
+                >
                     {#if user.avatar_url || user.avatarUrl}
                         <Avatar.Image
                             src={user.avatar_url || user.avatarUrl}
                             alt={user.full_name || user.name}
                         />
                     {/if}
-                    <Avatar.Fallback class="bg-primary/5 text-2xl text-primary font-bold">
-                        {(user.full_name || user.name || "?").charAt(0).toUpperCase()}
+                    <Avatar.Fallback
+                        class="bg-primary/5 text-2xl text-primary font-bold"
+                    >
+                        {(user.full_name || user.name || "?")
+                            .charAt(0)
+                            .toUpperCase()}
                     </Avatar.Fallback>
                 </Avatar.Root>
 
@@ -414,7 +438,9 @@
                             </div>
                         {:else}
                             <div class="flex items-center justify-center gap-2">
-                                <h3 class="text-lg font-semibold">{user.full_name || user.name}</h3>
+                                <h3 class="text-lg font-semibold">
+                                    {user.full_name || user.name}
+                                </h3>
                                 <Button
                                     type="button"
                                     variant="ghost"
@@ -428,7 +454,9 @@
                             </div>
                         {/if}
                     {:else}
-                        <h3 class="text-lg font-semibold">{user.full_name || user.name}</h3>
+                        <h3 class="text-lg font-semibold">
+                            {user.full_name || user.name}
+                        </h3>
                     {/if}
 
                     <p class="text-sm text-muted-foreground">{user.email}</p>
@@ -462,7 +490,11 @@
                     />
 
                     <input type="hidden" name="isAdminValue" value={isAdmin} />
-                    <input type="hidden" name="isFinanceValue" value={isFinance} />
+                    <input
+                        type="hidden"
+                        name="isFinanceValue"
+                        value={isFinance}
+                    />
 
                     <Separator />
 
@@ -478,7 +510,9 @@
                         onToggleReveal={toggleReveal}
                     />
 
-                    <div class="pt-2 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-2 flex flex-col gap-2">
+                    <div
+                        class="pt-2 sticky bottom-0 bg-background/80 backdrop-blur-sm pb-2 flex flex-col gap-2"
+                    >
                         {#if isEditing}
                             <div class="flex flex-row gap-2">
                                 <Button
@@ -501,7 +535,7 @@
                                     {:else}
                                         <Save class="h-4 w-4" />
                                     {/if}
-                                    確認儲存變更
+                                    儲存變更
                                 </Button>
                             </div>
                         {:else}

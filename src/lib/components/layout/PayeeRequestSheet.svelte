@@ -4,21 +4,14 @@
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import { Textarea } from "$lib/components/ui/textarea";
+    import { Switch } from "$lib/components/ui/switch";
     import * as Sheet from "$lib/components/ui/sheet";
     import { toast } from "svelte-sonner";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
-    import {
-        Check,
-        X,
-        LoaderCircle,
-    } from "lucide-svelte";
+    import { Check, X, LoaderCircle } from "lucide-svelte";
     import { invalidateAll } from "$app/navigation";
 
-    let {
-        request,
-        open = $bindable(false),
-        isFinance = false,
-    } = $props();
+    let { request, open = $bindable(false), isFinance = false } = $props();
 
     let isActionSubmitting = $state(false);
 
@@ -39,7 +32,10 @@
         linkedPayee?.service_description || "",
     );
     let beforeTaxId = $derived(
-        request?.payload?.linked_identity_no || linkedPayee?.identity_no || linkedPayee?.unified_no || "",
+        request?.payload?.linked_identity_no ||
+            linkedPayee?.identity_no ||
+            linkedPayee?.unified_no ||
+            "",
     );
     let beforeEmail = $derived(linkedPayee?.extra_info?.email || "");
     let beforeAddress = $derived(linkedPayee?.extra_info?.address || "");
@@ -79,11 +75,7 @@
         return text.includes("已加密") || looksLikeHexBlob ? "" : text;
     }
 
-    function getAfterValue(
-        key: string,
-        fallback: any,
-        nestedParent?: string,
-    ) {
+    function getAfterValue(key: string, fallback: any, nestedParent?: string) {
         if (hasOwn(proposedData, key)) return toText(proposedData?.[key]);
         if (
             nestedParent &&
@@ -95,13 +87,25 @@
         return toText(fallback);
     }
 
+    function parseBoolish(value: any, fallback = false) {
+        if (value === null || value === undefined || value === "")
+            return fallback;
+        if (typeof value === "boolean") return value;
+        const text = String(value).trim().toLowerCase();
+        if (["true", "1", "yes", "on"].includes(text)) return true;
+        if (["false", "0", "no", "off"].includes(text)) return false;
+        return fallback;
+    }
+
     let displayName = $derived(
         toText(proposedData?.name) || beforeName || request?.name || "",
     );
     let displayType = $derived(
         toText(proposedData?.type) || beforeType || "unknown",
     );
-    let taxLabel = $derived(displayType === "vendor" ? "統一編號" : "身分證字號");
+    let taxLabel = $derived(
+        displayType === "vendor" ? "統一編號" : "身分證字號",
+    );
     let afterServiceDescription = $derived(
         getAfterValue("service_description", beforeServiceDescription),
     );
@@ -111,8 +115,12 @@
     let afterAddress = $derived(
         getAfterValue("address", beforeAddress, "extra_info"),
     );
-    let afterBankCode = $derived(
-        getAfterValue("bank_code", beforeBankCode),
+    let afterBankCode = $derived(getAfterValue("bank_code", beforeBankCode));
+    let beforeEditableAccount = $derived(
+        parseBoolish(linkedPayee?.editable_account, false),
+    );
+    let afterEditableAccount = $derived(
+        parseBoolish(proposedData?.editable_account, beforeEditableAccount),
     );
     let afterBankAccountTail = $derived(
         proposedBankAccountTail || beforeBankAccountTail || "",
@@ -124,12 +132,20 @@
         bankAccountDisplay(proposedBankAccountPlain, afterBankAccountTail),
     );
     let taxIdDisplayAfter = $derived.by(() => {
-        if (request?.payload?.proposed_unified_no) return sanitizeEncryptedPlaceholder(request.payload.proposed_unified_no);
-        if (hasOwn(proposedData, "identity_no")) return sanitizeEncryptedPlaceholder(proposedData.identity_no);
+        if (request?.payload?.proposed_unified_no)
+            return sanitizeEncryptedPlaceholder(
+                request.payload.proposed_unified_no,
+            );
+        if (hasOwn(proposedData, "identity_no"))
+            return sanitizeEncryptedPlaceholder(proposedData.identity_no);
         return "";
     });
-    let taxIdDisplayBefore = $derived(sanitizeEncryptedPlaceholder(beforeTaxId));
-    let proposedAttachments = $derived(request?.payload?.proposed_attachments || {});
+    let taxIdDisplayBefore = $derived(
+        sanitizeEncryptedPlaceholder(beforeTaxId),
+    );
+    let proposedAttachments = $derived(
+        request?.payload?.proposed_attachments || {},
+    );
     let proposedAttachmentUrls = $derived(
         request?.payload?.proposed_attachment_urls || {},
     );
@@ -138,7 +154,8 @@
         hasOwn(proposedData, "name") && changed(beforeName, displayName),
     );
     let isTaxIdChanged = $derived(
-        (Boolean(request?.payload?.proposed_unified_no) || hasOwn(proposedData, "identity_no")) &&
+        (Boolean(request?.payload?.proposed_unified_no) ||
+            hasOwn(proposedData, "identity_no")) &&
             changed(taxIdDisplayBefore, taxIdDisplayAfter),
     );
     let isServiceChanged = $derived(
@@ -152,7 +169,12 @@
         hasOwn(proposedData, "address") && changed(beforeAddress, afterAddress),
     );
     let isBankCodeChanged = $derived(
-        hasOwn(proposedData, "bank_code") && changed(beforeBankCode, afterBankCode),
+        hasOwn(proposedData, "bank_code") &&
+            changed(beforeBankCode, afterBankCode),
+    );
+    let isEditableAccountChanged = $derived(
+        hasOwn(proposedData, "editable_account") &&
+            beforeEditableAccount !== afterEditableAccount,
     );
     let isBankAccountChanged = $derived(
         normalize(proposedBankAccountPlain).length > 0 ||
@@ -166,6 +188,7 @@
             isEmailChanged ||
             isAddressChanged ||
             isBankCodeChanged ||
+            isEditableAccountChanged ||
             isBankAccountChanged,
     );
     let hasAnyAttachmentChanges = $derived(
@@ -212,7 +235,9 @@
                     open = false;
                     await invalidateAll();
                 } else if (result.type === "failure") {
-                    toast.error(result.data?.message || UI_MESSAGES.common.actionFailed);
+                    toast.error(
+                        result.data?.message || UI_MESSAGES.common.actionFailed,
+                    );
                 }
             };
         };
@@ -242,48 +267,80 @@
                     {#if changeType !== "disable"}
                         {#if isUpdateFlow}
                             <div class="space-y-4">
-                                <h3 class="text-base font-semibold">目前資訊</h3>
+                                <h3 class="text-base font-semibold">
+                                    目前資訊
+                                </h3>
                                 <div class="space-y-2">
                                     <Label>收款人名稱</Label>
-                                    <Input value={withFallback(beforeName)} readonly />
+                                    <Input
+                                        value={withFallback(beforeName)}
+                                        readonly
+                                    />
                                 </div>
 
                                 <div class="grid gap-4 md:grid-cols-2">
                                     <div class="space-y-2">
                                         <Label>{taxLabel}</Label>
-                                        <Input value={withFallback(taxIdDisplayBefore)} readonly />
+                                        <Input
+                                            value={withFallback(
+                                                taxIdDisplayBefore,
+                                            )}
+                                            readonly
+                                        />
                                     </div>
                                     <div class="space-y-2">
                                         <Label>服務項目說明</Label>
-                                        <Input value={withFallback(beforeServiceDescription)} readonly />
+                                        <Input
+                                            value={withFallback(
+                                                beforeServiceDescription,
+                                            )}
+                                            readonly
+                                        />
                                     </div>
                                 </div>
 
                                 {#if displayType === "personal"}
                                     <div class="space-y-2">
                                         <Label>電子郵件</Label>
-                                        <Input value={withFallback(beforeEmail)} readonly />
+                                        <Input
+                                            value={withFallback(beforeEmail)}
+                                            readonly
+                                        />
                                     </div>
                                     <div class="space-y-2">
                                         <Label>戶籍/通訊地址</Label>
-                                        <Input value={withFallback(beforeAddress)} readonly />
+                                        <Input
+                                            value={withFallback(beforeAddress)}
+                                            readonly
+                                        />
                                     </div>
                                     <div class="space-y-2 pt-2 border-t">
                                         <Label>附件</Label>
                                         <div class="grid gap-3 grid-cols-3">
                                             {#each ATTACHMENT_FIELDS as field}
                                                 <div class="space-y-1">
-                                                    <p class="text-xs text-muted-foreground">{field.label}</p>
+                                                    <p
+                                                        class="text-xs text-muted-foreground"
+                                                    >
+                                                        {field.label}
+                                                    </p>
                                                     {#if getAttachmentHref(beforeAttachmentUrls, field.key)}
                                                         <a
-                                                            href={getAttachmentHref(beforeAttachmentUrls, field.key)}
+                                                            href={getAttachmentHref(
+                                                                beforeAttachmentUrls,
+                                                                field.key,
+                                                            )}
                                                             target="_blank"
                                                             class="text-sm text-primary underline-offset-2 hover:underline"
                                                         >
                                                             查看附件
                                                         </a>
                                                     {:else}
-                                                        <p class="text-sm text-muted-foreground">—</p>
+                                                        <p
+                                                            class="text-sm text-muted-foreground"
+                                                        >
+                                                            —
+                                                        </p>
                                                     {/if}
                                                 </div>
                                             {/each}
@@ -291,42 +348,77 @@
                                     </div>
                                 {/if}
 
-                                <div class="grid gap-4 grid-cols-5 pt-2 border-t">
+                                <div
+                                    class="grid gap-4 grid-cols-5 pt-2 border-t"
+                                >
                                     <div class="col-span-2 space-y-2">
                                         <Label>銀行代碼</Label>
-                                        <Input value={withFallback(beforeBankCode)} readonly />
+                                        <Input
+                                            value={withFallback(beforeBankCode)}
+                                            readonly
+                                        />
                                     </div>
                                     <div class="col-span-3 space-y-2">
                                         <Label>銀行帳號</Label>
-                                        <Input value={withFallback(beforeBankAccountDisplay)} readonly />
+                                        <Input
+                                            value={withFallback(
+                                                beforeBankAccountDisplay,
+                                            )}
+                                            readonly
+                                        />
                                     </div>
                                 </div>
+                                {#if displayType === "vendor"}
+                                    <div class="flex items-center gap-2">
+                                        <Label>非固定帳號</Label>
+                                        <Switch
+                                            checked={beforeEditableAccount}
+                                            disabled
+                                        />
+                                    </div>
+                                {/if}
                             </div>
 
                             <div class="space-y-4 pt-4 border-t">
-                                <h3 class="text-base font-semibold">變更後資訊</h3>
+                                <h3 class="text-base font-semibold">
+                                    變更後資訊
+                                </h3>
                                 {#if isNameChanged}
                                     <div class="space-y-2">
                                         <Label>收款人名稱</Label>
-                                        <Input value={withFallback(displayName)} readonly />
+                                        <Input
+                                            value={withFallback(displayName)}
+                                            readonly
+                                        />
                                     </div>
                                 {/if}
                                 {#if isTaxIdChanged}
                                     <div class="space-y-2">
                                         <Label>{taxLabel}</Label>
-                                        <Input value={withFallback(taxIdDisplayAfter)} readonly />
+                                        <Input
+                                            value={withFallback(
+                                                taxIdDisplayAfter,
+                                            )}
+                                            readonly
+                                        />
                                     </div>
                                 {/if}
                                 {#if isEmailChanged}
                                     <div class="space-y-2">
                                         <Label>電子郵件</Label>
-                                        <Input value={withFallback(afterEmail)} readonly />
+                                        <Input
+                                            value={withFallback(afterEmail)}
+                                            readonly
+                                        />
                                     </div>
                                 {/if}
                                 {#if isAddressChanged}
                                     <div class="space-y-2">
                                         <Label>通訊地址</Label>
-                                        <Input value={withFallback(afterAddress)} readonly />
+                                        <Input
+                                            value={withFallback(afterAddress)}
+                                            readonly
+                                        />
                                     </div>
                                 {/if}
                                 {#if displayType === "personal" && hasAnyAttachmentChanges}
@@ -335,17 +427,31 @@
                                         <div class="grid gap-3 grid-cols-3">
                                             {#each ATTACHMENT_FIELDS as field}
                                                 <div class="space-y-1">
-                                                    <p class="text-xs text-muted-foreground">{field.label}</p>
+                                                    <p
+                                                        class="text-xs text-muted-foreground"
+                                                    >
+                                                        {field.label}
+                                                    </p>
                                                     {#if getAttachmentHref(proposedAttachmentUrls, field.key)}
                                                         <a
-                                                            href={getAttachmentHref(proposedAttachmentUrls, field.key)}
+                                                            href={getAttachmentHref(
+                                                                proposedAttachmentUrls,
+                                                                field.key,
+                                                            )}
                                                             target="_blank"
                                                             class="text-sm text-primary underline-offset-2 hover:underline"
                                                         >
                                                             查看附件
                                                         </a>
                                                     {:else}
-                                                        <Input value={toAttachmentDisplay(proposedAttachments?.[field.key])} readonly />
+                                                        <Input
+                                                            value={toAttachmentDisplay(
+                                                                proposedAttachments?.[
+                                                                    field.key
+                                                                ],
+                                                            )}
+                                                            readonly
+                                                        />
                                                     {/if}
                                                 </div>
                                             {/each}
@@ -355,7 +461,12 @@
                                 {#if isServiceChanged}
                                     <div class="space-y-2">
                                         <Label>服務項目說明</Label>
-                                        <Input value={withFallback(afterServiceDescription)} readonly />
+                                        <Input
+                                            value={withFallback(
+                                                afterServiceDescription,
+                                            )}
+                                            readonly
+                                        />
                                     </div>
                                 {/if}
                                 {#if isBankCodeChanged || isBankAccountChanged}
@@ -363,15 +474,34 @@
                                         {#if isBankCodeChanged}
                                             <div class="col-span-2 space-y-2">
                                                 <Label>銀行代碼</Label>
-                                                <Input value={withFallback(afterBankCode)} readonly />
+                                                <Input
+                                                    value={withFallback(
+                                                        afterBankCode,
+                                                    )}
+                                                    readonly
+                                                />
                                             </div>
                                         {/if}
                                         {#if isBankAccountChanged}
                                             <div class="col-span-3 space-y-2">
                                                 <Label>銀行帳號</Label>
-                                                <Input value={withFallback(afterBankAccountDisplay)} readonly />
+                                                <Input
+                                                    value={withFallback(
+                                                        afterBankAccountDisplay,
+                                                    )}
+                                                    readonly
+                                                />
                                             </div>
                                         {/if}
+                                    </div>
+                                {/if}
+                                {#if isEditableAccountChanged}
+                                    <div class="flex items-center gap-2">
+                                        <Label>非固定帳號</Label>
+                                        <Switch
+                                            checked={afterEditableAccount}
+                                            disabled
+                                        />
                                     </div>
                                 {/if}
                                 {#if !hasAnyDataChanges && !hasAnyAttachmentChanges}
@@ -382,51 +512,89 @@
                             </div>
                         {:else}
                             <div class="space-y-4">
-                            <div class="space-y-2">
-                                <Label>收款人名稱</Label>
-                                <Input value={withFallback(displayName)} readonly />
-                            </div>
-
-                            <div class="space-y-2">
-                                <Label>{taxLabel}</Label>
-                                <Input value={withFallback(taxIdDisplayAfter)} readonly />
-                            </div>
-
-                            {#if displayType === "personal"}
                                 <div class="space-y-2">
-                                    <Label>電子郵件</Label>
-                                    <Input value={withFallback(afterEmail)} readonly />
+                                    <Label>收款人名稱</Label>
+                                    <Input
+                                        value={withFallback(displayName)}
+                                        readonly
+                                    />
                                 </div>
+
                                 <div class="space-y-2">
-                                    <Label>通訊地址</Label>
-                                    <Input value={withFallback(afterAddress)} readonly />
+                                    <Label>{taxLabel}</Label>
+                                    <Input
+                                        value={withFallback(taxIdDisplayAfter)}
+                                        readonly
+                                    />
                                 </div>
-                            {/if}
 
-                            <div class="space-y-2">
-                                <Label>服務項目說明</Label>
-                                <Input value={withFallback(afterServiceDescription)} readonly />
-                            </div>
-                        </div>
+                                {#if displayType === "personal"}
+                                    <div class="space-y-2">
+                                        <Label>電子郵件</Label>
+                                        <Input
+                                            value={withFallback(afterEmail)}
+                                            readonly
+                                        />
+                                    </div>
+                                    <div class="space-y-2">
+                                        <Label>通訊地址</Label>
+                                        <Input
+                                            value={withFallback(afterAddress)}
+                                            readonly
+                                        />
+                                    </div>
+                                {/if}
 
-                        <div class="space-y-4 pt-2 border-t">
-                            <div class="grid gap-4 grid-cols-5">
-                                <div class="col-span-2 space-y-2">
-                                    <Label>銀行代碼</Label>
-                                    <Input value={withFallback(afterBankCode)} readonly />
-                                </div>
-                                <div class="col-span-3 space-y-2">
-                                    <Label>銀行帳號</Label>
-                                    <Input value={withFallback(afterBankAccountDisplay)} readonly />
+                                <div class="space-y-2">
+                                    <Label>服務項目說明</Label>
+                                    <Input
+                                        value={withFallback(
+                                            afterServiceDescription,
+                                        )}
+                                        readonly
+                                    />
                                 </div>
                             </div>
-                        </div>
+
+                            <div class="space-y-4 pt-2 border-t">
+                                <div class="grid gap-4 grid-cols-5">
+                                    <div class="col-span-2 space-y-2">
+                                        <Label>銀行代碼</Label>
+                                        <Input
+                                            value={withFallback(afterBankCode)}
+                                            readonly
+                                        />
+                                    </div>
+                                    <div class="col-span-3 space-y-2">
+                                        <Label>銀行帳號</Label>
+                                        <Input
+                                            value={withFallback(
+                                                afterBankAccountDisplay,
+                                            )}
+                                            readonly
+                                        />
+                                    </div>
+                                </div>
+                                {#if displayType === "vendor"}
+                                    <div class="flex items-center gap-2">
+                                        <Label>非固定帳號</Label>
+                                        <Switch
+                                            checked={afterEditableAccount}
+                                            disabled
+                                        />
+                                    </div>
+                                {/if}
+                            </div>
                         {/if}
                     {/if}
 
                     <div class="pt-2 space-y-2 border-t">
                         <Label>變更原因</Label>
-                        <Textarea value={reason || "—"} readonly class="resize-none" />
+                        <Textarea
+                            value={reason || "—"}
+                            readonly
+                            class="resize-none"
+                        />
                     </div>
                 </div>
 
@@ -451,7 +619,9 @@
                                     disabled={isActionSubmitting}
                                 >
                                     {#if isActionSubmitting}
-                                        <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
+                                        <LoaderCircle
+                                            class="mr-2 h-4 w-4 animate-spin"
+                                        />
                                     {:else}
                                         <X class="mr-2 h-4 w-4" />
                                     {/if}
@@ -476,7 +646,9 @@
                                     disabled={isActionSubmitting}
                                 >
                                     {#if isActionSubmitting}
-                                        <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
+                                        <LoaderCircle
+                                            class="mr-2 h-4 w-4 animate-spin"
+                                        />
                                     {:else}
                                         <Check class="mr-2 h-4 w-4" />
                                     {/if}

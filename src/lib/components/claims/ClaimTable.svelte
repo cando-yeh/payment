@@ -5,9 +5,7 @@
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import { formatCurrency, formatDate, cn } from "$lib/utils";
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
-    import {
-        getClaimTypeLabel,
-    } from "$lib/claims/constants";
+    import { getClaimTypeLabel } from "$lib/claims/constants";
     import { goto } from "$app/navigation";
     import { type Snippet } from "svelte";
 
@@ -86,16 +84,17 @@
                 </Table.Head>
             {/if}
             <Table.Head
-                class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colDate)}
-                >日期</Table.Head
+                class={cn(
+                    LIST_TABLE_TOKENS.headBase,
+                    LIST_TABLE_TOKENS.colDate,
+                )}>日期</Table.Head
             >
             <Table.Head
                 class={cn(
                     LIST_TABLE_TOKENS.headBase,
                     LIST_TABLE_TOKENS.colId,
                     !selectable && "pl-8",
-                )}
-                >ID#</Table.Head
+                )}>ID#</Table.Head
             >
             <Table.Head class={LIST_TABLE_TOKENS.headBase}>類別</Table.Head>
             <Table.Head class={LIST_TABLE_TOKENS.headBase}
@@ -106,12 +105,13 @@
                     LIST_TABLE_TOKENS.headBase,
                     LIST_TABLE_TOKENS.colAmount,
                     "text-right",
-                )}
-                >總金額</Table.Head
+                )}>總金額</Table.Head
             >
             <Table.Head
-                class={cn(LIST_TABLE_TOKENS.headBase, LIST_TABLE_TOKENS.colStatus)}
-                >當前狀態</Table.Head
+                class={cn(
+                    LIST_TABLE_TOKENS.headBase,
+                    LIST_TABLE_TOKENS.colStatus,
+                )}>申請進度</Table.Head
             >
         </Table.Row>
     </Table.Header>
@@ -151,10 +151,7 @@
                         )}
                     >
                         <span
-                            class={cn(
-                                LIST_TABLE_TOKENS.idText,
-                                "select-all",
-                            )}
+                            class={cn(LIST_TABLE_TOKENS.idText, "select-all")}
                         >
                             #{claim.id.split("-")[0]}
                         </span>
@@ -168,9 +165,7 @@
                         </div>
                     </Table.Cell>
                     <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
-                        {claim.payee?.name ||
-                            claim.applicant?.full_name ||
-                            "—"}
+                        {claim.payee?.name || claim.applicant?.full_name || "—"}
                     </Table.Cell>
                     <Table.Cell class="text-right pr-4">
                         {@const amountParts = splitCurrencyParts(

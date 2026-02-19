@@ -81,6 +81,7 @@
                     <BankCodeCombobox
                         id={bankCodeFieldId}
                         name={bankCodeFieldName}
+                        required={isManagement && isEditing}
                         disabled={!canEdit}
                         bind:value={bankName}
                         submitMode="code-name"
@@ -100,6 +101,7 @@
                                 ? decryptedAccount || "請輸入新帳號..."
                                 : "••••••••••••"}
                             disabled={revealing}
+                            required={isManagement && isEditing}
                         />
                     {:else if isPayee && isEditing}
                         <Input
