@@ -37,8 +37,8 @@
         Upload,
         ClipboardList,
         FileText,
-        ChevronDown,
-        ChevronUp,
+        CircleX,
+        X,
     } from "lucide-svelte";
 
     export interface ClaimEditorClaim {
@@ -218,9 +218,8 @@
     let itemDraftUploadPreviewUrl = $state<string | null>(null);
     let itemDraftAmountDisplay = $state("");
     let itemDraftSnapshot = $state("");
-    let itemDrawerSection = $state<"expense" | "voucher">("expense");
-    let itemDrawerSectionTouched = $state(false);
     let formSubmitIntent = $state<"save" | "submit">("save");
+    let showSubmitErrorSummary = $state(false);
 
     type SubmitCheckIssue = {
         severity: "error" | "warning";
@@ -308,41 +307,13 @@
     );
     const expenseGridColumns = $derived(
         isEditable
-            ? "82px 82px minmax(140px,1.2fr) 96px 92px minmax(170px,1.4fr) 72px"
-            : "82px 82px minmax(140px,1.2fr) 96px 92px minmax(170px,1.4fr)",
+            ? "80px 84px minmax(96px,1fr) 94px 90px minmax(96px,1fr) 54px"
+            : "80px 84px minmax(96px,1fr) 94px 90px minmax(96px,1fr)",
     );
     const personalServiceItem = $derived.by(() => {
         if (items.length === 0) return emptyItem();
         return normalizeItemForEditor(items[0]);
     });
-    const defaultItemDrawerSection = $derived.by(() => {
-        if (isSupplementMode) return "voucher";
-        const hasCategory = Boolean(String(itemDraft.category || "").trim());
-        const hasDescription = Boolean(
-            String(itemDraft.description || "").trim(),
-        );
-        const amount = Number(String(itemDraft.amount || "").replaceAll(",", ""));
-        if (!hasCategory || !hasDescription || !Number.isFinite(amount) || amount <= 0) {
-            return "expense";
-        }
-        return "voucher";
-    });
-
-    $effect(() => {
-        if (!itemDrawerOpen) {
-            itemDrawerSectionTouched = false;
-            return;
-        }
-        if (!itemDrawerSectionTouched) {
-            itemDrawerSection = defaultItemDrawerSection;
-        }
-    });
-
-    function openItemDrawerSection(section: "expense" | "voucher") {
-        itemDrawerSectionTouched = true;
-        itemDrawerSection = section;
-    }
-
     function upsertPersonalServiceItem(
         patch: Partial<ClaimEditorItem>,
         options: { normalizeAmount?: boolean } = {},
@@ -593,10 +564,29 @@
         if (!target) return;
         itemDrawerIndex = index;
         itemDraft = normalizeItemForEditor(target);
-        itemDraftUpload = null;
+        itemDraftUpload = pendingUpload[index] || null;
         itemDraftAmountDisplay = formatAmountInput(itemDraft.amount);
         itemDraftSnapshot = itemSnapshot(itemDraft);
         itemDrawerOpen = true;
+    }
+
+    function openPendingAttachment(index: number, event: Event) {
+        event.stopPropagation();
+        const file = pendingUpload[index];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        window.open(url, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+
+    function openUploadedAttachment(item: ClaimEditorItem, event: Event) {
+        event.stopPropagation();
+        if (!item.id) return;
+        window.open(
+            `/api/claims/attachment/${item.id}`,
+            "_blank",
+            "noopener,noreferrer",
+        );
     }
 
     function closeItemDrawer() {
@@ -659,11 +649,14 @@
         fd.append("invoice_number", String(item.invoice_number || ""));
         fd.append("exempt_reason", String(item.exempt_reason || ""));
 
-        const response = await fetch(`/claims/${claim.id}${supplementItemAction}`, {
-            method: "POST",
-            body: fd,
-            headers: { "x-sveltekit-action": "true" },
-        });
+        const response = await fetch(
+            `/claims/${claim.id}${supplementItemAction}`,
+            {
+                method: "POST",
+                body: fd,
+                headers: { "x-sveltekit-action": "true" },
+            },
+        );
         const result = deserialize(await response.text()) as any;
         if (result?.type === "failure") {
             toast.error(result?.data?.message || "更新憑證決策失敗");
@@ -676,7 +669,9 @@
         const normalized = normalizeItemForEditor(itemDraft);
         normalized.amount = String(itemDraft.amount || "").replaceAll(",", "");
         const status = normalized.attachment_status;
-        const hasExistingAttachment = Boolean(normalized.id && normalized.extra?.file_path);
+        const hasExistingAttachment = Boolean(
+            normalized.id && normalized.extra?.file_path,
+        );
         const hasNewAttachment = Boolean(itemDraftUpload);
 
         if (status === "uploaded") {
@@ -916,9 +911,6 @@
     const submitErrors = $derived(
         submitCheckIssues.filter((issue) => issue.severity === "error"),
     );
-    const submitWarnings = $derived(
-        submitCheckIssues.filter((issue) => issue.severity === "warning"),
-    );
 
     function scrollToItemRow(index: number) {
         const row = document.querySelector(
@@ -942,9 +934,10 @@
 
     function validateBeforeDirectSubmit() {
         if (submitErrors.length > 0) {
-            toast.error(submitErrors[0].message);
+            showSubmitErrorSummary = true;
             return false;
         }
+        showSubmitErrorSummary = false;
         return true;
     }
 
@@ -996,7 +989,7 @@
         }
     }
 
-    async function removeAttachment(itemId: string) {
+    async function removeAttachment(itemId: string, navigateAfter = true) {
         const fd = new FormData();
         fd.append("item_id", itemId);
 
@@ -1013,7 +1006,22 @@
             return;
         }
         toast.success(UI_MESSAGES.attachment.deleteSuccess);
-        await goto(`/claims/${claim.id}`, { invalidateAll: true });
+        if (navigateAfter) {
+            await goto(`/claims/${claim.id}`, { invalidateAll: true });
+        }
+    }
+
+    async function clearItemDraftAttachment() {
+        if (itemDraft.id && itemDraft.extra?.file_path) {
+            await removeAttachment(itemDraft.id, false);
+            itemDraft = { ...itemDraft, extra: {} };
+        }
+        itemDraftUpload = null;
+        if (itemDrawerIndex !== null) {
+            const next = { ...pendingUpload };
+            delete next[itemDrawerIndex];
+            pendingUpload = next;
+        }
     }
 </script>
 
@@ -1030,8 +1038,7 @@
 
         <div id="claim-header-actions" class="flex items-center gap-2">
             {@render headerActions?.()}
-            {#if (isEditable || isSupplementMode) &&
-                (showSaveButton || showSubmitButton)}
+            {#if (isEditable || isSupplementMode) && (showSaveButton || showSubmitButton)}
                 {#if isEditable && !isCreate && deleteAction}
                     <Button
                         type="submit"
@@ -1100,51 +1107,23 @@
 
     {@render nextAction?.()}
 
-    {#if (isEditable || isSupplementMode) && showSubmitButton && (submitErrors.length > 0 || submitWarnings.length > 0)}
-        <div class="rounded-xl border border-border/50 bg-background/70 p-3">
-            <div class="mb-2 flex items-center justify-between gap-2">
-                <p class="text-sm font-semibold">提交前檢核摘要</p>
-                <p class="text-xs text-muted-foreground">
-                    點選項目可定位到對應明細列
-                </p>
-            </div>
-            <div class="space-y-2">
-                {#if submitErrors.length > 0}
-                    <div class="rounded-lg border border-destructive/25 bg-destructive/5 p-2">
-                        <p class="mb-1 text-xs font-semibold text-destructive">
-                            error（阻擋）
-                        </p>
-                        <div class="space-y-1">
-                            {#each submitErrors as issue}
-                                <button
-                                    type="button"
-                                    class="block w-full rounded px-2 py-1 text-left text-xs text-destructive hover:bg-destructive/10"
-                                    onclick={() => goToIssue(issue)}
-                                >
-                                    {issue.message}
-                                </button>
-                            {/each}
-                        </div>
-                    </div>
-                {/if}
-                {#if submitWarnings.length > 0}
-                    <div class="rounded-lg border border-amber-300/70 bg-amber-50 p-2">
-                        <p class="mb-1 text-xs font-semibold text-amber-700">
-                            warning（提醒）
-                        </p>
-                        <div class="space-y-1">
-                            {#each submitWarnings as issue}
-                                <button
-                                    type="button"
-                                    class="block w-full rounded px-2 py-1 text-left text-xs text-amber-800 hover:bg-amber-100"
-                                    onclick={() => goToIssue(issue)}
-                                >
-                                    {issue.message}
-                                </button>
-                            {/each}
-                        </div>
-                    </div>
-                {/if}
+    {#if (isEditable || isSupplementMode) && showSubmitButton && showSubmitErrorSummary && submitErrors.length > 0}
+        <div class="rounded-xl border border-red-300 bg-red-50 p-0.5">
+            <div class="space-y-1">
+                {#each submitErrors as issue}
+                    <button
+                        type="button"
+                        class={`flex w-full items-start gap-2 rounded px-2 py-0.5 text-left text-[11px] leading-4 font-normal text-red-700 ${
+                            issue.itemIndex !== null
+                                ? "cursor-pointer hover:bg-red-100"
+                                : "cursor-default"
+                        }`}
+                        onclick={() => goToIssue(issue)}
+                    >
+                        <CircleX class="mt-0.5 h-4 w-4 shrink-0" />
+                        <span class="leading-4">{issue.message}</span>
+                    </button>
+                {/each}
             </div>
         </div>
     {/if}
@@ -1484,74 +1463,112 @@
                         <Card.Root
                             class="overflow-hidden rounded-xl border border-border/40"
                         >
-                            <Card.Content class="p-4">
-                                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                            <Card.Content class="p-3">
+                                <div
+                                    class="grid grid-cols-1 gap-2 md:grid-cols-4 xl:grid-cols-6"
+                                >
                                     <div class="space-y-1.5">
-                                        <Label class="text-xs text-muted-foreground">服務開始日</Label>
+                                        <Label
+                                            class="text-xs text-muted-foreground"
+                                            >服務開始日</Label
+                                        >
                                         <Input
                                             type="date"
                                             value={personalServiceItem.date}
                                             disabled={!isEditable}
                                             oninput={(event) =>
                                                 upsertPersonalServiceItem({
-                                                    date: (event.currentTarget as HTMLInputElement).value,
+                                                    date: (
+                                                        event.currentTarget as HTMLInputElement
+                                                    ).value,
                                                 })}
                                         />
                                     </div>
                                     <div class="space-y-1.5">
-                                        <Label class="text-xs text-muted-foreground">服務結束日</Label>
+                                        <Label
+                                            class="text-xs text-muted-foreground"
+                                            >服務結束日</Label
+                                        >
                                         <Input
                                             type="date"
                                             value={personalServiceItem.date_end}
                                             disabled={!isEditable}
                                             oninput={(event) =>
                                                 upsertPersonalServiceItem({
-                                                    date_end: (event.currentTarget as HTMLInputElement).value,
+                                                    date_end: (
+                                                        event.currentTarget as HTMLInputElement
+                                                    ).value,
                                                 })}
                                         />
                                     </div>
                                     <div class="space-y-1.5">
-                                        <Label class="text-xs text-muted-foreground">類別</Label>
+                                        <Label
+                                            class="text-xs text-muted-foreground"
+                                            >類別</Label
+                                        >
                                         <select
                                             class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                             value={personalServiceItem.category}
                                             disabled={!isEditable}
                                             oninput={(event) =>
                                                 upsertPersonalServiceItem({
-                                                    category: (event.currentTarget as HTMLSelectElement).value,
+                                                    category: (
+                                                        event.currentTarget as HTMLSelectElement
+                                                    ).value,
                                                 })}
                                         >
                                             {#each CLAIM_ITEM_CATEGORIES as cat}
-                                                <option value={cat.value}>{cat.label}</option>
+                                                <option value={cat.value}
+                                                    >{cat.label}</option
+                                                >
                                             {/each}
                                         </select>
                                     </div>
-                                    <div class="space-y-1.5 md:col-span-2 xl:col-span-1">
-                                        <Label class="text-xs text-muted-foreground">說明</Label>
+                                    <div
+                                        class="space-y-1.5"
+                                    >
+                                        <Label
+                                            class="text-xs text-muted-foreground"
+                                            >金額</Label
+                                        >
+                                        <Input
+                                            inputmode="numeric"
+                                            value={formatAmountInput(
+                                                personalServiceItem.amount,
+                                            )}
+                                            disabled={!isEditable}
+                                            class="text-right"
+                                            oninput={(event) =>
+                                                upsertPersonalServiceItem(
+                                                    {
+                                                        amount: (
+                                                            event.currentTarget as HTMLInputElement
+                                                        ).value.replace(
+                                                            /[^\d]/g,
+                                                            "",
+                                                        ),
+                                                    },
+                                                    { normalizeAmount: true },
+                                                )}
+                                        />
+                                    </div>
+                                    <div
+                                        class="space-y-1.5 md:col-span-4 xl:col-span-2"
+                                    >
+                                        <Label
+                                            class="text-xs text-muted-foreground"
+                                            >說明</Label
+                                        >
                                         <Input
                                             value={personalServiceItem.description}
                                             disabled={!isEditable}
                                             placeholder="請輸入服務內容說明"
                                             oninput={(event) =>
                                                 upsertPersonalServiceItem({
-                                                    description: (event.currentTarget as HTMLInputElement).value,
+                                                    description: (
+                                                        event.currentTarget as HTMLInputElement
+                                                    ).value,
                                                 })}
-                                        />
-                                    </div>
-                                    <div class="space-y-1.5 md:col-span-2 xl:col-span-1">
-                                        <Label class="text-xs text-muted-foreground">金額</Label>
-                                        <Input
-                                            inputmode="numeric"
-                                            value={formatAmountInput(personalServiceItem.amount)}
-                                            disabled={!isEditable}
-                                            class="text-right"
-                                            oninput={(event) =>
-                                                upsertPersonalServiceItem(
-                                                    {
-                                                        amount: (event.currentTarget as HTMLInputElement).value.replace(/[^\d]/g, ""),
-                                                    },
-                                                    { normalizeAmount: true },
-                                                )}
                                         />
                                     </div>
                                 </div>
@@ -1563,179 +1580,262 @@
                         >
                             <Card.Content class="p-0">
                                 <div class="overflow-x-auto">
-                                    <div class="min-w-[820px]">
-                                    <div
-                                        class="grid items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
-                                        style={`grid-template-columns:${expenseGridColumns};`}
-                                    >
-                                        <span
-                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
-                                            >日期</span
+                                    <div class="min-w-[700px]">
+                                        <div
+                                            class="grid items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
+                                            style={`grid-template-columns:${expenseGridColumns};`}
                                         >
-                                        <span
-                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
-                                            >類別</span
-                                        >
-                                        <span
-                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
-                                            >說明</span
-                                        >
-                                        <span
-                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
-                                            >發票號碼</span
-                                        >
-                                        <span
-                                            class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
-                                            >金額</span
-                                        >
-                                        <span
-                                            class="text-center text-xs font-semibold text-muted-foreground"
-                                            >憑證</span
-                                        >
-                                        {#if isEditable}
                                             <span
                                                 class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
-                                                >操作</span
+                                                >日期</span
                                             >
-                                        {/if}
-                                    </div>
+                                            <span
+                                                class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                                >類別</span
+                                            >
+                                            <span
+                                                class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                                >說明</span
+                                            >
+                                            <span
+                                                class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                                >發票號碼</span
+                                            >
+                                            <span
+                                                class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                                >金額</span
+                                            >
+                                            <span
+                                                class="text-center text-xs font-semibold text-muted-foreground"
+                                                >憑證</span
+                                            >
+                                            {#if isEditable}
+                                                <span
+                                                    class="whitespace-nowrap text-center text-xs font-semibold text-muted-foreground"
+                                                    >操作</span
+                                                >
+                                            {/if}
+                                        </div>
 
-                                    {#if items.length > 0}
-                                        {#each items as item, i}
-                                            <div
-                                                class={`grid items-center gap-2 border-b border-border/20 px-4 py-2 ${
-                                                    canOperateItems
-                                                        ? "cursor-pointer hover:bg-muted/20"
-                                                        : ""
-                                                }`}
-                                                style={`grid-template-columns:${expenseGridColumns};`}
-                                                data-testid={`claim-item-row-${i}`}
-                                                role={canOperateItems
-                                                    ? "button"
-                                                    : undefined}
-                                                tabindex={canOperateItems
-                                                    ? 0
-                                                    : undefined}
-                                                onclick={() =>
-                                                    canOperateItems &&
-                                                    openEditItemDrawer(i)}
-                                                onkeydown={(event) => {
-                                                    if (!canOperateItems) return;
-                                                    if (
-                                                        event.key === "Enter" ||
-                                                        event.key === " "
-                                                    ) {
-                                                        event.preventDefault();
-                                                        openEditItemDrawer(i);
-                                                    }
-                                                }}
-                                            >
-                                                <span
-                                                    class="whitespace-nowrap text-center text-xs"
-                                                    >{item.date || "—"}</span
-                                                >
-                                                <span
-                                                    class="whitespace-nowrap text-center text-xs"
-                                                    >{categoryLabel(
-                                                        item.category,
-                                                    )}</span
-                                                >
-                                                <span class="truncate text-xs"
-                                                    >{item.description ||
-                                                        "—"}</span
-                                                >
-                                                <span
-                                                    class="whitespace-nowrap text-center text-xs"
-                                                    >{item.invoice_number ||
-                                                        "—"}</span
-                                                >
+                                        {#if items.length > 0}
+                                            {#each items as item, i}
                                                 <div
-                                                    class="flex items-center justify-between gap-1 whitespace-nowrap text-xs tabular-nums"
+                                                    class={`grid items-center gap-2 border-b border-border/20 px-4 py-2 ${
+                                                        canOperateItems
+                                                            ? "hover:bg-muted/10 transition-colors"
+                                                            : ""
+                                                    }`}
+                                                    style={`grid-template-columns:${expenseGridColumns};`}
+                                                    data-testid={`claim-item-row-${i}`}
                                                 >
-                                                    <span
-                                                        class="text-muted-foreground"
-                                                        >NT$</span
+                                                    <button
+                                                        type="button"
+                                                        class="contents text-left disabled:cursor-default"
+                                                        disabled={!canOperateItems}
+                                                        onclick={() =>
+                                                            canOperateItems &&
+                                                            openEditItemDrawer(
+                                                                i,
+                                                            )}
+                                                        onkeydown={(event) => {
+                                                            if (
+                                                                !canOperateItems
+                                                            )
+                                                                return;
+                                                            if (
+                                                                event.key ===
+                                                                    "Enter" ||
+                                                                event.key ===
+                                                                    " "
+                                                            ) {
+                                                                event.preventDefault();
+                                                                openEditItemDrawer(
+                                                                    i,
+                                                                );
+                                                            }
+                                                        }}
                                                     >
-                                                    <span
-                                                        class="font-medium text-foreground"
-                                                    >
-                                                        {new Intl.NumberFormat(
-                                                            "en-US",
-                                                            {
-                                                                maximumFractionDigits: 0,
-                                                            },
-                                                        ).format(
-                                                            Number(
-                                                                item.amount,
-                                                            ) || 0,
-                                                        )}
-                                                    </span>
-                                                </div>
-                                                <div class="text-center text-xs">
-                                                    {#if item.attachment_status === "uploaded"}
-                                                        {#if item.extra?.file_path && item.id}
-                                                            <a
-                                                                href={`/api/claims/attachment/${item.id}`}
-                                                                target="_blank"
-                                                                class="inline-flex items-center gap-1 whitespace-nowrap text-primary hover:underline"
+                                                        <span
+                                                            class="whitespace-nowrap text-center text-xs"
+                                                            >{item.date ||
+                                                                "—"}</span
+                                                        >
+                                                        <span
+                                                            class="whitespace-nowrap text-center text-xs"
+                                                            >{categoryLabel(
+                                                                item.category,
+                                                            )}</span
+                                                        >
+                                                        <span
+                                                            class="line-clamp-2 break-words text-xs"
+                                                            >{item.description ||
+                                                                "—"}</span
+                                                        >
+                                                        <span
+                                                            class="whitespace-nowrap text-center text-xs"
+                                                            >{item.invoice_number ||
+                                                                "—"}</span
+                                                        >
+                                                        <div
+                                                            class="flex items-center justify-between gap-1 whitespace-nowrap text-xs tabular-nums"
+                                                        >
+                                                            <span
+                                                                class="text-muted-foreground"
+                                                                >NT$</span
                                                             >
-                                                                <Eye class="h-3 w-3" /> 查看憑證
-                                                            </a>
-                                                        {:else if pendingUpload[i]}
-                                                            <span class="whitespace-nowrap text-muted-foreground">已選擇附件</span>
-                                                        {:else}
-                                                            <span class="whitespace-nowrap text-destructive">未上傳憑證</span>
-                                                        {/if}
-                                                    {:else if item.attachment_status === "pending_supplement"}
-                                                        <span class="whitespace-nowrap text-muted-foreground">憑證後補</span>
-                                                    {:else}
-                                                        <span class="line-clamp-2 break-words text-muted-foreground">
-                                                            {item.exempt_reason || "無憑證"}
-                                                        </span>
+                                                            <span
+                                                                class="font-medium text-foreground"
+                                                            >
+                                                                {new Intl.NumberFormat(
+                                                                    "en-US",
+                                                                    {
+                                                                        maximumFractionDigits: 0,
+                                                                    },
+                                                                ).format(
+                                                                    Number(
+                                                                        item.amount,
+                                                                    ) || 0,
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            class="text-center text-xs"
+                                                        >
+                                                            {#if item.attachment_status === "uploaded"}
+                                                                {#if item.extra?.file_path && item.id}
+                                                                    <span
+                                                                        role="link"
+                                                                        tabindex="0"
+                                                                        class="inline-flex items-center gap-1 text-primary hover:underline"
+                                                                        onclick={(
+                                                                            e,
+                                                                        ) =>
+                                                                            openUploadedAttachment(
+                                                                                item,
+                                                                                e,
+                                                                            )}
+                                                                        onkeydown={(
+                                                                            e,
+                                                                        ) => {
+                                                                            if (
+                                                                                e.key ===
+                                                                                    "Enter" ||
+                                                                                e.key ===
+                                                                                    " "
+                                                                            ) {
+                                                                                e.preventDefault();
+                                                                                openUploadedAttachment(
+                                                                                    item,
+                                                                                    e,
+                                                                                );
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <Eye
+                                                                            class="h-3 w-3"
+                                                                        /> 查看附件
+                                                                    </span>
+                                                                {:else if pendingUpload[i]}
+                                                                    <span
+                                                                        role="link"
+                                                                        tabindex="0"
+                                                                        class="inline-flex items-center gap-1 text-primary hover:underline"
+                                                                        onclick={(
+                                                                            event,
+                                                                        ) =>
+                                                                            openPendingAttachment(
+                                                                                i,
+                                                                                event,
+                                                                            )}
+                                                                        onkeydown={(
+                                                                            event,
+                                                                        ) => {
+                                                                            if (
+                                                                                event.key ===
+                                                                                    "Enter" ||
+                                                                                event.key ===
+                                                                                    " "
+                                                                            ) {
+                                                                                event.preventDefault();
+                                                                                openPendingAttachment(
+                                                                                    i,
+                                                                                    event,
+                                                                                );
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <Eye
+                                                                            class="h-3 w-3"
+                                                                        />
+                                                                        查看附件
+                                                                    </span>
+                                                                {:else}
+                                                                    <span
+                                                                        class="break-words text-destructive"
+                                                                        >未上傳憑證</span
+                                                                    >
+                                                                {/if}
+                                                            {:else if item.attachment_status === "pending_supplement"}
+                                                                <span
+                                                                    class="break-words text-muted-foreground"
+                                                                    >憑證後補</span
+                                                                >
+                                                            {:else}
+                                                                <span
+                                                                    class="line-clamp-2 break-words text-muted-foreground"
+                                                                >
+                                                                    {item.exempt_reason ||
+                                                                        "無憑證"}
+                                                                </span>
+                                                            {/if}
+                                                        </div>
+                                                    </button>
+                                                    {#if isEditable}
+                                                        <div
+                                                            class="flex items-center justify-center gap-1"
+                                                        >
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                class="h-7 w-7"
+                                                                onclick={(
+                                                                    event,
+                                                                ) => {
+                                                                    event.stopPropagation();
+                                                                    removeItem(
+                                                                        i,
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <Trash2
+                                                                    class="h-3.5 w-3.5 text-destructive"
+                                                                />
+                                                            </Button>
+                                                        </div>
                                                     {/if}
                                                 </div>
-                                                {#if isEditable}
-                                                    <div
-                                                        class="flex items-center justify-center gap-1"
-                                                    >
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            class="h-7 w-7"
-                                                            onclick={(event) => {
-                                                                event.stopPropagation();
-                                                                removeItem(i);
-                                                            }}
-                                                        >
-                                                            <Trash2
-                                                                class="h-3.5 w-3.5 text-destructive"
-                                                            />
-                                                        </Button>
-                                                    </div>
-                                                {/if}
-                                            </div>
-                                        {/each}
-                                    {/if}
+                                            {/each}
+                                        {/if}
 
-                                    {#if isEditable}
-                                        <div
-                                            class={`px-4 py-2 bg-primary/[0.03] ${
-                                                items.length > 0
-                                                    ? "border-t border-border/20"
-                                                    : ""
-                                            }`}
-                                        >
-                                            <button
-                                                type="button"
-                                                class="flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06]"
-                                                onclick={openCreateItemDrawer}
+                                        {#if isEditable}
+                                            <div
+                                                class={`px-4 py-2 bg-primary/[0.03] ${
+                                                    items.length > 0
+                                                        ? "border-t border-border/20"
+                                                        : ""
+                                                }`}
                                             >
-                                                <Plus class="h-4 w-4" />
-                                                新增明細
-                                            </button>
-                                        </div>
-                                    {/if}
+                                                <button
+                                                    type="button"
+                                                    class="flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06]"
+                                                    onclick={openCreateItemDrawer}
+                                                >
+                                                    <Plus class="h-4 w-4" />
+                                                    新增明細
+                                                </button>
+                                            </div>
+                                        {/if}
                                     </div>
                                 </div>
                             </Card.Content>
@@ -1759,359 +1859,327 @@
                 >
             </Dialog.Header>
             <div class="space-y-4 pt-2">
-                <section class="rounded-lg border border-border/40 bg-muted/10">
-                    <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2.5 text-left"
-                        onclick={() => openItemDrawerSection("expense")}
-                    >
-                        <div>
-                            <p class="text-sm font-semibold">費用欄位</p>
-                            <p class="text-xs text-muted-foreground">
-                                {isSupplementMode
-                                    ? "補件階段僅供檢視"
-                                    : "先完成費用欄位，再處理憑證決策"}
-                            </p>
+                <section
+                    class="rounded-lg border border-border/40 bg-muted/10 p-3"
+                >
+                    {#if isSupplementMode}
+                        <div
+                            class="grid grid-cols-1 gap-3 text-sm md:grid-cols-3"
+                        >
+                            <div
+                                class="rounded-md border bg-background px-3 py-2"
+                            >
+                                <p class="text-xs text-muted-foreground">
+                                    類別
+                                </p>
+                                <p class="mt-1 font-medium">
+                                    {categoryLabel(itemDraft.category)}
+                                </p>
+                            </div>
+                            <div
+                                class="rounded-md border bg-background px-3 py-2"
+                            >
+                                <p class="text-xs text-muted-foreground">
+                                    說明
+                                </p>
+                                <p class="mt-1 font-medium">
+                                    {itemDraft.description || "—"}
+                                </p>
+                            </div>
+                            <div
+                                class="rounded-md border bg-background px-3 py-2"
+                            >
+                                <p class="text-xs text-muted-foreground">
+                                    金額
+                                </p>
+                                <p class="mt-1 font-medium">
+                                    {Number(
+                                        itemDraft.amount || 0,
+                                    ).toLocaleString("en-US")}
+                                </p>
+                            </div>
                         </div>
-                        {#if itemDrawerSection === "expense"}
-                            <ChevronUp class="h-4 w-4 text-muted-foreground" />
-                        {:else}
-                            <ChevronDown class="h-4 w-4 text-muted-foreground" />
-                        {/if}
-                    </button>
-                    {#if itemDrawerSection === "expense"}
-                        <div class="border-t border-border/40 p-3">
-                            {#if isSupplementMode}
-                                <div class="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
-                                    <div class="rounded-md border bg-background px-3 py-2">
-                                        <p class="text-xs text-muted-foreground">類別</p>
-                                        <p class="mt-1 font-medium">{categoryLabel(itemDraft.category)}</p>
-                                    </div>
-                                    <div class="rounded-md border bg-background px-3 py-2">
-                                        <p class="text-xs text-muted-foreground">說明</p>
-                                        <p class="mt-1 font-medium">{itemDraft.description || "—"}</p>
-                                    </div>
-                                    <div class="rounded-md border bg-background px-3 py-2">
-                                        <p class="text-xs text-muted-foreground">金額</p>
-                                        <p class="mt-1 font-medium">
-                                            {Number(itemDraft.amount || 0).toLocaleString("en-US")}
-                                        </p>
-                                    </div>
-                                </div>
-                            {:else}
-                                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                    <div class="space-y-1.5">
-                                        <Label for="item-category">類別</Label>
-                                        <select
-                                            id="item-category"
-                                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                            bind:value={itemDraft.category}
-                                            disabled={!isEditable}
+                    {:else}
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div class="space-y-1.5">
+                                <Label for="item-category">類別</Label>
+                                <select
+                                    id="item-category"
+                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    bind:value={itemDraft.category}
+                                    disabled={!isEditable}
+                                >
+                                    {#each CLAIM_ITEM_CATEGORIES as cat}
+                                        <option value={cat.value}
+                                            >{cat.label}</option
                                         >
-                                            {#each CLAIM_ITEM_CATEGORIES as cat}
-                                                <option value={cat.value}>{cat.label}</option>
-                                            {/each}
-                                        </select>
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <Label for="item-description">說明</Label>
-                                        <Input
-                                            id="item-description"
-                                            bind:value={itemDraft.description}
-                                            placeholder="請輸入費用說明"
-                                            disabled={!isEditable}
-                                        />
-                                    </div>
-                                    <div class="space-y-1.5">
-                                        <Label for="item-amount">金額</Label>
-                                        <Input
-                                            id="item-amount"
-                                            type="text"
-                                            inputmode="numeric"
-                                            value={itemDraftAmountDisplay}
-                                            oninput={handleAmountInput}
-                                            placeholder="0"
-                                            disabled={!isEditable}
-                                            class="text-right"
-                                        />
-                                    </div>
-                                </div>
-                            {/if}
+                                    {/each}
+                                </select>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label for="item-description">說明</Label>
+                                <Input
+                                    id="item-description"
+                                    bind:value={itemDraft.description}
+                                    placeholder="請輸入費用說明"
+                                    disabled={!isEditable}
+                                />
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label for="item-amount">金額</Label>
+                                <Input
+                                    id="item-amount"
+                                    type="text"
+                                    inputmode="numeric"
+                                    value={itemDraftAmountDisplay}
+                                    oninput={handleAmountInput}
+                                    placeholder="0"
+                                    disabled={!isEditable}
+                                    class="text-right"
+                                />
+                            </div>
                         </div>
                     {/if}
                 </section>
 
-                <section class="rounded-lg border border-border/40 bg-muted/10">
-                    <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2.5 text-left"
-                        onclick={() => openItemDrawerSection("voucher")}
-                    >
-                        <div>
-                            <p class="text-sm font-semibold">憑證決策</p>
-                            <p class="text-xs text-muted-foreground">
-                                補件模式僅可編輯此區，並完成必要附件資訊。
-                            </p>
-                        </div>
-                        {#if itemDrawerSection === "voucher"}
-                            <ChevronUp class="h-4 w-4 text-muted-foreground" />
-                        {:else}
-                            <ChevronDown class="h-4 w-4 text-muted-foreground" />
-                        {/if}
-                    </button>
-                    {#if itemDrawerSection === "voucher"}
-                        <div class="space-y-3 border-t border-border/40 p-3">
-                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                {#each voucherDecisionChoices as option}
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        disabled={!canEditVoucherSection}
-                                        class={voucherDecisionClass(
+                <section
+                    class="rounded-lg border border-border/40 bg-muted/10 p-3"
+                >
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            {#each voucherDecisionChoices as option}
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={!canEditVoucherSection}
+                                    class={voucherDecisionClass(
+                                        option.value,
+                                        itemDraft.attachment_status ===
                                             option.value,
-                                            itemDraft.attachment_status ===
-                                                option.value,
-                                        )}
-                                        onclick={() => {
-                                            if (!canEditVoucherSection) return;
-                                            const nextDate =
-                                                option.value ===
-                                                "pending_supplement"
-                                                    ? ""
-                                                    : itemDraft.date;
-                                            const nextInvoice =
-                                                option.value === "uploaded"
-                                                    ? itemDraft.invoice_number
-                                                    : "";
-                                            itemDraft = {
-                                                ...itemDraft,
-                                                attachment_status: option.value,
-                                                date: nextDate,
-                                                invoice_number: nextInvoice,
-                                                exempt_reason:
-                                                    option.value === "exempt"
-                                                        ? itemDraft.exempt_reason
-                                                        : "",
-                                            };
-                                            if (option.value !== "uploaded") {
-                                                itemDraftUpload = null;
-                                            }
-                                        }}
+                                    )}
+                                    onclick={() => {
+                                        if (!canEditVoucherSection) return;
+                                        const nextDate =
+                                            option.value ===
+                                            "pending_supplement"
+                                                ? ""
+                                                : itemDraft.date;
+                                        const nextInvoice =
+                                            option.value === "uploaded"
+                                                ? itemDraft.invoice_number
+                                                : "";
+                                        itemDraft = {
+                                            ...itemDraft,
+                                            attachment_status: option.value,
+                                            date: nextDate,
+                                            invoice_number: nextInvoice,
+                                            exempt_reason:
+                                                option.value === "exempt"
+                                                    ? itemDraft.exempt_reason
+                                                    : "",
+                                        };
+                                        if (option.value !== "uploaded") {
+                                            itemDraftUpload = null;
+                                        }
+                                    }}
+                                >
+                                    <div
+                                        class="flex w-full flex-col items-start gap-1 text-left"
                                     >
-                                        <div
-                                            class="flex w-full flex-col items-start gap-1 text-left"
+                                        <span class="text-sm font-semibold"
+                                            >{option.label}</span
                                         >
-                                            <span class="text-sm font-semibold"
-                                                >{option.label}</span
-                                            >
-                                            <span
-                                                class="text-xs leading-snug whitespace-normal break-words opacity-80"
-                                                >{option.description}</span
-                                            >
-                                        </div>
-                                    </Button>
-                                {/each}
+                                        <span
+                                            class="text-xs leading-snug whitespace-normal break-words opacity-80"
+                                            >{option.description}</span
+                                        >
+                                    </div>
+                                </Button>
+                            {/each}
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <div class="space-y-3">
+                                <div class="space-y-1.5">
+                                    <Label for="item-date">發票/交易日期</Label>
+                                    <Input
+                                        id="item-date"
+                                        type="date"
+                                        bind:value={itemDraft.date}
+                                        disabled={!canEditVoucherSection ||
+                                            itemDraft.attachment_status ===
+                                                "pending_supplement"}
+                                        class={`pr-12 [&::-webkit-calendar-picker-indicator]:-translate-x-2 [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
+                                            itemDraft.attachment_status ===
+                                            "pending_supplement"
+                                                ? "bg-muted/50 text-muted-foreground"
+                                                : ""
+                                        }`}
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="item-invoice">發票號碼</Label>
+                                    <Input
+                                        id="item-invoice"
+                                        bind:value={itemDraft.invoice_number}
+                                        placeholder="AB-12345678"
+                                        disabled={!canEditVoucherSection ||
+                                            itemDraft.attachment_status !==
+                                                "uploaded"}
+                                        class={itemDraft.attachment_status !==
+                                        "uploaded"
+                                            ? "bg-muted/50 text-muted-foreground"
+                                            : ""}
+                                    />
+                                </div>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                <div
-                                    class="rounded-lg border border-border/40 bg-background/60 p-3 md:col-span-1"
-                                >
-                                    <div class="space-y-3">
-                                        <div class="space-y-1.5">
-                                            <Label for="item-date">日期</Label>
-                                            <Input
-                                                id="item-date"
-                                                type="date"
-                                                bind:value={itemDraft.date}
-                                                disabled={!canEditVoucherSection ||
-                                                    itemDraft.attachment_status ===
-                                                        "pending_supplement"}
-                                                class={`pr-12 [&::-webkit-calendar-picker-indicator]:-translate-x-2 [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
-                                                    itemDraft.attachment_status ===
-                                                    "pending_supplement"
-                                                        ? "bg-muted/50 text-muted-foreground"
-                                                        : ""
-                                                }`}
-                                            />
-                                        </div>
-                                        <div class="space-y-1.5">
-                                            <Label for="item-invoice"
-                                                >發票號碼</Label
+                            <div
+                                class="self-start rounded-lg border border-border/40 bg-background/60 p-3 md:col-span-2"
+                            >
+                                {#if itemDraft.attachment_status === "uploaded"}
+                                    <div class="space-y-2">
+                                        {#if itemDraft.id && itemDraft.extra?.file_path}
+                                            <a
+                                                href={getCurrentAttachmentUrl(
+                                                    itemDraft,
+                                                )}
+                                                target="_blank"
+                                                class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                                             >
-                                            <Input
-                                                id="item-invoice"
-                                                bind:value={
-                                                    itemDraft.invoice_number
-                                                }
-                                                placeholder="AB-12345678"
-                                                disabled={!canEditVoucherSection ||
-                                                    itemDraft.attachment_status !==
-                                                        "uploaded"}
-                                                class={itemDraft.attachment_status !==
-                                                "uploaded"
-                                                    ? "bg-muted/50 text-muted-foreground"
-                                                    : ""}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div
-                                    class="rounded-lg border border-border/40 bg-background/60 p-3 min-h-[170px] md:col-span-2"
-                                >
-                                    {#if itemDraft.attachment_status === "uploaded"}
-                                        <div class="space-y-2">
-                                            {#if itemDraft.id && itemDraft.extra?.file_path}
-                                                <a
-                                                    href={getCurrentAttachmentUrl(
-                                                        itemDraft,
-                                                    )}
-                                                    target="_blank"
-                                                    class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                                                >
-                                                    <Eye class="h-4 w-4" /> 查看目前附件
-                                                </a>
-                                                <div
-                                                    class="rounded-md border border-border/50 bg-background/70 p-2"
-                                                >
-                                                    {#if isImagePath(getCurrentAttachmentPath(itemDraft))}
-                                                        <img
-                                                            src={getCurrentAttachmentUrl(
-                                                                itemDraft,
-                                                            )}
-                                                            alt="目前附件"
-                                                            class="h-24 w-full rounded object-cover"
+                                                <Eye class="h-4 w-4" /> 查看附件
+                                            </a>
+                                            <div
+                                                class="relative rounded-md border border-border/50 bg-background/70 p-2"
+                                            >
+                                                {#if canEditVoucherSection}
+                                                    <button
+                                                        type="button"
+                                                        class="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive"
+                                                        onclick={() =>
+                                                            void clearItemDraftAttachment()}
+                                                        title="移除附件"
+                                                    >
+                                                        <X class="h-3.5 w-3.5" />
+                                                    </button>
+                                                {/if}
+                                                {#if isImagePath(getCurrentAttachmentPath(itemDraft))}
+                                                    <img
+                                                        src={getCurrentAttachmentUrl(
+                                                            itemDraft,
+                                                        )}
+                                                        alt="目前附件"
+                                                        class="h-24 w-full rounded object-cover"
+                                                    />
+                                                {:else if isPdfPath(getCurrentAttachmentPath(itemDraft))}
+                                                    <div
+                                                        class="flex h-24 items-center gap-2 rounded bg-muted/40 px-3 text-sm text-muted-foreground"
+                                                    >
+                                                        <FileText
+                                                            class="h-4 w-4"
                                                         />
-                                                    {:else if isPdfPath(getCurrentAttachmentPath(itemDraft))}
-                                                        <div
-                                                            class="flex h-24 items-center gap-2 rounded bg-muted/40 px-3 text-sm text-muted-foreground"
+                                                        <span class="truncate"
+                                                            >PDF 檔案</span
                                                         >
-                                                            <FileText
-                                                                class="h-4 w-4"
-                                                            />
-                                                            <span class="truncate"
-                                                                >PDF 檔案</span
-                                                            >
-                                                        </div>
-                                                    {/if}
-                                                </div>
-                                                {#if canEditVoucherSection && !isSupplementMode}
-                                                    <div>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            class="h-8 px-2 text-xs text-destructive"
-                                                            onclick={() => {
-                                                                if (itemDraft.id) {
-                                                                    void removeAttachment(
-                                                                        itemDraft.id,
-                                                                    );
-                                                                    itemDraft = {
-                                                                        ...itemDraft,
-                                                                        extra: {},
-                                                                        attachment_status:
-                                                                            "pending_supplement",
-                                                                    };
-                                                                }
-                                                            }}
-                                                        >
-                                                            移除附件
-                                                        </Button>
                                                     </div>
                                                 {/if}
-                                            {/if}
-                                            {#if canEditVoucherSection}
-                                                <label
-                                                    class="inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline"
-                                                >
-                                                    <Upload class="h-4 w-4" />
-                                                    {itemDraft.id
-                                                        ? "重新上傳附件"
-                                                        : "選擇附件"}
-                                                    <input
-                                                        type="file"
-                                                        class="hidden"
-                                                        onchange={(event) => {
-                                                            const input =
-                                                                event.currentTarget as HTMLInputElement;
-                                                            itemDraftUpload =
-                                                                input.files?.[0] ||
-                                                                null;
-                                                        }}
-                                                    />
-                                                </label>
-                                            {/if}
-                                            {#if itemDraftUpload}
-                                                <div
-                                                    class="space-y-1.5 rounded-md border border-border/50 bg-background/70 p-2"
-                                                >
-                                                    <p
-                                                        class="text-xs text-muted-foreground"
+                                            </div>
+                                        {/if}
+                                        {#if canEditVoucherSection && !(itemDraft.id && itemDraft.extra?.file_path) && !itemDraftUpload}
+                                            <label
+                                                class="inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline"
+                                            >
+                                                <Upload class="h-4 w-4" />
+                                                {itemDraft.id
+                                                    ? "重新上傳附件"
+                                                    : "選擇附件"}
+                                                <input
+                                                    type="file"
+                                                    class="hidden"
+                                                    onchange={(event) => {
+                                                        const input =
+                                                            event.currentTarget as HTMLInputElement;
+                                                        itemDraftUpload =
+                                                            input.files?.[0] ||
+                                                            null;
+                                                    }}
+                                                />
+                                            </label>
+                                        {/if}
+                                        {#if itemDraftUpload}
+                                            <div
+                                                class="relative space-y-1.5 rounded-md border border-border/50 bg-background/70 p-2"
+                                            >
+                                                {#if canEditVoucherSection}
+                                                    <button
+                                                        type="button"
+                                                        class="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-muted-foreground hover:text-destructive"
+                                                        onclick={() =>
+                                                            void clearItemDraftAttachment()}
+                                                        title="移除附件"
                                                     >
-                                                        已選擇：{itemDraftUpload.name}
-                                                    </p>
-                                                    {#if isImageFile(itemDraftUpload) && itemDraftUploadPreviewUrl}
-                                                        <img
-                                                            src={itemDraftUploadPreviewUrl}
-                                                            alt="附件預覽"
-                                                            class="h-24 w-full rounded object-cover"
-                                                        />
-                                                    {:else if isPdfFile(itemDraftUpload)}
-                                                        <div
-                                                            class="flex h-20 items-center gap-2 rounded bg-muted/40 px-3 text-sm text-muted-foreground"
-                                                        >
-                                                            <FileText
-                                                                class="h-4 w-4"
-                                                            />
-                                                            <span class="truncate"
-                                                                >{itemDraftUpload.name}</span
-                                                            >
-                                                        </div>
-                                                    {/if}
-                                                </div>
-                                            {:else if !(itemDraft.id && itemDraft.extra?.file_path)}
-                                                <p class="text-xs text-amber-600">
-                                                    尚未上傳憑證。提交前請確認已附上附件。
+                                                        <X class="h-3.5 w-3.5" />
+                                                    </button>
+                                                {/if}
+                                                <p
+                                                    class="text-xs text-muted-foreground"
+                                                >
+                                                    已選擇：{itemDraftUpload.name}
                                                 </p>
-                                            {/if}
-                                        </div>
-                                    {:else if itemDraft.attachment_status === "pending_supplement"}
-                                        <div class="space-y-2 text-sm">
-                                            <p class="font-semibold text-amber-700">
-                                                憑證後補流程
-                                            </p>
-                                            <p class="text-muted-foreground">
-                                                此筆明細先以待補件送出，後續請在規定期限內補上憑證附件。
-                                            </p>
+                                                {#if isImageFile(itemDraftUpload) && itemDraftUploadPreviewUrl}
+                                                    <img
+                                                        src={itemDraftUploadPreviewUrl}
+                                                        alt="附件預覽"
+                                                        class="h-24 w-full rounded object-cover"
+                                                    />
+                                                {:else if isPdfFile(itemDraftUpload)}
+                                                    <div
+                                                        class="flex h-20 items-center gap-2 rounded bg-muted/40 px-3 text-sm text-muted-foreground"
+                                                    >
+                                                        <FileText
+                                                            class="h-4 w-4"
+                                                        />
+                                                        <span class="truncate"
+                                                            >{itemDraftUpload.name}</span
+                                                        >
+                                                    </div>
+                                                {/if}
+                                            </div>
+                                        {:else if !(itemDraft.id && itemDraft.extra?.file_path)}
                                             <p class="text-xs text-amber-600">
-                                                若未如期補件，可能影響撥款或後續核銷作業。
+                                                尚未上傳憑證。提交前請確認已附上附件。
                                             </p>
-                                        </div>
-                                    {:else}
-                                        <div class="space-y-1.5">
-                                            <Label for="item-exempt-reason"
-                                                >無憑證原因</Label
-                                            >
-                                            <Textarea
-                                                id="item-exempt-reason"
-                                                bind:value={itemDraft.exempt_reason}
-                                                placeholder="請填寫無憑證理由"
-                                                class="min-h-[92px]"
-                                                disabled={!canEditVoucherSection}
-                                            />
-                                            <p
-                                                class="text-xs text-muted-foreground"
-                                            >
-                                                請具體描述無法提供憑證的情境，供審核時判斷。
-                                            </p>
-                                        </div>
-                                    {/if}
-                                </div>
+                                        {/if}
+                                    </div>
+                                {:else if itemDraft.attachment_status === "pending_supplement"}
+                                    <div class="space-y-2 text-sm">
+                                        <p class="font-semibold text-amber-700">
+                                            憑證後補流程
+                                        </p>
+                                        <p class="text-muted-foreground">
+                                            此筆明細先以待補件送出，後續請在規定期限內補上憑證附件。
+                                        </p>
+                                        <p class="text-xs text-amber-600">
+                                            若未如期補件，可能影響撥款或後續核銷作業。
+                                        </p>
+                                    </div>
+                                {:else}
+                                    <div class="space-y-1.5">
+                                        <Label for="item-exempt-reason"
+                                            >無憑證原因</Label
+                                        >
+                                        <Textarea
+                                            id="item-exempt-reason"
+                                            bind:value={itemDraft.exempt_reason}
+                                            placeholder="請具體描述無法提供憑證的情境，供審核時判斷"
+                                            class="min-h-[92px]"
+                                            disabled={!canEditVoucherSection}
+                                        />
+                                    </div>
+                                {/if}
                             </div>
                         </div>
-                    {/if}
+                    </div>
                 </section>
 
                 <div class="flex items-center justify-end gap-2 border-t pt-4">

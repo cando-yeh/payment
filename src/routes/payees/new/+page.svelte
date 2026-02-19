@@ -13,7 +13,7 @@
     import * as Tabs from "$lib/components/ui/tabs";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import { toast } from "svelte-sonner";
-    import { ArrowLeft, LoaderCircle } from "lucide-svelte";
+    import { ArrowLeft, LoaderCircle, Send } from "lucide-svelte";
     import { goto } from "$app/navigation";
     import { compressFormImageInputs } from "$lib/client/image-compression";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
@@ -56,26 +56,47 @@
     }
 </script>
 
-<div class="container max-w-2xl py-10">
-    <Button
-        variant="ghost"
-        class="mb-4 pl-0 hover:bg-transparent"
-        onclick={() => history.back()}
-    >
-        <ArrowLeft class="mr-2 h-4 w-4" />
-        返回列表
-    </Button>
+<div class="space-y-4 pb-16">
+    <div class="flex items-center justify-between gap-4">
+        <Button
+            variant="ghost"
+            class="h-9 px-3 text-base font-semibold text-muted-foreground hover:text-foreground"
+            onclick={() => history.back()}
+        >
+            <ArrowLeft class="mr-1.5 h-4 w-4" />
+            返回列表
+        </Button>
 
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold tracking-tight">新增收款人</h1>
-        <p class="text-muted-foreground mt-2">
-            提交新的收款對象資料。送出後需經財務審核才可正式啟用。
-        </p>
+        <Button
+            type="submit"
+            form="payee-create-form"
+            size="sm"
+            disabled={isLoading}
+        >
+            {#if isLoading}
+                <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                提交中...
+            {:else}
+                <Send class="mr-1.5 h-3.5 w-3.5" />
+                直接提交
+            {/if}
+        </Button>
     </div>
 
-    <Card.Root>
-        <Card.Content class="pt-6">
+    <Card.Root class="overflow-hidden rounded-2xl border border-border/40">
+        <div class="border-b border-border/40 px-6 py-5">
+            <h1
+                class="text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.01em] text-foreground"
+            >
+                新增收款人
+            </h1>
+            <p class="mt-1 text-[15px] leading-6 font-medium text-foreground/65">
+                提交新的收款對象資料。送出後需經財務審核才可正式啟用。
+            </p>
+        </div>
+        <Card.Content class="px-6 py-5">
             <form
+                id="payee-create-form"
                 method="POST"
                 action="?/createPayeeRequest"
                 use:enhance={handleSubmit}
@@ -112,6 +133,11 @@
                             </Tabs.Trigger>
                         </Tabs.List>
                     </Tabs.Root>
+                    <p class="text-sm text-muted-foreground">
+                        {payeeType === "vendor"
+                            ? "建立廠商收款資料，供廠商請款時選用。"
+                            : "建立個人收款資料，供個人勞務請款時選用。"}
+                    </p>
                     <!-- Hidden input for form submission -->
                     <input type="hidden" name="type" value={payeeType} />
                     <input
@@ -213,7 +239,7 @@
 
                     <!-- Bank Information Section -->
                     <div class="md:col-span-2 border-t pt-6 mt-2">
-                        <h3 class="font-semibold mb-4 text-lg">銀行匯款資訊</h3>
+                        <h3 class="mb-4 text-base font-semibold">銀行匯款資訊</h3>
 
                         <div class="grid gap-4 md:grid-cols-2">
                             <div class="space-y-2">
@@ -269,7 +295,7 @@
                     <!-- Attachments Section (Personal Only) -->
                     {#if payeeType === "personal"}
                         <div class="md:col-span-2 border-t pt-6 mt-2">
-                            <h3 class="font-semibold mb-4 text-lg">必要附件</h3>
+                            <h3 class="mb-4 text-base font-semibold">必要附件</h3>
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div class="space-y-2">
                                     <Label for="attachment_id_front"
@@ -325,17 +351,6 @@
                             </div>
                         </div>
                     {/if}
-                </div>
-
-                <div class="flex justify-end pt-4">
-                    <Button type="submit" disabled={isLoading}>
-                        {#if isLoading}
-                            <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
-                            提交中...
-                        {:else}
-                            提交申請
-                        {/if}
-                    </Button>
                 </div>
             </form>
         </Card.Content>

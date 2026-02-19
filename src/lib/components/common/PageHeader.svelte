@@ -18,17 +18,19 @@
 
 <div
     class={cn(
-        "flex flex-col md:flex-row md:items-center justify-between gap-8 rounded-2xl border border-border bg-background px-6 py-5 shadow-sm",
+        "flex flex-col justify-between gap-8 rounded-2xl border border-border/80 bg-background/95 px-6 py-5 shadow-sm md:flex-row md:items-center",
         className,
     )}
     in:fade={{ duration: 400 }}
 >
     <div class="space-y-1.5">
-        <h1 class="text-3xl font-bold tracking-tight text-foreground">
+        <h1
+            class="text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.01em] text-foreground"
+        >
             {title}
         </h1>
         {#if description}
-            <p class="text-muted-foreground text-sm font-medium">
+            <p class="text-[15px] leading-6 font-medium text-foreground/65">
                 {description}
             </p>
         {/if}

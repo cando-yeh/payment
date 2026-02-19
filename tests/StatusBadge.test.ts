@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_BADGE_PRESET } from "./badge-tokens";
+import { APP_BADGE_PRESET } from "../src/lib/components/common/badge-tokens";
 
 describe("StatusBadge", () => {
     it("defines localized claim status labels in presets", () => {

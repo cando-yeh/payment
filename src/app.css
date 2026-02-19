@@ -9,44 +9,44 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.99 0.004 248);
-  --foreground: oklch(0.18 0.02 248);
+  --radius: 0.85rem;
+  --background: oklch(0.975 0.008 252);
+  --foreground: oklch(0.26 0.04 260);
   
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 248);
+  --card: oklch(0.995 0.004 252);
+  --card-foreground: oklch(0.26 0.04 260);
   
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 248);
+  --popover: oklch(1 0.002 252);
+  --popover-foreground: oklch(0.26 0.04 260);
   
-  /* Electric Finance palette */
-  --primary: oklch(0.59 0.23 255);
+  /* Editorial business blue palette */
+  --primary: oklch(0.53 0.165 262);
   --primary-foreground: oklch(1 0 0);
   
-  --secondary: oklch(0.94 0.03 188);
-  --secondary-foreground: oklch(0.28 0.09 188);
+  --secondary: oklch(0.93 0.015 252);
+  --secondary-foreground: oklch(0.33 0.04 258);
   
-  --muted: oklch(0.94 0.018 230);
-  --muted-foreground: oklch(0.36 0.02 248);
+  --muted: oklch(0.95 0.01 252);
+  --muted-foreground: oklch(0.44 0.02 252);
   
-  --accent: oklch(0.9 0.055 188);
-  --accent-foreground: oklch(0.3 0.1 188);
+  --accent: oklch(0.91 0.03 252);
+  --accent-foreground: oklch(0.33 0.05 258);
   
-  --destructive: oklch(0.63 0.2 25);
+  --destructive: oklch(0.61 0.22 25);
   --destructive-foreground: oklch(1 0 0);
   
-  --border: oklch(0.84 0.015 248);
-  --input: oklch(0.84 0.015 248);
-  --ring: oklch(0.59 0.23 255 / 0.5);
+  --border: oklch(0.86 0.012 252);
+  --input: oklch(0.86 0.012 252);
+  --ring: oklch(0.53 0.165 262 / 0.4);
   
-  --sidebar: oklch(0.97 0.01 248);
-  --sidebar-foreground: oklch(0.2 0.02 248);
-  --sidebar-primary: oklch(0.59 0.23 255);
+  --sidebar: oklch(0.965 0.01 252);
+  --sidebar-foreground: oklch(0.28 0.03 258);
+  --sidebar-primary: oklch(0.53 0.165 262);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.93 0.035 188);
-  --sidebar-accent-foreground: oklch(0.28 0.09 188);
-  --sidebar-border: oklch(0.84 0.015 248);
-  --sidebar-ring: oklch(0.59 0.23 255 / 0.5);
+  --sidebar-accent: oklch(0.91 0.025 252);
+  --sidebar-accent-foreground: oklch(0.31 0.05 258);
+  --sidebar-border: oklch(0.86 0.012 252);
+  --sidebar-ring: oklch(0.53 0.165 262 / 0.4);
 }
 
 .dark {
@@ -130,6 +130,9 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }

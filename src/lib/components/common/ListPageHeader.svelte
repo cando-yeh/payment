@@ -22,9 +22,13 @@
 {#snippet headerActions()}
     <div class="flex items-center gap-3">
         {#if statText}
-            <div class="flex items-center gap-2 rounded-lg bg-muted px-4 py-2">
+            <div
+                class="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/70 px-4 py-2"
+            >
                 {@render statIcon?.()}
-                <span class="text-sm font-medium">{statText}</span>
+                <span class="text-xs font-semibold tracking-wide text-foreground/75"
+                    >{statText}</span
+                >
             </div>
         {/if}
         {@render children?.()}

@@ -19,10 +19,14 @@
     let searchTerm = $state("");
     let statusTab = $state<"paid" | "pending_doc">("paid");
 
-    function getPaymentViewStatus(payment: any): "paid" | "pending_doc" | "cancelled" {
+    function getPaymentViewStatus(
+        payment: any,
+    ): "paid" | "pending_doc" | "cancelled" {
         const hasPendingDoc =
             (payment.status === "completed" || payment.status === "paid") &&
-            payment.claims?.some((c: { status: string }) => c.status !== "paid");
+            payment.claims?.some(
+                (c: { status: string }) => c.status !== "paid",
+            );
         if (hasPendingDoc) return "pending_doc";
         if (payment.status === "cancelled") return "cancelled";
         return "paid";
@@ -32,7 +36,8 @@
         payments.filter((payment) => {
             const viewStatus = getPaymentViewStatus(payment);
             // Keep cancelled entries together with paid tab for history continuity.
-            if (statusTab === "pending_doc") return viewStatus === "pending_doc";
+            if (statusTab === "pending_doc")
+                return viewStatus === "pending_doc";
             return viewStatus === "paid" || viewStatus === "cancelled";
         }),
     );
@@ -52,7 +57,8 @@
         if (payments.length === 0) return "目前尚無付款紀錄";
         if (keyword && filteredPayments.length === 0)
             return `找不到符合「${keyword}」的結果`;
-        if (statusFilteredPayments.length === 0) return "目前篩選條件下沒有結果";
+        if (statusFilteredPayments.length === 0)
+            return "目前篩選條件下沒有結果";
         return "目前尚無付款紀錄";
     });
 
@@ -128,48 +134,44 @@
         </ListToolbar>
         <div class="m-0">
             <Table.Root>
-                    <Table.Header class={LIST_TABLE_TOKENS.header}>
-                        <Table.Row class={LIST_TABLE_TOKENS.headerRow}>
-                            <Table.Head
-                                class={cn(
-                                    LIST_TABLE_TOKENS.headBase,
-                                    LIST_TABLE_TOKENS.colDate,
-                                )}
-                                >撥款時間</Table.Head
-                            >
-                            <Table.Head
-                                class={cn(
-                                    LIST_TABLE_TOKENS.headBase,
-                                    LIST_TABLE_TOKENS.colId,
-                                )}
-                                >ID#</Table.Head
-                            >
-                            <Table.Head class={LIST_TABLE_TOKENS.headBase}
-                                >收款人</Table.Head
-                            >
-                            <Table.Head
-                                class={cn(
-                                    LIST_TABLE_TOKENS.headBase,
-                                    LIST_TABLE_TOKENS.colAmount,
-                                    "text-right",
-                                )}
-                                >總金額</Table.Head
-                            >
-                            <Table.Head class={LIST_TABLE_TOKENS.headBase}
-                                >經辦人</Table.Head
-                            >
-                            <Table.Head
-                                class={cn(
-                                    LIST_TABLE_TOKENS.headBase,
-                                    LIST_TABLE_TOKENS.colStatus,
-                                )}
-                                >狀態</Table.Head
-                            >
-                        </Table.Row>
-                    </Table.Header>
-                    <Table.Body class={LIST_TABLE_TOKENS.body}>
-                        {#if filteredPayments.length > 0}
-                            {#each filteredPayments as payment}
+                <Table.Header class={LIST_TABLE_TOKENS.header}>
+                    <Table.Row class={LIST_TABLE_TOKENS.headerRow}>
+                        <Table.Head
+                            class={cn(
+                                LIST_TABLE_TOKENS.headBase,
+                                LIST_TABLE_TOKENS.colDate,
+                            )}>撥款時間</Table.Head
+                        >
+                        <Table.Head
+                            class={cn(
+                                LIST_TABLE_TOKENS.headBase,
+                                LIST_TABLE_TOKENS.colId,
+                            )}>付款單號</Table.Head
+                        >
+                        <Table.Head class={LIST_TABLE_TOKENS.headBase}
+                            >收款人</Table.Head
+                        >
+                        <Table.Head
+                            class={cn(
+                                LIST_TABLE_TOKENS.headBase,
+                                LIST_TABLE_TOKENS.colAmount,
+                                "text-right",
+                            )}>總金額</Table.Head
+                        >
+                        <Table.Head class={LIST_TABLE_TOKENS.headBase}
+                            >經辦人</Table.Head
+                        >
+                        <Table.Head
+                            class={cn(
+                                LIST_TABLE_TOKENS.headBase,
+                                LIST_TABLE_TOKENS.colStatus,
+                            )}>狀態</Table.Head
+                        >
+                    </Table.Row>
+                </Table.Header>
+                <Table.Body class={LIST_TABLE_TOKENS.body}>
+                    {#if filteredPayments.length > 0}
+                        {#each filteredPayments as payment}
                             <Table.Row
                                 class={cn(
                                     LIST_TABLE_TOKENS.row,
@@ -196,15 +198,21 @@
                                 <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
                                     {payment.payee_name || "—"}
                                 </Table.Cell>
-                                <Table.Cell class="text-right font-bold text-green-600 text-xs">
+                                <Table.Cell class="text-right pr-4">
                                     {@const amountParts = splitAmountParts(
                                         payment.total_amount,
                                     )}
-                                    <div class="flex items-center justify-between gap-2">
-                                        <span class="text-[10px] text-muted-foreground">
+                                    <div
+                                        class="flex items-center justify-between gap-2"
+                                    >
+                                        <span
+                                            class="text-[10px] font-bold text-muted-foreground"
+                                        >
                                             {amountParts.symbol}
                                         </span>
-                                        <span class="font-bold text-green-600 text-xs">
+                                        <span
+                                            class="text-base font-bold tracking-tight text-foreground"
+                                        >
                                             {amountParts.value}
                                         </span>
                                     </div>
@@ -217,28 +225,32 @@
                                     <div class={LIST_TABLE_TOKENS.badgeWrap}>
                                         {#if payment.status === "completed" || payment.status === "paid"}
                                             {#if payment.claims?.some((c: { status: string }) => c.status !== "paid")}
-                                                <StatusBadge status="paid_pending_doc" />
+                                                <StatusBadge
+                                                    status="paid_pending_doc"
+                                                />
                                             {:else}
                                                 <StatusBadge status="paid" />
                                             {/if}
                                         {:else if payment.status === "cancelled"}
                                             <StatusBadge status="cancelled" />
                                         {:else}
-                                            <StatusBadge status={payment.status} />
+                                            <StatusBadge
+                                                status={payment.status}
+                                            />
                                         {/if}
                                     </div>
                                 </Table.Cell>
                             </Table.Row>
-                            {/each}
-                        {:else}
-                            <ListTableEmptyState
-                                icon={FileText}
-                                description={emptyMessage}
-                                colspan={6}
-                            />
-                        {/if}
-                    </Table.Body>
-                </Table.Root>
+                        {/each}
+                    {:else}
+                        <ListTableEmptyState
+                            icon={FileText}
+                            description={emptyMessage}
+                            colspan={6}
+                        />
+                    {/if}
+                </Table.Body>
+            </Table.Root>
         </div>
     </ListPageScaffold>
 </div>

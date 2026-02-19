@@ -93,7 +93,7 @@
         if (isSupplementApplicant) {
             return {
                 label: "進行補件送審",
-                reason: "你目前在補件階段，完成憑證後送交財務複審。",
+                reason: "補件完成後，請由右上角送出補件審核。",
                 kind: "supplement_submit",
             };
         }
@@ -102,79 +102,45 @@
                 label: "進行送審",
                 reason:
                     claim.status === "returned"
-                        ? "此單據已被退回，請修正後重新送審。"
-                        : "草稿已可送審，送出後將進入審核流程。",
+                        ? "此單據已退回，修正後請由右上角重新送審。"
+                        : "草稿已可送審，請由右上角送出審核。",
                 kind: "submit",
             };
         }
         if (canWithdraw) {
             return {
                 label: "執行撤回",
-                reason: "目前仍在主管審核前，你可以先撤回修正內容。",
+                reason: "目前仍在主管審核前，可由右上角先撤回草稿。",
                 kind: "withdraw",
             };
         }
         if (canCancel) {
             return {
                 label: "執行撤銷",
-                reason: "此申請已退回且不再送審時，請直接撤銷。",
+                reason: "此申請若不再送審，可由右上角直接撤銷。",
                 kind: "cancel",
             };
         }
         if (claim.status === "pending_payment" && canReject) {
             return {
                 label: "進行付款審核",
-                reason: "待付款檢核異常時，請駁回回到財務審核。",
+                reason: "待付款檢核異常時，請由右上角駁回至財務。",
                 kind: "payment_reject",
             };
         }
         if (canApprove || canReject) {
             return {
                 label: "進行審核決策",
-                reason: "你是此節點審核者，請完成本關卡決策。",
+                reason: "你是此節點審核者，請由右上角完成核准或駁回。",
                 kind: "review",
             };
         }
         return {
             label: "返回清單",
-            reason: "目前此狀態不需你操作，可回清單追蹤進度。",
+            reason: "此狀態目前無需操作，可先返回清單追蹤進度。",
             kind: "back",
         };
     });
-
-    function focusHeaderActions() {
-        const target = document.getElementById("claim-header-actions");
-        if (!target) return;
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-
-    function triggerButton(selector: string) {
-        const btn = document.querySelector(selector) as HTMLButtonElement | null;
-        if (!btn) return;
-        btn.click();
-    }
-
-    function runNextAction() {
-        if (nextAction.kind === "submit" || nextAction.kind === "supplement_submit") {
-            triggerButton("#claim-submit-button");
-            return;
-        }
-        if (nextAction.kind === "withdraw") {
-            triggerButton('[data-testid="claim-withdraw-button"]');
-            return;
-        }
-        if (nextAction.kind === "cancel") {
-            triggerButton('[data-testid="claim-cancel-button"]');
-            return;
-        }
-        if (nextAction.kind === "review" || nextAction.kind === "payment_reject") {
-            focusHeaderActions();
-            return;
-        }
-        if (nextAction.kind === "back") {
-            window.location.href = backHref;
-        }
-    }
 
     const editorClaim = $derived({
         ...claim,
@@ -313,7 +279,11 @@
                     confirmVariant: "destructive",
                 })}
         >
-            <Button variant="outline" type="submit" data-testid="claim-cancel-button">
+            <Button
+                variant="outline"
+                type="submit"
+                data-testid="claim-cancel-button"
+            >
                 <CircleX class="mr-1.5 h-4 w-4" /> 撤銷申請
             </Button>
         </form>
@@ -343,20 +313,15 @@
 {/snippet}
 
 {#snippet nextActionBlock()}
-    <div class="rounded-xl border border-primary/25 bg-primary/[0.04] px-4 py-3">
-        <div class="flex items-center justify-between gap-3">
-            <div>
-                <p class="text-sm font-semibold text-primary">你現在要做什麼</p>
-                <p class="mt-1 text-sm text-muted-foreground">{nextAction.reason}</p>
-            </div>
-            <Button
-                type="button"
-                class="shrink-0"
-                variant={nextAction.kind === "back" ? "outline" : "default"}
-                onclick={runNextAction}
-            >
-                {nextAction.label}
-            </Button>
+    <div
+        class="rounded-xl border border-amber-300 bg-amber-50 p-0.5"
+        title={nextAction.reason}
+    >
+        <div
+            class="flex items-start gap-2 rounded px-2 py-0.5 text-left text-[11px] leading-4 font-normal text-amber-900"
+        >
+            <CircleAlert class="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+            <span class="truncate">{nextAction.reason}</span>
         </div>
     </div>
 {/snippet}
