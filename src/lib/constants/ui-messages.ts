@@ -14,6 +14,7 @@ export const UI_MESSAGES = {
     },
     claim: {
         submitted: "已送出審核",
+        supplementSubmitted: "已送出補件審核",
         approverRequired:
             "尚未設定核准人，無法直接提交。請先聯繫管理員設定。",
         exemptReasonRequired(index: number) {

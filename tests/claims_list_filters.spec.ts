@@ -73,11 +73,12 @@ test.describe.serial('Claims List Filters', () => {
         await expect(page.locator(`text=#${ids.pendingManager}`)).toBeVisible();
         await expect(page.locator(`text=#${ids.pendingFinance}`)).toBeVisible();
         await expect(page.locator(`text=#${ids.pendingPayment}`)).toBeVisible();
+        await expect(page.locator(`text=#${ids.pendingDocReview}`)).toBeVisible();
         await expect(page.locator(`text=#${ids.draft}`)).toHaveCount(0);
 
         await page.goto('/claims?tab=action_required');
         await expect(page.locator(`text=#${ids.paidPendingDoc}`)).toBeVisible();
-        await expect(page.locator(`text=#${ids.pendingDocReview}`)).toBeVisible();
+        await expect(page.locator(`text=#${ids.pendingDocReview}`)).toHaveCount(0);
         await expect(page.locator(`text=#${ids.paid}`)).toHaveCount(0);
 
         await page.goto('/claims?tab=history');

@@ -106,10 +106,12 @@ test.describe.serial('Claim Detail Page', () => {
 
         await openClaimDetail(page, claimId);
         await expect(page.getByTestId('claim-item-row-0')).toBeVisible();
-        await page.getByTestId('claim-item-row-0').click();
+        await page.getByTestId('claim-item-row-0').locator('span').nth(2).click();
         const dialog = page.locator('[data-slot="dialog-content"]');
         await expect(dialog).toBeVisible();
+        await dialog.getByRole('button', { name: /^費用欄位/ }).click();
         await dialog.getByLabel('說明').fill('Updated from edit page');
+        await dialog.getByRole('button', { name: /^憑證決策/ }).click();
         await dialog.getByLabel('發票號碼').fill('AB-12345678');
         await dialog.locator('input[type="file"]').setInputFiles({
             name: 'voucher.png',

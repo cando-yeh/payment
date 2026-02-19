@@ -116,4 +116,39 @@ test.describe.serial('Claim Submit Guards', () => {
         const body = await postFormAction(page, `/claims/${id}?/submit`);
         expect(body).toContain('Only draft or returned claims can be submitted');
     });
+
+    test('inline submit summary shows issues and can jump to item row', async ({ page }) => {
+        const id = claimId('SX');
+        await supabaseAdmin.from('profiles').update({ approver_id: manager.id }).eq('id', applicant.id);
+        await supabaseAdmin.from('claims').insert({
+            id,
+            applicant_id: applicant.id,
+            claim_type: 'employee',
+            description: 'submit summary jump',
+            total_amount: 100,
+            status: 'draft'
+        });
+        await supabaseAdmin.from('claim_items').insert({
+            claim_id: id,
+            item_index: 1,
+            date_start: new Date().toISOString().split('T')[0],
+            category: 'travel',
+            description: 'Taxi',
+            amount: 100,
+            attachment_status: 'uploaded',
+            invoice_number: 'AB-12345678',
+            extra: {}
+        });
+
+        await injectSession(page, applicant.email, password);
+        await page.goto(`/claims/${id}`);
+
+        await expect(page.getByText('提交前檢核摘要')).toBeVisible();
+        const errorItem = page.getByRole('button', { name: /第 1 筆明細.*上傳憑證/ });
+        await expect(errorItem).toBeVisible();
+        await errorItem.click();
+
+        await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
+        await expect(page.getByRole('heading', { name: '編輯費用明細' })).toBeVisible();
+    });
 });
