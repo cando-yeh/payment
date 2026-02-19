@@ -7,6 +7,10 @@
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
+    import {
+        getClaimStatusesForTab,
+        isClaimsTabKey,
+    } from "$lib/claims/constants";
     import type { PageData } from "./$types";
 
     let { data }: { data: PageData } = $props();
@@ -40,34 +44,9 @@
 
     let tabClaims = $derived.by(() => {
         if (!data.claims) return [];
-        if (currentTab === "drafts") {
-            return data.claims.filter((claim) =>
-                ["draft", "returned"].includes(claim.status),
-            );
-        }
-        if (currentTab === "processing") {
-            return data.claims.filter((claim) =>
-                [
-                    "pending_manager",
-                    "pending_finance",
-                    "pending_payment",
-                    "pending_doc_review",
-                ].includes(claim.status),
-            );
-        }
-        if (currentTab === "action_required") {
-            return data.claims.filter((claim) =>
-                ["paid_pending_doc", "pending_doc_review"].includes(
-                    claim.status,
-                ),
-            );
-        }
-        if (currentTab === "history") {
-            return data.claims.filter((claim) =>
-                ["paid", "cancelled"].includes(claim.status),
-            );
-        }
-        return data.claims;
+        if (!isClaimsTabKey(currentTab)) return data.claims;
+        const statuses = getClaimStatusesForTab(currentTab);
+        return data.claims.filter((claim) => statuses.includes(claim.status));
     });
 
     let filteredClaims = $derived.by(() => {
@@ -130,16 +109,16 @@
                         onValueChange={handleTabChange}
                     >
                         <Tabs.List
-                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap overflow-visible"
+                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
                         >
                             <Tabs.Trigger
                                 value="drafts"
-                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                             >
                                 草稿/退回
                                 {#if returnedCount > 0}
                                     <span
-                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
                                     >
                                         {returnedCount}
                                     </span>
@@ -153,12 +132,12 @@
                             </Tabs.Trigger>
                             <Tabs.Trigger
                                 value="action_required"
-                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                             >
                                 待補件
                                 {#if pendingDocCount > 0}
                                     <span
-                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
                                     >
                                         {pendingDocCount}
                                     </span>

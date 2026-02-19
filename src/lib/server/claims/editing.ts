@@ -3,6 +3,7 @@ import { EDITABLE_CLAIM_STATUSES } from "$lib/server/claims/constants";
 type ClaimItemInput = {
     date?: string;
     date_start?: string;
+    date_end?: string;
     category?: string;
     description?: string;
     amount?: number | string;
@@ -28,7 +29,7 @@ export type ParsedEditForm = {
         claim_id: string;
         item_index: number;
         date_start: string;
-        date_end: null;
+        date_end: string | null;
         category: string;
         description: string;
         amount: number;
@@ -102,7 +103,7 @@ export function parseAndValidateEditForm(
             claim_id: claimId,
             item_index: index + 1,
             date_start: item.date || item.date_start || new Date().toISOString().slice(0, 10),
-            date_end: null,
+            date_end: String(item.date_end || "").trim() || null,
             category: String(item.category || "general").trim(),
             description: String(item.description || "").trim(),
             amount: Number.isFinite(amount) ? amount : 0,
@@ -114,6 +115,25 @@ export function parseAndValidateEditForm(
 
     if (!options.isDraft && normalizedItems.some((item) => item.amount <= 0)) {
         return { ok: false, status: 400, message: "All item amounts must be greater than 0" };
+    }
+    if (claimRow.claim_type === "personal_service") {
+        if (normalizedItems.length !== 1) {
+            return { ok: false, status: 400, message: "個人勞務請款僅能有一筆費用明細" };
+        }
+
+        const first = normalizedItems[0];
+        first.attachment_status = "exempt";
+        first.invoice_number = null;
+        first.extra = {};
+
+        if (!options.isDraft) {
+            if (!first.date_start || !first.date_end || !first.category || !first.description) {
+                return { ok: false, status: 400, message: "個人勞務請款需填寫完整明細欄位" };
+            }
+            if (first.date_end < first.date_start) {
+                return { ok: false, status: 400, message: "服務結束日不得早於服務開始日" };
+            }
+        }
     }
     // ... (rest of validation)
 

@@ -20,6 +20,36 @@ export const CLAIM_STATUS_LABELS: Record<string, string> = {
     cancelled: "已撤銷"
 };
 
+export const CLAIMS_TAB_STATUS_GROUPS = {
+    drafts: ["draft", "returned"],
+    processing: [
+        "pending_manager",
+        "pending_finance",
+        "pending_payment",
+        "pending_doc_review"
+    ],
+    action_required: ["paid_pending_doc"],
+    history: ["paid", "cancelled"]
+} as const;
+
+export type ClaimsTabKey = keyof typeof CLAIMS_TAB_STATUS_GROUPS;
+
+export function isClaimsTabKey(value: string): value is ClaimsTabKey {
+    return value in CLAIMS_TAB_STATUS_GROUPS;
+}
+
+export function getClaimStatusesForTab(tab: ClaimsTabKey): readonly string[] {
+    return CLAIMS_TAB_STATUS_GROUPS[tab];
+}
+
+export function getClaimsTabForStatus(status: string): ClaimsTabKey {
+    const entries = Object.entries(CLAIMS_TAB_STATUS_GROUPS) as Array<
+        [ClaimsTabKey, readonly string[]]
+    >;
+    const match = entries.find(([, statuses]) => statuses.includes(status));
+    return match?.[0] || "drafts";
+}
+
 export const CLAIM_ITEM_CATEGORIES = [
     { value: "travel", label: "差旅費" },
     { value: "food", label: "伙食費" },
@@ -34,4 +64,3 @@ export function getClaimStatusLabel(status?: string | null): string {
     if (!status) return "編輯中";
     return CLAIM_STATUS_LABELS[status] || status;
 }
-

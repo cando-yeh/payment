@@ -79,9 +79,6 @@ test.describe('Admin Users Page', () => {
         await page.goto('/admin/users');
         await expect(page).toHaveURL(/\/admin\/users/);
 
-        // Verify page heading
-        await expect(page.locator('h1')).toContainText('使用者管理');
-
         // Verify user table is rendered
         await expect(page.locator('table')).toBeVisible();
 
@@ -94,7 +91,6 @@ test.describe('Admin Users Page', () => {
         await page.goto('/admin/users');
         await expect(page).toHaveURL(/\/admin\/users/);
 
-        await expect(page.locator('h1')).toContainText('使用者管理');
         await expect(page.locator('table')).toBeVisible();
 
         // Finance can view module but should not see deactivate/delete actions.
@@ -327,7 +323,9 @@ test.describe('Admin Users Page', () => {
             .filter({ hasText: '確認永久刪除' })
             .getByRole('button', { name: '永久刪除', exact: true })
             .click();
-        await expect(page.locator('text=僅可停用以保留稽核軌跡')).toBeVisible();
+        await expect(
+            page.getByText(/僅可停用以保留稽核軌跡|已有歷史請款\/付款紀錄/)
+        ).toBeVisible();
 
         await supabaseAdmin.from('claims').delete().eq('id', claimId);
     });

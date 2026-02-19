@@ -1,8 +1,8 @@
 export const LIST_TABLE_TOKENS = {
-    header: "bg-secondary/55",
+    header: "bg-primary",
     headerRow: "hover:bg-transparent border-none",
     headBase:
-        "text-[11px] font-bold text-foreground/85 uppercase tracking-wider py-4",
+        "text-[11px] font-bold text-primary-foreground uppercase tracking-wider py-4",
     body: "divide-y divide-border/10",
     row: "group border-none hover:bg-primary/10 transition-colors h-12",
     rowClickable: "cursor-pointer",

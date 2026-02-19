@@ -9,6 +9,8 @@ import {
 
 type ClaimItemInput = {
     date?: string;
+    date_start?: string;
+    date_end?: string;
     category?: string;
     description?: string;
     amount?: number | string;
@@ -139,6 +141,11 @@ export const actions: Actions = {
             return fail(400, { message: 'At least one item is required' });
         }
         const safeItems = items || [];
+        const isPersonalService = claimType === 'personal_service';
+
+        if (isPersonalService && safeItems.length !== 1) {
+            return fail(400, { message: '個人勞務請款僅能有一筆費用明細' });
+        }
 
         const voucherSelections = safeItems.map((item) => {
             const statusRaw = String(item.attachment_status || '').trim();
@@ -155,6 +162,15 @@ export const actions: Actions = {
             file: File | null;
         }[] = [];
         for (let i = 0; i < safeItems.length; i += 1) {
+            if (isPersonalService) {
+                attachmentPlans.push({
+                    effectiveStatus: 'exempt',
+                    exemptReason: '',
+                    file: null
+                });
+                continue;
+            }
+
             const selected = voucherSelections[i] || { status: null, exemptReason: '' };
             const file = formData.get(`item_attachment_${i}`) as File | null;
             const hasFile = Boolean(file && file.size > 0);
@@ -191,19 +207,33 @@ export const actions: Actions = {
 
         const claimItems = safeItems.map((item, index) => {
             const amount = Number(item.amount);
+            const dateStart = String(item.date_start || item.date || '').trim();
+            const dateEnd = String(item.date_end || '').trim();
             return {
                 claim_id: '',
                 item_index: index + 1,
-                date_start: item.date || new Date().toISOString().slice(0, 10),
-                date_end: null,
+                date_start: dateStart || new Date().toISOString().slice(0, 10),
+                date_end: dateEnd || null,
                 category: (item.category || 'general').trim(),
                 description: String(item.description || '').trim(),
                 amount: Number.isFinite(amount) ? amount : 0,
-                invoice_number: item.invoice_number || null,
-                attachment_status: (item.attachment_status as 'uploaded' | 'pending_supplement' | 'exempt') || 'pending_supplement',
+                invoice_number: isPersonalService ? null : item.invoice_number || null,
+                attachment_status: isPersonalService
+                    ? 'exempt'
+                    : (item.attachment_status as 'uploaded' | 'pending_supplement' | 'exempt') || 'pending_supplement',
                 extra: {}
             };
         });
+
+        if (isPersonalService && shouldSubmitDirectly) {
+            const item = claimItems[0];
+            if (!item.date_start || !item.date_end || !item.category || !item.description) {
+                return fail(400, { message: '個人勞務請款需填寫完整明細欄位' });
+            }
+            if (item.date_end < item.date_start) {
+                return fail(400, { message: '服務結束日不得早於服務開始日' });
+            }
+        }
 
         if (shouldSubmitDirectly && claimItems.some((item) => item.amount <= 0)) {
             return fail(400, { message: 'All item amounts must be greater than 0' });
@@ -263,6 +293,9 @@ export const actions: Actions = {
         }
 
         for (let i = 0; i < safeItems.length; i += 1) {
+            if (isPersonalService) {
+                continue;
+            }
             const { effectiveStatus, exemptReason, file } = attachmentPlans[i];
 
             const itemId = itemIdByIndex.get(i);

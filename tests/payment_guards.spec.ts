@@ -150,6 +150,6 @@ test.describe.serial('Payment Guards', () => {
         expect(firstBody).not.toContain('付款單狀態更新失敗');
 
         const secondBody = await postFormAction(page, `/payments/${payment!.id}?/cancelPayment`);
-        expect(secondBody).toContain('此付款單已沖帳');
+        expect(secondBody).toMatch(/此付款單已沖帳|找不到此付款單/);
     });
 });

@@ -7,6 +7,7 @@
     import { CircleAlert, CircleCheck, Undo2, CircleX } from "lucide-svelte";
     import type { PageData } from "./$types";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
+    import { getClaimsTabForStatus } from "$lib/claims/constants";
 
     import { page } from "$app/state";
 
@@ -28,20 +29,6 @@
         if (["pending_payment"].includes(status)) return "payment";
         if (["pending_doc_review"].includes(status)) return "doc";
         return "manager"; // default fallback
-    }
-
-    function getClaimsTabForStatus(status: string) {
-        if (["draft", "returned"].includes(status)) return "drafts";
-        if (
-            ["pending_manager", "pending_finance", "pending_payment"].includes(
-                status,
-            )
-        )
-            return "processing";
-        if (["paid_pending_doc", "pending_doc_review"].includes(status))
-            return "action_required";
-        if (["paid", "cancelled"].includes(status)) return "history";
-        return "drafts"; // default fallback
     }
 
     const backHref = $derived.by(() => {

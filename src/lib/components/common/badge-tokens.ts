@@ -105,9 +105,17 @@ export const APP_BADGE_TONE: Record<
         variant: "outline",
         className: "whitespace-nowrap",
     },
-    "claim.type": {
+    "claim.type.employee": {
         variant: "secondary",
-        className: "font-bold",
+        className: "bg-sky-100 text-sky-800 border-sky-200 whitespace-nowrap",
+    },
+    "claim.type.vendor": {
+        variant: "secondary",
+        className: "bg-violet-100 text-violet-800 border-violet-200 whitespace-nowrap",
+    },
+    "claim.type.personal_service": {
+        variant: "secondary",
+        className: "bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap",
     },
     "timeline.from": {
         variant: "outline",
@@ -140,7 +148,18 @@ export const APP_BADGE_PRESET: Record<string, AppBadgePreset> = {
     "role.admin": { tone: "role.admin", label: "管理員" },
     "role.finance": { tone: "role.finance", label: "財務" },
     "role.employee": { tone: "role.employee", label: "員工" },
-    "claim.type": { tone: "claim.type", label: "請款類型" },
+    "claim.type.employee": {
+        tone: "claim.type.employee",
+        label: "員工報銷",
+    },
+    "claim.type.vendor": {
+        tone: "claim.type.vendor",
+        label: "廠商請款",
+    },
+    "claim.type.personal_service": {
+        tone: "claim.type.personal_service",
+        label: "個人勞務",
+    },
     "timeline.from": { tone: "timeline.from", label: "來源", size: "xs" },
     "timeline.to": { tone: "timeline.to", label: "目標", size: "xs" },
 };

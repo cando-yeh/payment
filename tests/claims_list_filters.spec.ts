@@ -103,7 +103,7 @@ test.describe.serial('Claims List Filters', () => {
         await page.waitForTimeout(250);
         expect(documentClaimsRequests).toBe(baselineRequests);
 
-        await page.getByRole('tab', { name: '歷史紀錄' }).click();
+        await page.getByRole('tab', { name: '已結案' }).click();
         await page.waitForTimeout(250);
         expect(documentClaimsRequests).toBe(baselineRequests);
     });

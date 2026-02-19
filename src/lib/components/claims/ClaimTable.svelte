@@ -157,8 +157,9 @@
                     <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
                         <div class={LIST_TABLE_TOKENS.badgeWrap}>
                             <AppBadge
-                                preset="claim.type"
+                                preset={`claim.type.${claim.claim_type || "employee"}`}
                                 label={getClaimTypeLabel(claim.claim_type)}
+                                className="font-semibold"
                             />
                         </div>
                     </Table.Cell>
@@ -184,10 +185,7 @@
                     </Table.Cell>
                     <Table.Cell class={LIST_TABLE_TOKENS.badgeCell}>
                         <div class={LIST_TABLE_TOKENS.badgeWrap}>
-                            <StatusBadge
-                                status={claim.status}
-                                className="scale-90"
-                            />
+                            <StatusBadge status={claim.status} />
                         </div>
                     </Table.Cell>
                 </Table.Row>

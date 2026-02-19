@@ -127,6 +127,7 @@
     type ClaimEditorItem = {
         id?: string | null;
         date: string;
+        date_end: string;
         category: string;
         description: string;
         amount: string | number;
@@ -139,6 +140,7 @@
     function emptyItem(): ClaimEditorItem {
         return {
             date: new Date().toISOString().split("T")[0],
+            date_end: "",
             category: "general",
             description: "",
             amount: "",
@@ -165,6 +167,7 @@
                     item?.date_start ||
                     new Date().toISOString().split("T")[0],
             ),
+            date_end: String(item?.date_end || ""),
             category: String(item?.category || "general"),
             description: String(item?.description || ""),
             amount:
@@ -221,6 +224,7 @@
     });
 
     const isEditable = $derived(mode === "edit");
+    const isPersonalService = $derived(claimType === "personal_service");
     const isSupplementMode = $derived(mode === "supplement");
     const canOperateItems = $derived(isEditable || isSupplementMode);
     const canEditVoucherSection = $derived(isEditable || isSupplementMode);
@@ -290,6 +294,26 @@
             ? "82px 82px minmax(140px,1.2fr) 96px 92px minmax(170px,1.4fr) 72px"
             : "82px 82px minmax(140px,1.2fr) 96px 92px minmax(170px,1.4fr)",
     );
+    const personalServiceItem = $derived.by(() => {
+        if (items.length === 0) return emptyItem();
+        return normalizeItemForEditor(items[0]);
+    });
+
+    function upsertPersonalServiceItem(
+        patch: Partial<ClaimEditorItem>,
+        options: { normalizeAmount?: boolean } = {},
+    ) {
+        const source = items.length > 0 ? items[0] : emptyItem();
+        const next = normalizeItemForEditor({ ...source, ...patch });
+        next.attachment_status = "exempt";
+        next.invoice_number = "";
+        next.exempt_reason = "";
+        next.extra = {};
+        if (options.normalizeAmount) {
+            next.amount = String(next.amount || "").replaceAll(",", "");
+        }
+        items = [next];
+    }
 
     let lastPayeeSelectionKey = $state("");
 
@@ -354,6 +378,9 @@
         payeeId = "";
         bankCode = "";
         bankAccount = "";
+        if (nextType === "personal_service") {
+            items = [emptyItem()];
+        }
     }
 
     async function togglePayeeBankAccountReveal() {
@@ -709,6 +736,37 @@
     }
 
     function validateBeforeDirectSubmit() {
+        if (isPersonalService) {
+            if (items.length !== 1) {
+                toast.error("個人勞務請款僅能有一筆費用明細");
+                return false;
+            }
+            const item = items[0];
+            const startDate = String(item?.date || "").trim();
+            const endDate = String(item?.date_end || "").trim();
+            const category = String(item?.category || "").trim();
+            const description = String(item?.description || "").trim();
+            const amount = Number(String(item?.amount || "").replaceAll(",", ""));
+
+            if (!startDate || !endDate || !category || !description) {
+                toast.error("個人勞務請款需填寫完整明細欄位");
+                return false;
+            }
+            if (endDate < startDate) {
+                toast.error("服務結束日不得早於服務開始日");
+                return false;
+            }
+            if (!Number.isFinite(amount) || amount <= 0) {
+                toast.error("個人勞務請款金額需大於 0");
+                return false;
+            }
+            if (requireApproverOnDirectSubmit && !hasApprover) {
+                toast.error(UI_MESSAGES.claim.approverRequired);
+                return false;
+            }
+            return true;
+        }
+
         for (let i = 0; i < items.length; i += 1) {
             const item = items[i];
             const status = String(
@@ -837,9 +895,9 @@
         <Button
             variant="ghost"
             href={backHref}
-            class="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+            class="h-9 px-3 text-base font-semibold text-muted-foreground hover:text-foreground"
         >
-            <ArrowLeft class="mr-1.5 h-3.5 w-3.5" />
+            <ArrowLeft class="mr-1.5 h-4 w-4" />
             {backLabel}
         </Button>
 
@@ -1052,7 +1110,7 @@
                                             className="font-semibold"
                                         />
                                         <AppBadge
-                                            preset="claim.type"
+                                            preset={`claim.type.${claim.claim_type || "employee"}`}
                                             label={displayClaimType}
                                             className="font-semibold"
                                         />
@@ -1241,12 +1299,90 @@
                     >
                         費用明細
                     </h2>
-                    <Card.Root
-                        class="overflow-visible rounded-xl border border-border/40"
-                    >
-                        <Card.Content class="p-0">
-                            <div class="overflow-x-auto">
-                                <div class="min-w-[760px]">
+                    {#if isPersonalService}
+                        <Card.Root
+                            class="overflow-hidden rounded-xl border border-border/40"
+                        >
+                            <Card.Content class="p-4">
+                                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                                    <div class="space-y-1.5">
+                                        <Label class="text-xs text-muted-foreground">服務開始日</Label>
+                                        <Input
+                                            type="date"
+                                            value={personalServiceItem.date}
+                                            disabled={!isEditable}
+                                            oninput={(event) =>
+                                                upsertPersonalServiceItem({
+                                                    date: (event.currentTarget as HTMLInputElement).value,
+                                                })}
+                                        />
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <Label class="text-xs text-muted-foreground">服務結束日</Label>
+                                        <Input
+                                            type="date"
+                                            value={personalServiceItem.date_end}
+                                            disabled={!isEditable}
+                                            oninput={(event) =>
+                                                upsertPersonalServiceItem({
+                                                    date_end: (event.currentTarget as HTMLInputElement).value,
+                                                })}
+                                        />
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <Label class="text-xs text-muted-foreground">類別</Label>
+                                        <select
+                                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={personalServiceItem.category}
+                                            disabled={!isEditable}
+                                            oninput={(event) =>
+                                                upsertPersonalServiceItem({
+                                                    category: (event.currentTarget as HTMLSelectElement).value,
+                                                })}
+                                        >
+                                            {#each CLAIM_ITEM_CATEGORIES as cat}
+                                                <option value={cat.value}>{cat.label}</option>
+                                            {/each}
+                                        </select>
+                                    </div>
+                                    <div class="space-y-1.5 md:col-span-2 xl:col-span-1">
+                                        <Label class="text-xs text-muted-foreground">說明</Label>
+                                        <Input
+                                            value={personalServiceItem.description}
+                                            disabled={!isEditable}
+                                            placeholder="請輸入服務內容說明"
+                                            oninput={(event) =>
+                                                upsertPersonalServiceItem({
+                                                    description: (event.currentTarget as HTMLInputElement).value,
+                                                })}
+                                        />
+                                    </div>
+                                    <div class="space-y-1.5 md:col-span-2 xl:col-span-1">
+                                        <Label class="text-xs text-muted-foreground">金額</Label>
+                                        <Input
+                                            inputmode="numeric"
+                                            value={formatAmountInput(personalServiceItem.amount)}
+                                            disabled={!isEditable}
+                                            class="text-right"
+                                            oninput={(event) =>
+                                                upsertPersonalServiceItem(
+                                                    {
+                                                        amount: (event.currentTarget as HTMLInputElement).value.replace(/[^\d]/g, ""),
+                                                    },
+                                                    { normalizeAmount: true },
+                                                )}
+                                        />
+                                    </div>
+                                </div>
+                            </Card.Content>
+                        </Card.Root>
+                    {:else}
+                        <Card.Root
+                            class="overflow-hidden rounded-xl border border-border/40"
+                        >
+                            <Card.Content class="p-0">
+                                <div class="overflow-x-auto">
+                                    <div class="min-w-[820px]">
                                     <div
                                         class="grid items-center gap-2 border-b border-border/30 bg-muted/20 px-4 py-2.5"
                                         style={`grid-template-columns:${expenseGridColumns};`}
@@ -1402,23 +1538,28 @@
                                     {/if}
 
                                     {#if isEditable}
-                                        <button
-                                            type="button"
-                                            class={`flex w-full items-center justify-center gap-2 bg-primary/[0.03] py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06] ${
+                                        <div
+                                            class={`px-4 py-2 bg-primary/[0.03] ${
                                                 items.length > 0
                                                     ? "border-t border-border/20"
                                                     : ""
                                             }`}
-                                            onclick={openCreateItemDrawer}
                                         >
-                                            <Plus class="h-4 w-4" />
-                                            新增明細
-                                        </button>
+                                            <button
+                                                type="button"
+                                                class="flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary/[0.06]"
+                                                onclick={openCreateItemDrawer}
+                                            >
+                                                <Plus class="h-4 w-4" />
+                                                新增明細
+                                            </button>
+                                        </div>
                                     {/if}
+                                    </div>
                                 </div>
-                            </div>
-                        </Card.Content>
-                    </Card.Root>
+                            </Card.Content>
+                        </Card.Root>
+                    {/if}
                 </section>
             </div>
         </div>

@@ -58,18 +58,16 @@
             <ListToolbar>
                 {#snippet left()}
                     <Tabs.List
-                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap overflow-visible"
+                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
                     >
                         <Tabs.Trigger
                             value="manager"
-                            class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
+                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                         >
-                            <span class="inline-flex items-center gap-2">
-                                <User class="h-3.5 w-3.5" /> 主管審核
-                            </span>
+                            <User class="h-3.5 w-3.5" /> 主管審核
                             {#if pendingManager.length > 0}
                                 <span
-                                    class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                    class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
                                 >
                                     {pendingManager.length}
                                 </span>
@@ -79,14 +77,12 @@
                         {#if userRole.isFinance || userRole.isAdmin}
                             <Tabs.Trigger
                                 value="finance"
-                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                             >
-                                <span class="inline-flex items-center gap-2">
-                                    <CircleCheck class="h-3.5 w-3.5" /> 財務審核
-                                </span>
+                                <CircleCheck class="h-3.5 w-3.5" /> 財務審核
                                 {#if pendingFinance.length > 0}
                                     <span
-                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
                                     >
                                         {pendingFinance.length}
                                     </span>
@@ -95,14 +91,12 @@
 
                             <Tabs.Trigger
                                 value="payment"
-                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                             >
-                                <span class="inline-flex items-center gap-2">
-                                    <Landmark class="h-3.5 w-3.5" /> 待撥款
-                                </span>
+                                <Landmark class="h-3.5 w-3.5" /> 待撥款
                                 {#if pendingPayment.length > 0}
                                     <span
-                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
                                     >
                                         {pendingPayment.length}
                                     </span>
@@ -111,14 +105,12 @@
 
                             <Tabs.Trigger
                                 value="doc"
-                                class="relative rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm overflow-visible"
+                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                             >
-                                <span class="inline-flex items-center gap-2">
-                                    <History class="h-3.5 w-3.5" /> 補件審核
-                                </span>
+                                <History class="h-3.5 w-3.5" /> 補件審核
                                 {#if pendingDocReview.length > 0}
                                     <span
-                                        class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
+                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
                                     >
                                         {pendingDocReview.length}
                                     </span>

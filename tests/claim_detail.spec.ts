@@ -16,6 +16,20 @@ test.describe.serial('Claim Detail Page', () => {
     const password = 'password123';
     let claimId: string;
 
+    async function openClaimDetail(page: any, id: string) {
+        await page.goto(`/claims/${id}`);
+        if (await page.getByText('費用明細').isVisible()) return;
+
+        await page.goto('/claims?tab=drafts');
+        const claimRow = page.locator('tr', {
+            has: page.locator(`text=#${id}`)
+        }).first();
+        await expect(claimRow).toBeVisible();
+        await claimRow.click();
+        await expect(page).toHaveURL(new RegExp(`/claims/${id}`));
+        await expect(page.getByText('費用明細')).toBeVisible();
+    }
+
     test.beforeAll(async () => {
         // Create test user
         const email = `claim_detail_${Date.now()}_${Math.floor(Math.random() * 1000)}@example.com`;
@@ -74,7 +88,7 @@ test.describe.serial('Claim Detail Page', () => {
     test('Draft claim opens inline edit mode on detail route', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
-        await page.goto(`/claims/${claimId}`);
+        await openClaimDetail(page, claimId);
         await expect(page).toHaveURL(new RegExp(`/claims/${claimId}`));
 
         // Verify unified layout heading
@@ -90,7 +104,7 @@ test.describe.serial('Claim Detail Page', () => {
     test('Draft edit page can submit save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
-        await page.goto(`/claims/${claimId}`);
+        await openClaimDetail(page, claimId);
         await expect(page.getByTestId('claim-item-row-0')).toBeVisible();
         await page.getByTestId('claim-item-row-0').click();
         const dialog = page.locator('[data-slot="dialog-content"]');
