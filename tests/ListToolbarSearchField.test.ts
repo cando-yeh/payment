@@ -9,9 +9,9 @@ describe("ListToolbar/SearchField contracts", () => {
             "utf8",
         );
 
-        expect(content).toContain("lg:flex-row");
-        expect(content).toContain("lg:items-center");
-        expect(content).toContain("lg:justify-between");
+        expect(content).toContain("md:flex-row");
+        expect(content).toContain("md:items-center");
+        expect(content).toContain("md:justify-between");
         expect(content).toContain("overflow-x-auto");
         expect(content).toContain("left?: Snippet");
         expect(content).toContain("right?: Snippet");
@@ -23,7 +23,7 @@ describe("ListToolbar/SearchField contracts", () => {
             "utf8",
         );
 
-        expect(content).toContain('widthClass = "w-full md:w-[320px]"');
+        expect(content).toContain('widthClass = "w-full md:w-[214px]"');
         expect(content).toContain("type=\"search\"");
         expect(content).toContain('placeholder = "搜尋..."');
         expect(content).toContain("group-focus-within:text-primary");

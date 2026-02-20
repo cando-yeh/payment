@@ -19,7 +19,8 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
     let profile = null;
     let pendingCounters = {
         myClaimsActionRequired: 0,
-        approvalPendingTotal: 0
+        approvalPendingTotal: 0,
+        payeePendingTotal: 0
     };
 
     if (session) {
@@ -83,15 +84,28 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
                     .in('status', ['pending_finance', 'pending_payment', 'pending_doc_review'])
                 : Promise.resolve({ count: 0, error: null } as any);
 
-            const [myClaimsResult, managerPendingResult, financePendingResult] = await Promise.all([
+            const payeePendingPromise = (profile.is_finance || profile.is_admin)
+                ? locals.supabase
+                    .from('payee_change_requests')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('status', 'pending')
+                : locals.supabase
+                    .from('payee_change_requests')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('status', 'pending')
+                    .eq('requested_by', session.user.id);
+
+            const [myClaimsResult, managerPendingResult, financePendingResult, payeePendingResult] = await Promise.all([
                 myClaimsPromise,
                 managerPendingPromise,
-                financePendingPromise
+                financePendingPromise,
+                payeePendingPromise
             ]);
 
             pendingCounters = {
                 myClaimsActionRequired: myClaimsResult.count || 0,
-                approvalPendingTotal: (managerPendingResult.count || 0) + (financePendingResult.count || 0)
+                approvalPendingTotal: (managerPendingResult.count || 0) + (financePendingResult.count || 0),
+                payeePendingTotal: payeePendingResult.count || 0
             };
         } else {
             // fallback: profile 讀取失敗時，至少保留 session 與 hooks 注入的角色資訊

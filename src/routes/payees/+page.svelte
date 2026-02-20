@@ -1,7 +1,8 @@
 <script lang="ts">
     import { Button } from "$lib/components/ui/button";
     import * as Table from "$lib/components/ui/table";
-    import * as Tabs from "$lib/components/ui/tabs";
+    import { Switch } from "$lib/components/ui/switch";
+    import { Label } from "$lib/components/ui/label";
     import {
         Plus,
         Search,
@@ -23,14 +24,13 @@
     import PayeeRequestSheet from "$lib/components/layout/PayeeRequestSheet.svelte";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
-    import ListTabs from "$lib/components/common/ListTabs.svelte";
-    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
     import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
+    import { LIST_TOOLBAR_TOKENS } from "$lib/components/common/list-toolbar-tokens";
     import { cn } from "$lib/utils";
     import { fade } from "svelte/transition";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
@@ -68,10 +68,9 @@
                   : "-";
             return {
                 id: req.id, // Request ID
-                name:
-                    req.change_type === "create"
-                        ? req.proposed_data?.name || "未知收款人"
-                        : `[${req.change_type === "update" ? "更新" : "停用"}] ${linkedPayee?.name || req.payee_id}`,
+                name: req.change_type === "create"
+                    ? req.proposed_data?.name || "未知收款人"
+                    : linkedPayee?.name || req.proposed_data?.name || "未知收款人",
                 type:
                     req.change_type === "create"
                         ? req.proposed_data?.type || "unknown"
@@ -113,7 +112,8 @@
     });
 
     let searchTerm = $state("");
-    let typeFilter = $state<"all" | "vendor" | "personal">("all");
+    let typeFilter = $state<"vendor" | "personal" | null>(null);
+    let includeDisabled = $state(false);
     let isActionSubmitting = $state(false);
     let revealedAccounts = $state<Record<string, string>>({});
     let revealingById = $state<Record<string, boolean>>({});
@@ -134,8 +134,37 @@
     let confirmButtonVariant = $state<"default" | "destructive">("default");
     let confirmAction = $state<null | (() => Promise<void>)>(null);
 
+    const pendingStatuses = new Set([
+        "pending_add",
+        "pending_update",
+        "pending_disable",
+    ]);
+
+    let vendorPendingCount = $derived(
+        payees.filter(
+            (p) => p.type === "vendor" && pendingStatuses.has(String(p.status)),
+        ).length,
+    );
+    let personalPendingCount = $derived(
+        payees.filter(
+            (p) =>
+                (p.type === "personal" || p.type === "employee") &&
+                pendingStatuses.has(String(p.status)),
+        ).length,
+    );
+
+    let baseFilteredPayees = $derived(
+        payees.filter((p) => includeDisabled || p.status !== "disabled"),
+    );
+
     let typeFilteredPayees = $derived(
-        payees.filter((p) => typeFilter === "all" || p.type === typeFilter),
+        baseFilteredPayees.filter((p) => {
+            if (!typeFilter) return true;
+            if (typeFilter === "personal") {
+                return p.type === "personal" || p.type === "employee";
+            }
+            return p.type === "vendor";
+        }),
     );
 
     let filteredPayees = $derived(
@@ -149,9 +178,14 @@
         if (payees.length === 0) return "目前尚無收款人";
         if (keyword && filteredPayees.length === 0)
             return `找不到符合「${keyword}」的結果`;
+        if (baseFilteredPayees.length === 0) return "目前篩選條件下沒有結果";
         if (typeFilteredPayees.length === 0) return "目前篩選條件下沒有結果";
         return "目前尚無收款人";
     });
+
+    function toggleTypeFilter(next: "vendor" | "personal") {
+        typeFilter = typeFilter === next ? null : next;
+    }
 
     function getTypeLabel(type: string) {
         switch (type) {
@@ -410,23 +444,57 @@
         {/snippet}
         <ListToolbar>
             {#snippet left()}
-                <Tabs.Root
-                    value={typeFilter}
-                    onValueChange={(value) =>
-                        (typeFilter = value as "all" | "vendor" | "personal")}
-                >
-                    <ListTabs>
-                        <ListTabTrigger value="all">
-                            全部
-                        </ListTabTrigger>
-                        <ListTabTrigger value="vendor">
+                <div class="flex items-center gap-3">
+                    <div class={LIST_TOOLBAR_TOKENS.tabList}>
+                        <button
+                            type="button"
+                            class={cn(
+                                LIST_TOOLBAR_TOKENS.tabTrigger,
+                                typeFilter === "vendor"
+                                    ? "bg-background shadow-sm"
+                                    : "hover:bg-background/70",
+                            )}
+                            onclick={() => toggleTypeFilter("vendor")}
+                        >
                             廠商
-                        </ListTabTrigger>
-                        <ListTabTrigger value="personal">
+                            {#if vendorPendingCount > 0}
+                                <span class={LIST_TOOLBAR_TOKENS.counterBadge}
+                                    >{vendorPendingCount}</span
+                                >
+                            {/if}
+                        </button>
+                        <button
+                            type="button"
+                            class={cn(
+                                LIST_TOOLBAR_TOKENS.tabTrigger,
+                                typeFilter === "personal"
+                                    ? "bg-background shadow-sm"
+                                    : "hover:bg-background/70",
+                            )}
+                            onclick={() => toggleTypeFilter("personal")}
+                        >
                             個人
-                        </ListTabTrigger>
-                    </ListTabs>
-                </Tabs.Root>
+                            {#if personalPendingCount > 0}
+                                <span class={LIST_TOOLBAR_TOKENS.counterBadge}
+                                    >{personalPendingCount}</span
+                                >
+                            {/if}
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 pl-1">
+                        <Label
+                            for="include-disabled-payees"
+                            class="text-xs font-medium text-muted-foreground"
+                            >顯示停用</Label
+                        >
+                        <Switch
+                            id="include-disabled-payees"
+                            bind:checked={includeDisabled}
+                            aria-label="顯示停用收款人"
+                        />
+                    </div>
+                </div>
             {/snippet}
             {#snippet right()}
                 <SearchField

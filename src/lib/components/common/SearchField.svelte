@@ -8,7 +8,7 @@
         placeholder = "搜尋...",
         className,
         inputClassName,
-        widthClass = "w-full md:w-[320px]",
+        widthClass = "w-full md:w-[214px]",
         oninput,
     }: {
         value?: string;

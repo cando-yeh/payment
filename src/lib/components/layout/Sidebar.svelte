@@ -134,6 +134,7 @@
             bankAccountTail?: string;
             myClaimsPendingCount?: number;
             approvalPendingCount?: number;
+            payeePendingCount?: number;
         };
         /** 額外的 CSS 類別 */
         class?: string;
@@ -246,6 +247,7 @@
     function getNavBadge(item: NavItem): number {
         if (item.href === "/claims") return user.myClaimsPendingCount || 0;
         if (item.href === "/approval") return user.approvalPendingCount || 0;
+        if (item.href === "/payees") return user.payeePendingCount || 0;
         return item.badge || 0;
     }
 </script>

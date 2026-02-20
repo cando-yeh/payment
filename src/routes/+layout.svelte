@@ -67,6 +67,8 @@
 						data.pendingCounters?.myClaimsActionRequired || 0,
 					approvalPendingCount:
 						data.pendingCounters?.approvalPendingTotal || 0,
+					payeePendingCount:
+						data.pendingCounters?.payeePendingTotal || 0,
 				}
 			: null,
 	);
