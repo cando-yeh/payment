@@ -21,6 +21,7 @@ import {
     resolveRejectNextStatus,
     resolveReviewerFlags
 } from '$lib/server/claims/review-policy';
+import { CLAIM_ITEM_CATEGORIES } from '$lib/claims/constants';
 
 export const load: PageServerLoad = async ({ params, locals: { supabase, getSession } }) => {
     const session = await getSession();
@@ -705,6 +706,100 @@ export const actions: Actions = {
         if (updateError) {
             console.error('Update Item Voucher Error:', updateError);
             return fail(500, { message: '更新憑證決策失敗' });
+        }
+
+        return { success: true };
+    },
+
+    reviewUpdateItem: async ({ request, params, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: 'Unauthorized' });
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_finance')
+            .eq('id', session.user.id)
+            .single();
+
+        if (!profile?.is_finance) {
+            return fail(403, { message: 'Forbidden' });
+        }
+
+        const { data: claim, error: claimError } = await supabase
+            .from('claims')
+            .select('id, status')
+            .eq('id', params.id)
+            .single();
+
+        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        if (claim.status !== 'pending_finance') {
+            return fail(400, { message: 'Only pending finance claims can be adjusted' });
+        }
+
+        const formData = await request.formData();
+        const itemId = String(formData.get('item_id') || '').trim();
+        const category = String(formData.get('category') || '').trim();
+        const amountRaw = String(formData.get('amount') || '').replaceAll(',', '').trim();
+        const amount = Number(amountRaw);
+
+        if (!itemId) return fail(400, { message: 'Missing item_id' });
+        const validCategories = new Set(CLAIM_ITEM_CATEGORIES.map((item) => item.value));
+        if (!validCategories.has(category)) {
+            return fail(400, { message: 'Invalid category' });
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return fail(400, { message: 'Amount must be greater than 0' });
+        }
+
+        const { data: item, error: itemError } = await supabase
+            .from('claim_items')
+            .select('id, claim_id')
+            .eq('id', itemId)
+            .eq('claim_id', params.id)
+            .single();
+
+        if (itemError || !item) return fail(404, { message: 'Claim item not found' });
+
+        const { error: updateItemError } = await supabase
+            .from('claim_items')
+            .update({
+                category,
+                amount
+            })
+            .eq('id', itemId)
+            .eq('claim_id', params.id);
+
+        if (updateItemError) {
+            console.error('reviewUpdateItem item update error:', updateItemError);
+            return fail(500, { message: '更新明細失敗' });
+        }
+
+        const { data: claimItems, error: totalFetchError } = await supabase
+            .from('claim_items')
+            .select('amount')
+            .eq('claim_id', params.id);
+        if (totalFetchError) {
+            console.error('reviewUpdateItem total fetch error:', totalFetchError);
+            return fail(500, { message: '重新計算總額失敗' });
+        }
+
+        const totalAmount = (claimItems || []).reduce(
+            (sum, current) => sum + Number(current.amount || 0),
+            0
+        );
+
+        const { error: updateClaimError } = await supabase
+            .from('claims')
+            .update({
+                total_amount: totalAmount,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', params.id)
+            .eq('status', 'pending_finance');
+
+        if (updateClaimError) {
+            console.error('reviewUpdateItem claim update error:', updateClaimError);
+            return fail(500, { message: '更新請款總額失敗' });
         }
 
         return { success: true };

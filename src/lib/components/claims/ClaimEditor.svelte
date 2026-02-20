@@ -108,7 +108,7 @@
         payees?: ClaimEditorPayee[];
         backHref?: string;
         backLabel?: string;
-        mode?: "edit" | "supplement" | "view";
+        mode?: "edit" | "supplement" | "review" | "view";
         isCreate?: boolean;
         formAction?: string;
         formEnctype?:
@@ -242,10 +242,17 @@
     });
 
     const isEditable = $derived(mode === "edit");
+    const isFinanceReviewMode = $derived(mode === "review");
     const isPersonalService = $derived(claimType === "personal_service");
     const isSupplementMode = $derived(mode === "supplement");
-    const canOperateItems = $derived(isEditable || isSupplementMode);
+    const canOperateItems = $derived(
+        isEditable || isSupplementMode || isFinanceReviewMode,
+    );
+    const canEditCoreItemFields = $derived(isEditable || isFinanceReviewMode);
     const canEditVoucherSection = $derived(isEditable || isSupplementMode);
+    const canSaveItemDraft = $derived(
+        canEditVoucherSection || isFinanceReviewMode,
+    );
     const canEditClaimType = $derived(isEditable && isCreate);
     const vendorPayees = $derived(payees.filter((p) => p.type === "vendor"));
     const personalPayees = $derived(
@@ -667,6 +674,30 @@
         return true;
     }
 
+    async function updateFinanceReviewedItem(item: ClaimEditorItem) {
+        const fd = new FormData();
+        fd.append("item_id", String(item.id || ""));
+        fd.append("category", String(item.category || ""));
+        fd.append(
+            "amount",
+            String(item.amount || "")
+                .replaceAll(",", "")
+                .trim(),
+        );
+
+        const response = await fetch(`/claims/${claim.id}?/reviewUpdateItem`, {
+            method: "POST",
+            body: fd,
+            headers: { "x-sveltekit-action": "true" },
+        });
+        const result = deserialize(await response.text()) as any;
+        if (result?.type === "failure") {
+            toast.error(result?.data?.message || "更新明細失敗");
+            return false;
+        }
+        return true;
+    }
+
     async function saveItemDraft() {
         const normalized = normalizeItemForEditor(itemDraft);
         normalized.amount = String(itemDraft.amount || "").replaceAll(",", "");
@@ -720,6 +751,29 @@
                 if (!uploaded) return;
             }
             const saved = await updateItemVoucherDecision(normalized);
+            if (!saved) return;
+            itemDrawerOpen = false;
+            await goto(`/claims/${claim.id}`, { invalidateAll: true });
+            return;
+        }
+
+        if (isFinanceReviewMode) {
+            if (!normalized.id) {
+                toast.error("財務審核僅可編輯既有明細");
+                return;
+            }
+            if (!String(normalized.category || "").trim()) {
+                toast.error("類別為必填");
+                return;
+            }
+            const amount = Number(
+                String(normalized.amount || "").replaceAll(",", ""),
+            );
+            if (!Number.isFinite(amount) || amount <= 0) {
+                toast.error("金額需大於 0");
+                return;
+            }
+            const saved = await updateFinanceReviewedItem(normalized);
             if (!saved) return;
             itemDrawerOpen = false;
             await goto(`/claims/${claim.id}`, { invalidateAll: true });
@@ -1458,7 +1512,7 @@
                     >
                         費用明細
                     </h2>
-                    {#if isPersonalService}
+                    {#if isPersonalService && !isFinanceReviewMode}
                         <Card.Root
                             class="overflow-hidden rounded-xl border border-border/40"
                         >
@@ -1621,39 +1675,37 @@
                                                 <div
                                                     class={`grid items-center gap-2 border-b border-border/20 px-4 py-2 ${
                                                         canOperateItems
-                                                            ? "hover:bg-muted/10 transition-colors"
+                                                            ? "cursor-pointer hover:bg-primary/5 transition-colors"
                                                             : ""
                                                     }`}
                                                     style={`grid-template-columns:${expenseGridColumns};`}
                                                     data-testid={`claim-item-row-${i}`}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        class="contents text-left disabled:cursor-default"
-                                                        disabled={!canOperateItems}
-                                                        onclick={() =>
-                                                            canOperateItems &&
+                                                    role={canOperateItems
+                                                        ? "button"
+                                                        : undefined}
+                                                    tabindex={canOperateItems
+                                                        ? 0
+                                                        : undefined}
+                                                    onclick={() => {
+                                                        if (!canOperateItems)
+                                                            return;
+                                                        openEditItemDrawer(i);
+                                                    }}
+                                                    onkeydown={(event) => {
+                                                        if (!canOperateItems)
+                                                            return;
+                                                        if (
+                                                            event.key ===
+                                                                "Enter" ||
+                                                            event.key === " "
+                                                        ) {
+                                                            event.preventDefault();
                                                             openEditItemDrawer(
                                                                 i,
-                                                            )}
-                                                        onkeydown={(event) => {
-                                                            if (
-                                                                !canOperateItems
-                                                            )
-                                                                return;
-                                                            if (
-                                                                event.key ===
-                                                                    "Enter" ||
-                                                                event.key ===
-                                                                    " "
-                                                            ) {
-                                                                event.preventDefault();
-                                                                openEditItemDrawer(
-                                                                    i,
-                                                                );
-                                                            }
-                                                        }}
-                                                    >
+                                                            );
+                                                        }
+                                                    }}
+                                                >
                                                         <span
                                                             class="whitespace-nowrap text-center text-xs"
                                                             >{item.date ||
@@ -1788,7 +1840,6 @@
                                                                 </span>
                                                             {/if}
                                                         </div>
-                                                    </button>
                                                     {#if isEditable}
                                                         <div
                                                             class="flex items-center justify-center gap-1"
@@ -1906,7 +1957,7 @@
                                     id="item-category"
                                     class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                     bind:value={itemDraft.category}
-                                    disabled={!isEditable}
+                                    disabled={!canEditCoreItemFields}
                                 >
                                     {#each CLAIM_ITEM_CATEGORIES as cat}
                                         <option value={cat.value}
@@ -1933,7 +1984,7 @@
                                     value={itemDraftAmountDisplay}
                                     oninput={handleAmountInput}
                                     placeholder="0"
-                                    disabled={!isEditable}
+                                    disabled={!canEditCoreItemFields}
                                     class="text-right"
                                 />
                             </div>
@@ -2186,9 +2237,9 @@
                         type="button"
                         variant="outline"
                         onclick={closeItemDrawer}
-                        >{canEditVoucherSection ? "取消" : "關閉"}</Button
+                        >{canSaveItemDraft ? "取消" : "關閉"}</Button
                     >
-                    {#if canEditVoucherSection}
+                    {#if canSaveItemDraft}
                         <Button
                             type="button"
                             onclick={() => void saveItemDraft()}

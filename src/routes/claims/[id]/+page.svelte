@@ -52,6 +52,12 @@
 
     const isEditableApplicant = $derived(data.viewMode === "edit");
     const isSupplementApplicant = $derived(data.viewMode === "supplement");
+    const isFinanceReviewEditable = $derived(
+        !isEditableApplicant &&
+            !isSupplementApplicant &&
+            claim.status === "pending_finance" &&
+            currentUser.isFinance,
+    );
     const canWithdraw = $derived(
         !isEditableApplicant &&
             claim.applicant_id === currentUser.id &&
@@ -333,6 +339,8 @@
         ? "edit"
         : isSupplementApplicant
           ? "supplement"
+          : isFinanceReviewEditable
+            ? "review"
           : "view"}
     {backHref}
     {backLabel}
