@@ -6,13 +6,15 @@
     import { fade } from "svelte/transition";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
     import type { PageData } from "./$types";
     import { enhance } from "$app/forms";
-    import { toast } from "svelte-sonner";
     import { page } from "$app/state";
     import { goto } from "$app/navigation";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
+    import { handleEnhancedActionFeedback } from "$lib/utils/action-feedback";
 
     let { data }: { data: PageData } = $props();
 
@@ -57,67 +59,37 @@
         >
             <ListToolbar>
                 {#snippet left()}
-                    <Tabs.List
-                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                    >
-                        <Tabs.Trigger
+                    <ListTabs>
+                        <ListTabTrigger
                             value="manager"
-                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                            count={pendingManager.length}
                         >
                             <User class="h-3.5 w-3.5" /> 主管審核
-                            {#if pendingManager.length > 0}
-                                <span
-                                    class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
-                                >
-                                    {pendingManager.length}
-                                </span>
-                            {/if}
-                        </Tabs.Trigger>
+                        </ListTabTrigger>
 
                         {#if userRole.isFinance || userRole.isAdmin}
-                            <Tabs.Trigger
+                            <ListTabTrigger
                                 value="finance"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                count={pendingFinance.length}
                             >
                                 <CircleCheck class="h-3.5 w-3.5" /> 財務審核
-                                {#if pendingFinance.length > 0}
-                                    <span
-                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
-                                    >
-                                        {pendingFinance.length}
-                                    </span>
-                                {/if}
-                            </Tabs.Trigger>
+                            </ListTabTrigger>
 
-                            <Tabs.Trigger
+                            <ListTabTrigger
                                 value="payment"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                count={pendingPayment.length}
                             >
                                 <Landmark class="h-3.5 w-3.5" /> 待撥款
-                                {#if pendingPayment.length > 0}
-                                    <span
-                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
-                                    >
-                                        {pendingPayment.length}
-                                    </span>
-                                {/if}
-                            </Tabs.Trigger>
+                            </ListTabTrigger>
 
-                            <Tabs.Trigger
+                            <ListTabTrigger
                                 value="doc"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                count={pendingDocReview.length}
                             >
                                 <History class="h-3.5 w-3.5" /> 補件審核
-                                {#if pendingDocReview.length > 0}
-                                    <span
-                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
-                                    >
-                                        {pendingDocReview.length}
-                                    </span>
-                                {/if}
-                            </Tabs.Trigger>
+                            </ListTabTrigger>
                         {/if}
-                    </Tabs.List>
+                    </ListTabs>
                 {/snippet}
                 {#snippet right()}
                     {#if selectedClaims.length > 0}
@@ -152,24 +124,24 @@
                                                 result,
                                                 update,
                                             }) => {
-                                                if (
-                                                    result.type === "success"
-                                                ) {
+                                                const ok =
+                                                    await handleEnhancedActionFeedback(
+                                                        {
+                                                            result: result as any,
+                                                            update,
+                                                            successMessage:
+                                                                UI_MESSAGES.approval
+                                                                    .batchPayDone,
+                                                            failureMessage:
+                                                                UI_MESSAGES.approval
+                                                                    .batchPayFailed,
+                                                        },
+                                                    );
+                                                if (ok) {
                                                     selectedClaims = [];
                                                     isBatchPayDialogOpen =
                                                         false;
-                                                    toast.success(UI_MESSAGES.approval.batchPayDone);
-                                                } else if (
-                                                    result.type === "failure"
-                                                ) {
-                                                    toast.error(
-                                                        String(
-                                                            result.data
-                                                                ?.message || "",
-                                                        ) || UI_MESSAGES.approval.batchPayFailed,
-                                                    );
                                                 }
-                                                await update();
                                                 isBatchPaySubmitting = false;
                                             };
                                         }}

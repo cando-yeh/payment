@@ -5,6 +5,8 @@
     import * as Tabs from "$lib/components/ui/tabs";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
     import {
@@ -108,48 +110,26 @@
                         value={currentTab}
                         onValueChange={handleTabChange}
                     >
-                        <Tabs.List
-                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                        >
-                            <Tabs.Trigger
+                        <ListTabs>
+                            <ListTabTrigger
                                 value="drafts"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                count={returnedCount}
                             >
                                 草稿/退回
-                                {#if returnedCount > 0}
-                                    <span
-                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
-                                    >
-                                        {returnedCount}
-                                    </span>
-                                {/if}
-                            </Tabs.Trigger>
-                            <Tabs.Trigger
-                                value="processing"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                            >
+                            </ListTabTrigger>
+                            <ListTabTrigger value="processing">
                                 審核中
-                            </Tabs.Trigger>
-                            <Tabs.Trigger
+                            </ListTabTrigger>
+                            <ListTabTrigger
                                 value="action_required"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                                count={pendingDocCount}
                             >
                                 待補件
-                                {#if pendingDocCount > 0}
-                                    <span
-                                        class="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white"
-                                    >
-                                        {pendingDocCount}
-                                    </span>
-                                {/if}
-                            </Tabs.Trigger>
-                            <Tabs.Trigger
-                                value="history"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                            >
+                            </ListTabTrigger>
+                            <ListTabTrigger value="history">
                                 已結案
-                            </Tabs.Trigger>
-                        </Tabs.List>
+                            </ListTabTrigger>
+                        </ListTabs>
                     </Tabs.Root>
                 {/snippet}
                 {#snippet right()}

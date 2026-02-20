@@ -94,7 +94,7 @@
                     LIST_TABLE_TOKENS.headBase,
                     LIST_TABLE_TOKENS.colId,
                     !selectable && "pl-8",
-                )}>ID#</Table.Head
+                )}>請款單號</Table.Head
             >
             <Table.Head class={LIST_TABLE_TOKENS.headBase}>類別</Table.Head>
             <Table.Head class={LIST_TABLE_TOKENS.headBase}>收款人</Table.Head>
@@ -133,12 +133,7 @@
                             />
                         </Table.Cell>
                     {/if}
-                    <Table.Cell
-                        class={cn(
-                            LIST_TABLE_TOKENS.idCell,
-                            "text-muted-foreground font-bold text-xs",
-                        )}
-                    >
+                    <Table.Cell class={LIST_TABLE_TOKENS.dateCell}>
                         {formatDate(claim.submitted_at || claim.created_at)}
                     </Table.Cell>
                     <Table.Cell
@@ -166,19 +161,15 @@
                     <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
                         {claim.payee?.name || claim.applicant?.full_name || "—"}
                     </Table.Cell>
-                    <Table.Cell class="text-right pr-4">
+                    <Table.Cell class={LIST_TABLE_TOKENS.amountCell}>
                         {@const amountParts = splitCurrencyParts(
                             claim.total_amount,
                         )}
-                        <div class="flex items-center justify-between gap-2">
-                            <span
-                                class="text-[10px] font-bold text-muted-foreground"
-                            >
+                        <div class={LIST_TABLE_TOKENS.amountWrap}>
+                            <span class={LIST_TABLE_TOKENS.amountSymbol}>
                                 {amountParts.symbol}
                             </span>
-                            <span
-                                class="text-base font-bold text-foreground tracking-tight"
-                            >
+                            <span class={LIST_TABLE_TOKENS.amountValue}>
                                 {amountParts.value}
                             </span>
                         </div>

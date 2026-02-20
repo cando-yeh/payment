@@ -17,6 +17,8 @@
     import * as Tabs from "$lib/components/ui/tabs";
     import * as Sheet from "$lib/components/ui/sheet";
     import * as Dialog from "$lib/components/ui/dialog";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import PayeeCombobox from "$lib/components/layout/PayeeCombobox.svelte";
     import AuditTimeline from "$lib/components/shared/AuditTimeline.svelte";
@@ -1219,19 +1221,16 @@
                             handleClaimTypeChange(value);
                         }}
                     >
-                        <Tabs.List
-                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                        >
+                        <ListTabs>
                             {#each CLAIM_TYPE_OPTIONS as option}
-                                <Tabs.Trigger
+                                <ListTabTrigger
                                     value={option.value}
-                                    class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                                     disabled={!canEditClaimType}
                                 >
                                     {option.label}
-                                </Tabs.Trigger>
+                                </ListTabTrigger>
                             {/each}
-                        </Tabs.List>
+                        </ListTabs>
                     </Tabs.Root>
                     <p class="text-xs text-muted-foreground">
                         {claimTypeDescription}

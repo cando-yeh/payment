@@ -228,7 +228,7 @@ test.describe('Payee Drawer Functionality', () => {
         await page.locator('input[name="service_description"]').fill('Test Service');
 
         // Submit
-        await page.getByRole('button', { name: '提交申請' }).click();
+        await page.getByRole('button', { name: '直接提交' }).click();
 
         // Expect redirect back to list and success message
         await expect(page).toHaveURL(/\/payees/);

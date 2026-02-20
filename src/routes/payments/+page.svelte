@@ -6,6 +6,8 @@
     import { goto } from "$app/navigation";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
@@ -107,22 +109,14 @@
                     onValueChange={(value) =>
                         (statusTab = value as "paid" | "pending_doc")}
                 >
-                    <Tabs.List
-                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                    >
-                        <Tabs.Trigger
-                            value="paid"
-                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >
+                    <ListTabs>
+                        <ListTabTrigger value="paid">
                             已撥款
-                        </Tabs.Trigger>
-                        <Tabs.Trigger
-                            value="pending_doc"
-                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >
+                        </ListTabTrigger>
+                        <ListTabTrigger value="pending_doc">
                             待補件
-                        </Tabs.Trigger>
-                    </Tabs.List>
+                        </ListTabTrigger>
+                    </ListTabs>
                 </Tabs.Root>
             {/snippet}
             {#snippet right()}
@@ -180,10 +174,7 @@
                                 onclick={() => goto(`/payments/${payment.id}`)}
                             >
                                 <Table.Cell
-                                    class={cn(
-                                        LIST_TABLE_TOKENS.idCell,
-                                        "text-muted-foreground font-bold text-xs",
-                                    )}
+                                    class={LIST_TABLE_TOKENS.dateCell}
                                 >
                                     {formatDate(payment.paid_at)}
                                 </Table.Cell>
@@ -198,21 +189,15 @@
                                 <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
                                     {payment.payee_name || "—"}
                                 </Table.Cell>
-                                <Table.Cell class="text-right pr-4">
+                                <Table.Cell class={LIST_TABLE_TOKENS.amountCell}>
                                     {@const amountParts = splitAmountParts(
                                         payment.total_amount,
                                     )}
-                                    <div
-                                        class="flex items-center justify-between gap-2"
-                                    >
-                                        <span
-                                            class="text-[10px] font-bold text-muted-foreground"
-                                        >
+                                    <div class={LIST_TABLE_TOKENS.amountWrap}>
+                                        <span class={LIST_TABLE_TOKENS.amountSymbol}>
                                             {amountParts.symbol}
                                         </span>
-                                        <span
-                                            class="text-base font-bold tracking-tight text-foreground"
-                                        >
+                                        <span class={LIST_TABLE_TOKENS.amountValue}>
                                             {amountParts.value}
                                         </span>
                                     </div>

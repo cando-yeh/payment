@@ -46,7 +46,7 @@ test.describe('Claim Creation Flow', () => {
         await expect(page.getByRole('heading', { name: '新增費用明細' })).toBeVisible();
         await page.getByLabel('說明').fill('Taxi to Client');
         await page.getByLabel('金額').fill('500');
-        await page.getByRole('button', { name: /^憑證決策/ }).click();
+        // 新版 UI 已移除 accordion，直接點選決策按鈕
         await page.getByRole('button', { name: '憑證後補' }).click();
         await page.getByRole('button', { name: '儲存明細' }).click();
         await expect(page.getByRole('heading', { name: '新增費用明細' })).not.toBeVisible();

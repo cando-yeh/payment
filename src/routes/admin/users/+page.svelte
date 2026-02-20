@@ -8,11 +8,12 @@
     import { toast } from "svelte-sonner";
     import { Search, Users, Trash2, UserX, UserCheck } from "lucide-svelte";
     import { timedFetch } from "$lib/client/timed-fetch";
-    import { deserialize } from "$app/forms";
     import { invalidateAll } from "$app/navigation";
     import UserProfileSheet from "$lib/components/layout/UserProfileSheet.svelte";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
     import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
@@ -22,6 +23,7 @@
     import { cn } from "$lib/utils";
     import { fade } from "svelte/transition";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
+    import { handleFetchActionFeedback } from "$lib/utils/action-feedback";
 
     let { data } = $props();
 
@@ -103,35 +105,6 @@
         return "目前尚無使用者";
     });
 
-    function resolveActionMessage(payload: any, fallback: string) {
-        if (typeof payload?.message === "string") return payload.message;
-        if (Array.isArray(payload) && typeof payload[1] === "string")
-            return payload[1];
-        return fallback;
-    }
-
-    async function parseActionResponse(response: Response, fallback: string) {
-        const text = await response.text();
-        let result: any = null;
-        try {
-            result = deserialize(text) as any;
-        } catch {
-            try {
-                result = JSON.parse(text);
-            } catch {
-                result = null;
-            }
-        }
-
-        if (result?.type === "failure") {
-            throw new Error(resolveActionMessage(result?.data, fallback));
-        }
-        if (!response.ok || (result?.type && result.type !== "success")) {
-            throw new Error(resolveActionMessage(result?.data, fallback));
-        }
-        return result;
-    }
-
     function openSystemConfirm(options: {
         title: string;
         description: string;
@@ -168,11 +141,14 @@
                 body: formData,
                 headers: { "x-sveltekit-action": "true" },
             });
-            await parseActionResponse(response, "停用失敗");
-            await invalidateAll();
-            toast.success(UI_MESSAGES.user.deactivated);
-        } catch (e: any) {
-            toast.error(e?.message || UI_MESSAGES.user.deactivateFailed);
+            const { ok } = await handleFetchActionFeedback({
+                response,
+                successMessage: UI_MESSAGES.user.deactivated,
+                failureMessage: UI_MESSAGES.user.deactivateFailed,
+            });
+            if (ok) await invalidateAll();
+        } catch {
+            toast.error(UI_MESSAGES.common.networkFailed("停用使用者"));
         } finally {
             setPending(opKey, false);
         }
@@ -192,11 +168,14 @@
                 body: formData,
                 headers: { "x-sveltekit-action": "true" },
             });
-            await parseActionResponse(response, "重新啟用失敗");
-            await invalidateAll();
-            toast.success(UI_MESSAGES.user.reactivated);
-        } catch (e: any) {
-            toast.error(e?.message || UI_MESSAGES.user.reactivateFailed);
+            const { ok } = await handleFetchActionFeedback({
+                response,
+                successMessage: UI_MESSAGES.user.reactivated,
+                failureMessage: UI_MESSAGES.user.reactivateFailed,
+            });
+            if (ok) await invalidateAll();
+        } catch {
+            toast.error(UI_MESSAGES.common.networkFailed("重新啟用使用者"));
         } finally {
             setPending(opKey, false);
         }
@@ -216,11 +195,14 @@
                 body: formData,
                 headers: { "x-sveltekit-action": "true" },
             });
-            await parseActionResponse(response, "永久刪除失敗");
-            await invalidateAll();
-            toast.success(UI_MESSAGES.user.deleted);
-        } catch (e: any) {
-            toast.error(e?.message || UI_MESSAGES.user.deleteFailed);
+            const { ok } = await handleFetchActionFeedback({
+                response,
+                successMessage: UI_MESSAGES.user.deleted,
+                failureMessage: UI_MESSAGES.user.deleteFailed,
+            });
+            if (ok) await invalidateAll();
+        } catch {
+            toast.error(UI_MESSAGES.common.networkFailed("刪除使用者"));
         } finally {
             setPending(opKey, false);
         }
@@ -244,22 +226,14 @@
             >
                 <ListToolbar>
                     {#snippet left()}
-                        <Tabs.List
-                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                        >
-                            <Tabs.Trigger
-                                value="active"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                            >
+                        <ListTabs>
+                            <ListTabTrigger value="active">
                                 啟用中 ({activeCount})
-                            </Tabs.Trigger>
-                            <Tabs.Trigger
-                                value="inactive"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                            >
+                            </ListTabTrigger>
+                            <ListTabTrigger value="inactive">
                                 已停用 ({inactiveCount})
-                            </Tabs.Trigger>
-                        </Tabs.List>
+                            </ListTabTrigger>
+                        </ListTabs>
                     {/snippet}
                     {#snippet right()}
                         <SearchField

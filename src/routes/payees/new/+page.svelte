@@ -11,6 +11,8 @@
     import { Label } from "$lib/components/ui/label";
     import * as Card from "$lib/components/ui/card";
     import * as Tabs from "$lib/components/ui/tabs";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import BankCodeCombobox from "$lib/components/layout/BankCodeCombobox.svelte";
     import { toast } from "svelte-sonner";
     import { ArrowLeft, LoaderCircle, Send } from "lucide-svelte";
@@ -116,22 +118,14 @@
                             }
                         }}
                     >
-                        <Tabs.List
-                            class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                        >
-                            <Tabs.Trigger
-                                value="vendor"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                            >
+                        <ListTabs>
+                            <ListTabTrigger value="vendor">
                                 廠商 (公司/行號)
-                            </Tabs.Trigger>
-                            <Tabs.Trigger
-                                value="personal"
-                                class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                            >
+                            </ListTabTrigger>
+                            <ListTabTrigger value="personal">
                                 個人 (勞務/領據)
-                            </Tabs.Trigger>
-                        </Tabs.List>
+                            </ListTabTrigger>
+                        </ListTabs>
                     </Tabs.Root>
                     <p class="text-sm text-muted-foreground">
                         {payeeType === "vendor"

@@ -8,6 +8,10 @@ type ActionResultLike = {
     location?: string;
 };
 
+type MessageResolver =
+    | string
+    | ((result: ActionResultLike) => string | undefined | null);
+
 type EnhancedParams = {
     result: ActionResultLike;
     update: () => Promise<void>;
@@ -17,9 +21,21 @@ type EnhancedParams = {
 
 type FetchParams = {
     response: Response;
-    successMessage?: string;
-    failureMessage?: string;
+    successMessage?: MessageResolver;
+    failureMessage?: MessageResolver;
 };
+
+function resolveMessage(
+    input: MessageResolver | undefined,
+    result: ActionResultLike,
+): string | undefined {
+    if (!input) return undefined;
+    if (typeof input === "function") {
+        const resolved = input(result);
+        return resolved ? String(resolved) : undefined;
+    }
+    return input;
+}
 
 export async function handleEnhancedActionFeedback({
     result,
@@ -51,13 +67,28 @@ export async function handleFetchActionFeedback({
     successMessage,
     failureMessage = UI_MESSAGES.common.actionFailed,
 }: FetchParams): Promise<{ ok: boolean; result: ActionResultLike }> {
-    const result = deserialize(await response.text()) as ActionResultLike;
+    const text = await response.text();
+    let result: ActionResultLike;
+    try {
+        result = deserialize(text) as ActionResultLike;
+    } catch {
+        try {
+            result = JSON.parse(text) as ActionResultLike;
+        } catch {
+            result = { type: "error", data: { message: undefined } };
+        }
+    }
+
+    const resolvedFailure =
+        resolveMessage(failureMessage, result) || UI_MESSAGES.common.actionFailed;
+    const resolvedSuccess = resolveMessage(successMessage, result);
+
     if (result?.type === "failure") {
-        toast.error(result?.data?.message || failureMessage);
+        toast.error(result?.data?.message || resolvedFailure);
         return { ok: false, result };
     }
     if (result?.type === "redirect" || result?.type === "success") {
-        if (successMessage) toast.success(successMessage);
+        if (resolvedSuccess) toast.success(resolvedSuccess);
         await applyAction(result as any);
         return { ok: true, result };
     }

@@ -23,6 +23,8 @@
     import PayeeRequestSheet from "$lib/components/layout/PayeeRequestSheet.svelte";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
+    import ListTabs from "$lib/components/common/ListTabs.svelte";
+    import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
@@ -32,6 +34,7 @@
     import { cn } from "$lib/utils";
     import { fade } from "svelte/transition";
     import { UI_MESSAGES } from "$lib/constants/ui-messages";
+    import { handleFetchActionFeedback } from "$lib/utils/action-feedback";
 
     let { data } = $props();
 
@@ -214,14 +217,13 @@
                         body: formData,
                         headers: { "x-sveltekit-action": "true" },
                     });
-                    const result = deserialize(await response.text()) as any;
-                    if (result.type === "success") {
-                        toast.success(UI_MESSAGES.payee.requestWithdrawn);
+                    const { ok } = await handleFetchActionFeedback({
+                        response,
+                        successMessage: UI_MESSAGES.payee.requestWithdrawn,
+                        failureMessage: UI_MESSAGES.common.submitFailed,
+                    });
+                    if (ok) {
                         await invalidateAll();
-                    } else {
-                        toast.error(
-                            result.data?.message || UI_MESSAGES.common.submitFailed,
-                        );
                     }
                 } catch {
                     toast.error(UI_MESSAGES.common.networkFailed("撤銷申請"));
@@ -252,15 +254,17 @@
                         body: formData,
                         headers: { "x-sveltekit-action": "true" },
                     });
-                    const result = deserialize(await response.text()) as any;
-                    if (result.type === "success") {
-                        toast.success(result.data?.message || UI_MESSAGES.payee.statusToggled(action));
+                    const { ok } = await handleFetchActionFeedback({
+                        response,
+                        successMessage: (result) =>
+                            result?.data?.message ||
+                            UI_MESSAGES.payee.statusToggled(action),
+                        failureMessage: (result) =>
+                            result?.data?.message ||
+                            UI_MESSAGES.payee.statusToggleFailed(action),
+                    });
+                    if (ok) {
                         await invalidateAll();
-                    } else {
-                        toast.error(
-                            result.data?.message ||
-                                UI_MESSAGES.payee.statusToggleFailed(action),
-                        );
                     }
                 } catch {
                     toast.error(UI_MESSAGES.common.networkFailed(`${action}收款人`));
@@ -288,15 +292,14 @@
                         body: formData,
                         headers: { "x-sveltekit-action": "true" },
                     });
-                    const result = deserialize(await response.text()) as any;
-                    if (result.type === "success") {
-                        toast.success(UI_MESSAGES.payee.deleted);
+                    const { ok } = await handleFetchActionFeedback({
+                        response,
+                        successMessage: UI_MESSAGES.payee.deleted,
+                        failureMessage: UI_MESSAGES.common.deleteFailed,
+                    });
+                    if (ok) {
                         isDetailOpen = false;
                         await invalidateAll();
-                    } else {
-                        toast.error(
-                            result.data?.message || UI_MESSAGES.common.deleteFailed,
-                        );
                     }
                 } catch {
                     toast.error(UI_MESSAGES.common.networkFailed("刪除收款人"));
@@ -325,18 +328,17 @@
                         body: formData,
                         headers: { "x-sveltekit-action": "true" },
                     });
-                    const result = deserialize(await response.text()) as any;
-                    if (result.type === "success") {
-                        toast.success(
-                            result.data?.message ||
-                                UI_MESSAGES.payee.disableRequested,
-                        );
+                    const { ok } = await handleFetchActionFeedback({
+                        response,
+                        successMessage: (result) =>
+                            result?.data?.message ||
+                            UI_MESSAGES.payee.disableRequested,
+                        failureMessage: (result) =>
+                            result?.data?.message ||
+                            UI_MESSAGES.common.submitFailed,
+                    });
+                    if (ok) {
                         await invalidateAll();
-                    } else {
-                        toast.error(
-                            result.data?.message ||
-                                UI_MESSAGES.common.submitFailed,
-                        );
                     }
                 } catch {
                     toast.error(UI_MESSAGES.common.networkFailed("提交停用申請"));
@@ -413,28 +415,17 @@
                     onValueChange={(value) =>
                         (typeFilter = value as "all" | "vendor" | "personal")}
                 >
-                    <Tabs.List
-                        class="bg-secondary/40 p-1 rounded-xl h-auto inline-flex gap-1 flex-nowrap"
-                    >
-                        <Tabs.Trigger
-                            value="all"
-                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >
+                    <ListTabs>
+                        <ListTabTrigger value="all">
                             全部
-                        </Tabs.Trigger>
-                        <Tabs.Trigger
-                            value="vendor"
-                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >
+                        </ListTabTrigger>
+                        <ListTabTrigger value="vendor">
                             廠商
-                        </Tabs.Trigger>
-                        <Tabs.Trigger
-                            value="personal"
-                            class="rounded-lg px-5 py-2 font-bold text-xs whitespace-nowrap gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                        >
+                        </ListTabTrigger>
+                        <ListTabTrigger value="personal">
                             個人
-                        </Tabs.Trigger>
-                    </Tabs.List>
+                        </ListTabTrigger>
+                    </ListTabs>
                 </Tabs.Root>
             {/snippet}
             {#snippet right()}
