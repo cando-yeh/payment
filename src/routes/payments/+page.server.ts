@@ -9,29 +9,13 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('is_finance, is_admin')
+        .select('is_finance')
         .eq('id', session.user.id)
         .single();
 
-    if (!profile?.is_finance && !profile?.is_admin) {
+    if (!profile?.is_finance) {
         throw redirect(303, '/');
     }
 
-    const { data: payments, error } = await supabase
-        .from('payments')
-        .select(`
-            *,
-            paid_by_profile:profiles!payments_paid_by_fkey(full_name),
-            claims(status)
-        `)
-        .order('paid_at', { ascending: false });
-
-    if (error) {
-        console.error('Error fetching payments:', error);
-        return { payments: [] };
-    }
-
-    return {
-        payments: payments || []
-    };
+    throw redirect(303, '/documents?tab=payments');
 };

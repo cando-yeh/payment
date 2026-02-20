@@ -66,7 +66,11 @@
 
 <div class="space-y-6">
     <div class="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onclick={() => goto("/payments")}>
+        <Button
+            variant="ghost"
+            size="icon"
+            onclick={() => goto("/documents?tab=payments")}
+        >
             <ArrowLeft class="h-4 w-4" />
         </Button>
         <div>

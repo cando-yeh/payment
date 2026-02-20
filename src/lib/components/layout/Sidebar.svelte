@@ -44,7 +44,7 @@
         User, // 個人帳戶
         Settings, // 使用者設定
         LogOut, // 登出按鈕
-        Landmark, // 付款歷史
+        Landmark, // 單據中心
     } from "lucide-svelte";
 
     // ========================================
@@ -98,12 +98,12 @@
             requiredRoles: ["admin"],
         },
 
-        // 付款歷史：僅財務、管理員可見
+        // 單據中心：僅財務可見
         {
-            label: "付款歷史",
-            href: "/payments",
+            label: "單據中心",
+            href: "/documents",
             icon: Landmark,
-            requiredRoles: ["finance", "admin"],
+            requiredRoles: ["finance"],
         },
     ];
 

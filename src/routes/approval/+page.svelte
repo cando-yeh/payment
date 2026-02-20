@@ -49,7 +49,7 @@
 <div in:fade={{ duration: 400 }}>
     <ListPageScaffold
         title="審核中心"
-        description="管理待核准、待撥款及補件審核中的單據"
+        description="處理待主管、待財務、待撥款與補件審核中的單據。"
         shellClassName="pb-2"
     >
         <Tabs.Root
