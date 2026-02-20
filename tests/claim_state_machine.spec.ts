@@ -84,7 +84,7 @@ test.describe.serial('Claim Status Machine', () => {
                 claim_id: id,
                 item_index: 1,
                 date_start: new Date().toISOString().split('T')[0],
-                category: 'travel',
+                category: '差旅費',
                 description: `item ${id}`,
                 amount: 500
             });

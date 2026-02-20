@@ -17,7 +17,7 @@ function buildItems(amount = 1000) {
     return JSON.stringify([
         {
             date: new Date().toISOString().split('T')[0],
-            category: 'general',
+            category: '一般雜支',
             description: 'variant item',
             amount
         }

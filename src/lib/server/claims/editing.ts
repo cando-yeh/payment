@@ -104,7 +104,7 @@ export function parseAndValidateEditForm(
             item_index: index + 1,
             date_start: item.date || item.date_start || new Date().toISOString().slice(0, 10),
             date_end: String(item.date_end || "").trim() || null,
-            category: String(item.category || "general").trim(),
+            category: String(item.category || "一般雜支").trim(),
             description: String(item.description || "").trim(),
             amount: Number.isFinite(amount) ? amount : 0,
             invoice_number: item.invoice_number || null,

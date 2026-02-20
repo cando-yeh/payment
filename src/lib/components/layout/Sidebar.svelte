@@ -45,6 +45,7 @@
         Settings, // 使用者設定
         LogOut, // 登出按鈕
         Landmark, // 單據中心
+        MoreVertical,
     } from "lucide-svelte";
 
     // ========================================
@@ -90,12 +91,12 @@
         // 收款人管理：所有使用者可見 (新增需審核)
         { label: "收款人管理", href: "/payees", icon: Building2 },
 
-        // 使用者管理：僅管理員可見
+        // 系統設定：財務/管理員可見
         {
-            label: "使用者管理",
+            label: "系統設定",
             href: "/admin/users",
             icon: Settings,
-            requiredRoles: ["admin"],
+            requiredRoles: ["finance", "admin"],
         },
 
         // 單據中心：僅財務可見
@@ -255,14 +256,14 @@
 <!-- 側邊欄容器：macOS 風格設計，高透明度、細緻邊框 -->
 <aside
     class={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar backdrop-blur-3xl transition-all duration-300",
+        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border/80 bg-sidebar transition-all duration-300",
         className,
     )}
 >
     <!-- ====================================== -->
     <!-- 頂部區域：Logo 與快速新增按鈕 -->
     <!-- ====================================== -->
-    <div class="flex flex-col gap-6 p-6">
+    <div class="flex flex-col gap-6 p-6 pb-4">
         <!-- 品牌標識 -->
         <div class="flex items-center gap-3">
             <div
@@ -271,7 +272,7 @@
                 <FileText class="h-4 w-4" />
             </div>
             <span
-                class="text-base font-bold tracking-tight text-sidebar-foreground"
+                class="text-[1.05rem] font-semibold tracking-tight text-sidebar-foreground"
                 >請款系統</span
             >
         </div>
@@ -280,7 +281,7 @@
     <!-- ====================================== -->
     <!-- 主要導航區域 -->
     <!-- ====================================== -->
-    <nav class="flex-1 space-y-0.5 px-3">
+    <nav class="flex-1 space-y-1 px-4">
         {#each navItems as item}
             <!-- 依權限決定是否顯示 -->
             {#if hasAccess(item)}
@@ -289,11 +290,11 @@
                     data-sveltekit-preload-data="hover"
                     onclick={(event) => handleNavClick(event, item.href)}
                     class={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
+                        "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-medium transition-all duration-200",
                         // 根據是否為當前頁面套用不同樣式
                         isActive(item.href)
-                            ? "bg-primary/10 text-primary shadow-inner"
-                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground",
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                     )}
                 >
                     <!-- 導航圖標 -->
@@ -301,8 +302,8 @@
                         class={cn(
                             "h-4 w-4",
                             isActive(item.href)
-                                ? "text-primary"
-                                : "text-sidebar-foreground/50",
+                                ? "text-primary-foreground"
+                                : "text-sidebar-foreground/55",
                         )}
                     />
                     {item.label}
@@ -310,7 +311,12 @@
                     <!-- 待辦數量徽章 (若有) -->
                     {#if getNavBadge(item) > 0}
                         <span
-                            class="ml-auto flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white"
+                            class={cn(
+                                "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
+                                isActive(item.href)
+                                    ? "bg-white/95 text-destructive"
+                                    : "bg-destructive text-white",
+                            )}
                         >
                             {getNavBadge(item)}
                         </span>
@@ -320,69 +326,81 @@
         {/each}
     </nav>
 
-    <Separator.Root class="bg-sidebar-border" />
-
     <!-- ====================================== -->
     <!-- 使用者資訊卡片 -->
     <!-- ====================================== -->
-    <div class="p-4">
-        <div class="flex items-center gap-3">
-            <!-- 使用者頭像 -->
-            <Avatar.Root class="h-10 w-10">
-                {#if user.avatarUrl}
-                    <Avatar.Image src={user.avatarUrl} alt={user.name} />
-                {/if}
-                <!-- 無頭像時顯示名字首字 -->
-                <Avatar.Fallback
-                    class="bg-sidebar-primary text-sidebar-primary-foreground"
-                >
-                    {user.name.charAt(0).toUpperCase()}
-                </Avatar.Fallback>
-            </Avatar.Root>
-
-            <!-- 使用者名稱與角色 -->
-            <button
-                class="flex-1 overflow-hidden appearance-none border-none bg-transparent p-0 text-left outline-none cursor-pointer group"
-                onclick={() => (accountSheetOpen = true)}
-                title="個人帳戶設定"
+    <div
+        class="flex items-center gap-3 rounded-xl bg-transparent px-3 py-2.5"
+    >
+        <!-- 使用者頭像 -->
+        <Avatar.Root class="h-10 w-10">
+            {#if user.avatarUrl}
+                <Avatar.Image src={user.avatarUrl} alt={user.name} />
+            {/if}
+            <!-- 無頭像時顯示名字首字 -->
+            <Avatar.Fallback
+                class="bg-sidebar-primary text-sidebar-primary-foreground"
             >
-                <div class="flex flex-col">
-                    <p
-                        class="truncate text-sm font-medium text-sidebar-foreground group-hover:text-primary transition-colors"
-                    >
-                        {user.name}
-                    </p>
-                    <div class="mt-0.5 flex flex-wrap gap-1">
-                        {#if user.isAdmin}
-                            <span
-                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold bg-blue-50 text-blue-700 border-blue-200"
-                            >
-                                管理員
-                            </span>
-                        {/if}
-                        {#if user.isFinance}
-                            <span
-                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-700 border-amber-200"
-                            >
-                                財務
-                            </span>
-                        {/if}
-                        {#if !user.isAdmin && !user.isFinance}
-                            <span
-                                class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold border-input text-foreground"
-                            >
-                                員工
-                            </span>
-                        {/if}
-                    </div>
-                </div>
-            </button>
+                {user.name.charAt(0).toUpperCase()}
+            </Avatar.Fallback>
+        </Avatar.Root>
 
-            <!-- 登出按鈕 -->
+        <!-- 使用者名稱與角色 -->
+        <button
+            class="flex-1 overflow-hidden appearance-none border-none bg-transparent p-0 text-left outline-none cursor-pointer group"
+            onclick={() => (accountSheetOpen = true)}
+            title="個人帳戶設定"
+        >
+            <div class="flex flex-col">
+                <p
+                    class="truncate text-sm font-semibold text-sidebar-foreground group-hover:text-primary transition-colors"
+                >
+                    {user.name}
+                </p>
+                <p class="truncate text-xs text-muted-foreground/90">
+                    {user.email}
+                </p>
+                <div class="mt-0.5 flex flex-wrap gap-1">
+                    {#if user.isAdmin}
+                        <span
+                            class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold bg-blue-50 text-blue-700 border-blue-200"
+                        >
+                            管理員
+                        </span>
+                    {/if}
+                    {#if user.isFinance}
+                        <span
+                            class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-700 border-amber-200"
+                        >
+                            財務
+                        </span>
+                    {/if}
+                    {#if !user.isAdmin && !user.isFinance}
+                        <span
+                            class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold border-input text-foreground"
+                        >
+                            員工
+                        </span>
+                    {/if}
+                </div>
+            </div>
+        </button>
+
+        <!-- 登出按鈕 -->
+        <div class="flex flex-col items-center gap-0.5">
             <Button
                 variant="ghost"
                 size="icon"
-                class="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground"
+                class="h-7 w-7 text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                onclick={() => (accountSheetOpen = true)}
+                title="帳戶設定"
+            >
+                <MoreVertical class="h-4 w-4" />
+            </Button>
+            <Button
+                variant="ghost"
+                size="icon"
+                class="h-7 w-7 text-sidebar-foreground/60 hover:bg-destructive/10 hover:text-destructive"
                 onclick={async () => {
                     const { createBrowserSupabaseClient } = await import(
                         "$lib/supabase"
@@ -391,6 +409,7 @@
                     await supabase.auth.signOut();
                     window.location.href = "/auth";
                 }}
+                title="登出"
             >
                 <LogOut class="h-4 w-4" />
             </Button>

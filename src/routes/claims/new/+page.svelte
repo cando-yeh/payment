@@ -44,6 +44,7 @@
 <ClaimEditor
     claim={draftClaim}
     payees={data.payees}
+    categoryOptions={data.categoryOptions}
     mode="edit"
     isCreate={true}
     backHref="/claims"

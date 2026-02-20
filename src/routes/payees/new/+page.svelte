@@ -106,7 +106,7 @@
                 class="space-y-6"
             >
                 <!-- Type Selection -->
-                <div class="space-y-3">
+                <div class="form-row-box space-y-3">
                     <Label>收款人類型</Label>
                     <Tabs.Root
                         value={payeeType}
@@ -141,88 +141,43 @@
                     />
                 </div>
 
-                <div class="grid gap-4 md:grid-cols-2">
-                    <!-- Row 1: Name and Tax ID / ID Number -->
+                <div class="form-row-box grid gap-4 md:grid-cols-2">
                     <div class="space-y-2">
-                        <Label for="name"
-                            >公司/個人名稱 <span class="text-red-500">*</span
-                            ></Label
-                        >
+                        <Label for="name">公司/個人名稱 <span class="text-red-500">*</span></Label>
                         <Input
                             id="name"
                             name="name"
-                            placeholder={payeeType === "vendor"
-                                ? "公司全名"
-                                : "真實姓名"}
+                            placeholder={payeeType === "vendor" ? "公司全名" : "真實姓名"}
                             required
                         />
                     </div>
-
                     <div class="space-y-2">
                         {#if payeeType === "vendor"}
-                            <Label for="identity_no"
-                                >統一編號 (8碼) <span class="text-red-500"
-                                    >*</span
-                                ></Label
-                            >
-                            <Input
-                                id="identity_no"
-                                name="identity_no"
-                                placeholder="12345678"
-                                maxlength={8}
-                                required
-                            />
+                            <Label for="identity_no">統一編號 (8碼) <span class="text-red-500">*</span></Label>
+                            <Input id="identity_no" name="identity_no" placeholder="12345678" maxlength={8} required />
                         {:else}
-                            <Label for="identity_no"
-                                >身分證字號 <span class="text-red-500">*</span
-                                ></Label
-                            >
-                            <Input
-                                id="identity_no"
-                                name="identity_no"
-                                placeholder="A123456789"
-                                maxlength={10}
-                                required
-                            />
+                            <Label for="identity_no">身分證字號 <span class="text-red-500">*</span></Label>
+                            <Input id="identity_no" name="identity_no" placeholder="A123456789" maxlength={10} required />
                         {/if}
                     </div>
+                </div>
 
-                    <!-- Row 2: Email and Address (Personal Only) -->
-                    {#if payeeType === "personal"}
+                {#if payeeType === "personal"}
+                    <div class="form-row-box grid gap-4 md:grid-cols-2">
                         <div class="space-y-2">
-                            <Label for="email"
-                                >電子郵件 <span class="text-red-500">*</span
-                                ></Label
-                            >
-                            <Input
-                                id="email"
-                                name="email"
-                                type="email"
-                                placeholder="example@email.com"
-                                required
-                            />
+                            <Label for="email">電子郵件 <span class="text-red-500">*</span></Label>
+                            <Input id="email" name="email" type="email" placeholder="example@email.com" required />
                         </div>
                         <div class="space-y-2">
-                            <Label for="address"
-                                >戶籍/通訊地址 <span class="text-red-500"
-                                    >*</span
-                                ></Label
-                            >
-                            <Input
-                                id="address"
-                                name="address"
-                                placeholder="請填寫完整地址"
-                                required
-                            />
+                            <Label for="address">戶籍/通訊地址 <span class="text-red-500">*</span></Label>
+                            <Input id="address" name="address" placeholder="請填寫完整地址" required />
                         </div>
-                    {/if}
+                    </div>
+                {/if}
 
-                    <!-- Row 3: Shared Service Description -->
-                    <div class="space-y-2 md:col-span-2">
-                        <Label for="service_description"
-                            >服務項目說明 <span class="text-red-500">*</span
-                            ></Label
-                        >
+                <div class="form-row-box">
+                    <div class="space-y-2">
+                        <Label for="service_description">服務項目說明 <span class="text-red-500">*</span></Label>
                         <Input
                             id="service_description"
                             name="service_description"
@@ -230,67 +185,55 @@
                             required
                         />
                     </div>
+                </div>
 
-                    <!-- Bank Information Section -->
-                    <div class="md:col-span-2 border-t pt-6 mt-2">
-                        <h3 class="mb-4 text-base font-semibold">銀行匯款資訊</h3>
-
-                        <div class="grid gap-4 md:grid-cols-2">
-                            <div class="space-y-2">
-                                <Label for="bank_code"
-                                    >銀行代碼 <span class="text-red-500">*</span
-                                    ></Label
-                                >
-                                <BankCodeCombobox
-                                    id="bank_code"
-                                    name="bank_code"
-                                    placeholder="請選擇銀行"
-                                    required
-                                />
-                                {#if payeeType === "vendor"}
-                                    <div class="mb-4 flex flex-col gap-1.5">
-                                        <div class="flex items-center gap-2">
-                                            <Label for="editable_account"
-                                                >非固定帳號</Label
-                                            >
-                                            <Switch
-                                                id="editable_account"
-                                                aria-label="非固定帳號"
-                                                bind:checked={editableAccount}
-                                            />
-                                        </div>
-                                        <p
-                                            class="text-xs text-muted-foreground"
-                                        >
-                                            若開啟，則請款時可修改銀行帳號。
-                                        </p>
+                <div class="form-row-box">
+                    <h3 class="mb-4 text-base font-semibold">銀行匯款資訊</h3>
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div class="space-y-2">
+                            <Label for="bank_code">銀行代碼 <span class="text-red-500">*</span></Label>
+                            <BankCodeCombobox
+                                id="bank_code"
+                                name="bank_code"
+                                placeholder="請選擇銀行"
+                                required
+                            />
+                            {#if payeeType === "vendor"}
+                                <div class="mb-4 flex flex-col gap-1.5">
+                                    <div class="flex items-center gap-2">
+                                        <Label for="editable_account">非固定帳號</Label>
+                                        <Switch
+                                            id="editable_account"
+                                            aria-label="非固定帳號"
+                                            bind:checked={editableAccount}
+                                        />
                                     </div>
-                                {/if}
-                            </div>
-                            <div class="space-y-2">
-                                <Label for="bank_account"
-                                    >銀行帳號 <span class="text-red-500">*</span
-                                    ></Label
-                                >
-                                <Input
-                                    id="bank_account"
-                                    name="bank_account"
-                                    type="password"
-                                    placeholder="請輸入帳號"
-                                    required
-                                />
-                                <p class="text-xs text-muted-foreground">
-                                    帳號將加密儲存，僅財務人員可查看。
-                                </p>
-                            </div>
+                                    <p class="text-xs text-muted-foreground">
+                                        若開啟，則請款時可修改銀行帳號。
+                                    </p>
+                                </div>
+                            {/if}
+                        </div>
+                        <div class="space-y-2">
+                            <Label for="bank_account">銀行帳號 <span class="text-red-500">*</span></Label>
+                            <Input
+                                id="bank_account"
+                                name="bank_account"
+                                type="password"
+                                placeholder="請輸入帳號"
+                                required
+                            />
+                            <p class="text-xs text-muted-foreground">
+                                帳號將加密儲存，僅財務人員可查看。
+                            </p>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Attachments Section (Personal Only) -->
-                    {#if payeeType === "personal"}
-                        <div class="md:col-span-2 border-t pt-6 mt-2">
-                            <h3 class="mb-4 text-base font-semibold">必要附件</h3>
-                            <div class="grid gap-4 md:grid-cols-2">
+                {#if payeeType === "personal"}
+                    <div class="form-row-box">
+                        <h3 class="mb-4 text-base font-semibold">必要附件</h3>
+                        <div class="grid gap-4 md:grid-cols-2">
                                 <div class="space-y-2">
                                     <Label for="attachment_id_front"
                                         >身分證正面 <span class="text-red-500"
@@ -342,10 +285,9 @@
                                         需包含銀行帳號與戶名
                                     </p>
                                 </div>
-                            </div>
                         </div>
-                    {/if}
-                </div>
+                    </div>
+                {/if}
             </form>
         </Card.Content>
     </Card.Root>

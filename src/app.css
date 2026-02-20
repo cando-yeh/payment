@@ -20,7 +20,7 @@
   --popover-foreground: oklch(0.26 0.04 260);
   
   /* Editorial business blue palette */
-  --primary: oklch(0.53 0.165 262);
+  --primary: #3a5ba0;
   --primary-foreground: oklch(1 0 0);
   
   --secondary: oklch(0.93 0.015 252);
@@ -37,16 +37,16 @@
   
   --border: oklch(0.86 0.012 252);
   --input: oklch(0.86 0.012 252);
-  --ring: oklch(0.53 0.165 262 / 0.4);
+  --ring: #3a5ba066;
   
   --sidebar: oklch(0.965 0.01 252);
   --sidebar-foreground: oklch(0.28 0.03 258);
-  --sidebar-primary: oklch(0.53 0.165 262);
+  --sidebar-primary: #3a5ba0;
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.91 0.025 252);
   --sidebar-accent-foreground: oklch(0.31 0.05 258);
   --sidebar-border: oklch(0.86 0.012 252);
-  --sidebar-ring: oklch(0.53 0.165 262 / 0.4);
+  --sidebar-ring: #3a5ba066;
 }
 
 .dark {
@@ -59,8 +59,8 @@
   --popover: oklch(0.22 0.02 255);
   --popover-foreground: oklch(0.98 0.01 255);
   
-  --primary: oklch(0.65 0.15 255);
-  --primary-foreground: oklch(0.18 0.01 255);
+  --primary: #3a5ba0;
+  --primary-foreground: oklch(0.98 0.01 255);
   
   --secondary: oklch(0.32 0.04 188);
   --secondary-foreground: oklch(0.96 0.02 188);
@@ -76,12 +76,12 @@
   
   --border: oklch(0.28 0.02 255);
   --input: oklch(0.28 0.02 255);
-  --ring: oklch(0.65 0.15 255 / 0.4);
+  --ring: #3a5ba066;
   
   --sidebar: oklch(0.2 0.02 255 / 0.85);
   --sidebar-foreground: oklch(0.95 0.01 255);
-  --sidebar-primary: oklch(0.65 0.15 255);
-  --sidebar-primary-foreground: oklch(0.2 0.02 255);
+  --sidebar-primary: #3a5ba0;
+  --sidebar-primary-foreground: oklch(0.98 0.01 255);
   --sidebar-accent: oklch(0.62 0.11 188 / 0.16);
   --sidebar-accent-foreground: oklch(0.78 0.1 188);
   --sidebar-border: oklch(0.25 0.02 255);
@@ -134,5 +134,15 @@
     text-rendering: geometricPrecision;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .form-row-box {
+    @apply rounded-xl border border-border/60 bg-background/80 p-4;
+  }
+
+  .form-row-box + .form-row-box {
+    @apply mt-3;
   }
 }

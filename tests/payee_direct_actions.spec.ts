@@ -9,6 +9,11 @@ test.describe('Payee Direct Actions (Finance)', () => {
     const password = 'password123';
     let testPayeeId: string;
     let testPayeeName: string;
+    async function ensureShowDisabledOn(page: any) {
+        const toggle = page.getByRole('switch', { name: '顯示停用收款人' });
+        const checked = await toggle.getAttribute('aria-checked');
+        if (checked !== 'true') await toggle.click();
+    }
 
     async function postPayeeAction(
         page: any,
@@ -99,6 +104,9 @@ test.describe('Payee Direct Actions (Finance)', () => {
             .toBe('disabled');
 
         await page.reload();
+        // New UX: disabled payees are hidden by default until "顯示停用" is enabled.
+        await expect(page.getByTestId(`payee-row-${testPayeeId}`)).toHaveCount(0);
+        await ensureShowDisabledOn(page);
         await expect(
             page.getByTestId(`payee-row-${testPayeeId}`).getByText('已停用')
         ).toBeVisible();
@@ -107,6 +115,8 @@ test.describe('Payee Direct Actions (Finance)', () => {
     test('Finance User can directly ENABLE a payee', async ({ page }) => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
+        // Ensure disabled rows are visible for re-enable flow.
+        await ensureShowDisabledOn(page);
 
         const row = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(row).toBeVisible();

@@ -2,7 +2,7 @@
     import * as Table from "$lib/components/ui/table";
     import * as Tabs from "$lib/components/ui/tabs";
     import { Landmark } from "lucide-svelte";
-    import type { PageData } from "./$types";
+
     import { goto } from "$app/navigation";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
@@ -16,19 +16,33 @@
     import { cn } from "$lib/utils";
     import { fade } from "svelte/transition";
 
-    let { data }: { data: PageData } = $props();
+    interface PaymentClaim {
+        status: string;
+    }
+
+    interface Payment {
+        id: string;
+        status: string;
+        payee_name: string | null;
+        total_amount: number;
+        paid_at: string;
+        paid_by_profile: {
+            full_name: string | null;
+        } | null;
+        claims: PaymentClaim[] | null;
+    }
+
+    let { data }: { data: { payments: Payment[] } } = $props();
     let { payments } = $derived(data);
     let searchTerm = $state("");
     let statusTab = $state<"paid" | "pending_doc">("paid");
 
     function getPaymentViewStatus(
-        payment: any,
+        payment: Payment,
     ): "paid" | "pending_doc" | "cancelled" {
         const hasPendingDoc =
             (payment.status === "completed" || payment.status === "paid") &&
-            payment.claims?.some(
-                (c: { status: string }) => c.status !== "paid",
-            );
+            payment.claims?.some((c: PaymentClaim) => c.status !== "paid");
         if (hasPendingDoc) return "pending_doc";
         if (payment.status === "cancelled") return "cancelled";
         return "paid";
@@ -110,9 +124,7 @@
                         (statusTab = value as "paid" | "pending_doc")}
                 >
                     <ListTabs>
-                        <ListTabTrigger value="paid">
-                            已撥款
-                        </ListTabTrigger>
+                        <ListTabTrigger value="paid">已撥款</ListTabTrigger>
                         <ListTabTrigger value="pending_doc">
                             待補件
                         </ListTabTrigger>
@@ -173,9 +185,7 @@
                                 )}
                                 onclick={() => goto(`/payments/${payment.id}`)}
                             >
-                                <Table.Cell
-                                    class={LIST_TABLE_TOKENS.dateCell}
-                                >
+                                <Table.Cell class={LIST_TABLE_TOKENS.dateCell}>
                                     {formatDate(payment.paid_at)}
                                 </Table.Cell>
                                 <Table.Cell
@@ -189,15 +199,21 @@
                                 <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
                                     {payment.payee_name || "—"}
                                 </Table.Cell>
-                                <Table.Cell class={LIST_TABLE_TOKENS.amountCell}>
+                                <Table.Cell
+                                    class={LIST_TABLE_TOKENS.amountCell}
+                                >
                                     {@const amountParts = splitAmountParts(
                                         payment.total_amount,
                                     )}
                                     <div class={LIST_TABLE_TOKENS.amountWrap}>
-                                        <span class={LIST_TABLE_TOKENS.amountSymbol}>
+                                        <span
+                                            class={LIST_TABLE_TOKENS.amountSymbol}
+                                        >
                                             {amountParts.symbol}
                                         </span>
-                                        <span class={LIST_TABLE_TOKENS.amountValue}>
+                                        <span
+                                            class={LIST_TABLE_TOKENS.amountValue}
+                                        >
                                             {amountParts.value}
                                         </span>
                                     </div>

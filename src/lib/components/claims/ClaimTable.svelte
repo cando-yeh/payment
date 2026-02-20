@@ -102,7 +102,6 @@
                 class={cn(
                     LIST_TABLE_TOKENS.headBase,
                     LIST_TABLE_TOKENS.colAmount,
-                    "text-right",
                 )}>總金額</Table.Head
             >
             <Table.Head

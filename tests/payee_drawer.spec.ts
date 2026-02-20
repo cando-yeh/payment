@@ -234,8 +234,11 @@ test.describe('Payee Drawer Functionality', () => {
         await expect(page).toHaveURL(/\/payees/);
 
         // 2. Find the pending row
-        const row = page.getByRole('row', { name: newPayeeName }).first();
-        await expect(row).toBeVisible();
+        const row = page
+            .locator('[data-testid^="payee-row-"]')
+            .filter({ hasText: newPayeeName })
+            .first();
+        await expect(row).toBeVisible({ timeout: 10000 });
         await expect(row).toContainText('待審核 (新增)');
 
         // 3. Withdraw from row action icon
@@ -249,6 +252,8 @@ test.describe('Payee Drawer Functionality', () => {
 
         // 4. Verify success
         await expect(page.getByText('申請已撤銷')).toBeVisible();
-        await expect(page.getByRole('row', { name: newPayeeName })).not.toBeVisible();
+        await expect(
+            page.locator('[data-testid^="payee-row-"]').filter({ hasText: newPayeeName })
+        ).toHaveCount(0);
     });
 });

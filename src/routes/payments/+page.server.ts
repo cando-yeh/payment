@@ -17,5 +17,16 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         throw redirect(303, '/');
     }
 
-    throw redirect(303, '/documents?tab=payments');
+    const { data: payments } = await supabase
+        .from('payments')
+        .select(`
+            *,
+            paid_by_profile:profiles!payments_paid_by_fkey(full_name),
+            claims(status)
+        `)
+        .order('paid_at', { ascending: false });
+
+    return {
+        payments: payments || [],
+    };
 };

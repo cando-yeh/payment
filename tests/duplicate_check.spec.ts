@@ -87,7 +87,7 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
                 amount: 1000,
                 description: 'Original Item',
                 invoice_number: invoiceNumber,
-                category: 'general'
+                category: '一般雜支'
             }
         ]);
 
@@ -111,7 +111,7 @@ test.describe.serial('Duplicate Invoice Check E2E', () => {
                 amount: 1000,
                 description: 'Duplicate Item',
                 invoice_number: invoiceNumber,
-                category: 'general'
+                category: '一般雜支'
             }
         ]);
 

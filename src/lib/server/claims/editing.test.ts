@@ -36,14 +36,14 @@ describe("parseAndValidateEditForm - personal_service", () => {
                 {
                     date_start: "2026-02-19",
                     date_end: "2026-02-19",
-                    category: "general",
+                    category: "一般雜支",
                     description: "service A",
                     amount: 100
                 },
                 {
                     date_start: "2026-02-20",
                     date_end: "2026-02-20",
-                    category: "general",
+                    category: "一般雜支",
                     description: "service B",
                     amount: 200
                 }
@@ -64,7 +64,7 @@ describe("parseAndValidateEditForm - personal_service", () => {
                 {
                     date_start: "2026-02-20",
                     date_end: "2026-02-19",
-                    category: "general",
+                    category: "一般雜支",
                     description: "service",
                     amount: 100
                 }
@@ -85,7 +85,7 @@ describe("parseAndValidateEditForm - personal_service", () => {
                 {
                     date_start: "2026-02-19",
                     date_end: "2026-02-19",
-                    category: "general",
+                    category: "一般雜支",
                     description: "service",
                     amount: 100,
                     attachment_status: "uploaded",
@@ -131,4 +131,3 @@ describe("parseAndValidateEditForm - personal_service", () => {
         expect(result.ok).toBe(true);
     });
 });
-

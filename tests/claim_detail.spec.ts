@@ -63,7 +63,7 @@ test.describe.serial('Claim Detail Page', () => {
                 claim_id: claimId,
                 item_index: 1,
                 date_start: new Date().toISOString().split('T')[0],
-                category: 'travel',
+                category: '差旅費',
                 description: 'Test line item',
                 amount: 300,
             });

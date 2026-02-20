@@ -335,6 +335,7 @@
 <ClaimEditor
     claim={editorClaim}
     payees={data.payees}
+    categoryOptions={data.categoryOptions}
     mode={isEditableApplicant
         ? "edit"
         : isSupplementApplicant

@@ -80,6 +80,7 @@
     let {
         claim,
         payees = [],
+        categoryOptions = [],
         backHref = "/claims",
         backLabel = "返回清單",
         mode = "edit",
@@ -106,6 +107,13 @@
     }: {
         claim: ClaimEditorClaim;
         payees?: ClaimEditorPayee[];
+        categoryOptions?: Array<{
+            id?: string;
+            name?: string;
+            value?: string;
+            label?: string;
+            description?: string;
+        }>;
         backHref?: string;
         backLabel?: string;
         mode?: "edit" | "supplement" | "review" | "view";
@@ -147,11 +155,58 @@
         extra: Record<string, any>;
     };
 
+    type CategoryOption = {
+        value: string;
+        label: string;
+        description?: string;
+    };
+
+    function normalizeCategoryOptions(
+        raw: Array<{
+            id?: string;
+            name?: string;
+            value?: string;
+            label?: string;
+            description?: string;
+        }>,
+    ) {
+        if (!Array.isArray(raw) || raw.length === 0) {
+            return CLAIM_ITEM_CATEGORIES.map((item) => ({
+                value: item.value,
+                label: item.label,
+                description: item.description,
+            }));
+        }
+        return raw
+            .map((item) => {
+                const value = String(
+                    item?.name || item?.value || item?.label || "",
+                ).trim();
+                if (!value) return null;
+                return {
+                    value,
+                    label: String(item?.label || item?.name || value).trim(),
+                    description: String(item?.description || "").trim(),
+                };
+            })
+            .filter(Boolean) as CategoryOption[];
+    }
+
+    const resolvedCategoryOptions = $derived(
+        normalizeCategoryOptions(categoryOptions),
+    );
+    const defaultCategory = $derived.by(() => {
+        const match = resolvedCategoryOptions.find(
+            (item) => item.value === "一般雜支",
+        );
+        return match?.value || resolvedCategoryOptions[0]?.value || "一般雜支";
+    });
+
     function emptyItem(): ClaimEditorItem {
         return {
             date: new Date().toISOString().split("T")[0],
             date_end: "",
-            category: "general",
+            category: defaultCategory,
             description: "",
             amount: "",
             invoice_number: "",
@@ -178,7 +233,7 @@
                     new Date().toISOString().split("T")[0],
             ),
             date_end: String(item?.date_end || ""),
-            category: String(item?.category || "general"),
+            category: String(item?.category || defaultCategory),
             description: String(item?.description || ""),
             amount:
                 item?.amount === null || item?.amount === undefined
@@ -539,7 +594,8 @@
 
     function categoryLabel(value: string) {
         return (
-            CLAIM_ITEM_CATEGORIES.find((item) => item.value === value)?.label ||
+            resolvedCategoryOptions.find((item) => item.value === value)
+                ?.label ||
             value
         );
     }
@@ -1570,16 +1626,14 @@
                                                     ).value,
                                                 })}
                                         >
-                                            {#each CLAIM_ITEM_CATEGORIES as cat}
+                                            {#each resolvedCategoryOptions as cat}
                                                 <option value={cat.value}
                                                     >{cat.label}</option
                                                 >
                                             {/each}
                                         </select>
                                     </div>
-                                    <div
-                                        class="space-y-1.5"
-                                    >
+                                    <div class="space-y-1.5">
                                         <Label
                                             class="text-xs text-muted-foreground"
                                             >金額</Label
@@ -1672,6 +1726,7 @@
 
                                         {#if items.length > 0}
                                             {#each items as item, i}
+                                                <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
                                                 <div
                                                     class={`grid items-center gap-2 border-b border-border/20 px-4 py-2 ${
                                                         canOperateItems
@@ -1706,140 +1761,140 @@
                                                         }
                                                     }}
                                                 >
+                                                    <span
+                                                        class="whitespace-nowrap text-center text-xs"
+                                                        >{item.date ||
+                                                            "—"}</span
+                                                    >
+                                                    <span
+                                                        class="whitespace-nowrap text-center text-xs"
+                                                        >{categoryLabel(
+                                                            item.category,
+                                                        )}</span
+                                                    >
+                                                    <span
+                                                        class="line-clamp-2 break-words text-xs"
+                                                        >{item.description ||
+                                                            "—"}</span
+                                                    >
+                                                    <span
+                                                        class="whitespace-nowrap text-center text-xs"
+                                                        >{item.invoice_number ||
+                                                            "—"}</span
+                                                    >
+                                                    <div
+                                                        class="flex items-center justify-between gap-1 whitespace-nowrap text-xs tabular-nums"
+                                                    >
                                                         <span
-                                                            class="whitespace-nowrap text-center text-xs"
-                                                            >{item.date ||
-                                                                "—"}</span
+                                                            class="text-muted-foreground"
+                                                            >NT$</span
                                                         >
                                                         <span
-                                                            class="whitespace-nowrap text-center text-xs"
-                                                            >{categoryLabel(
-                                                                item.category,
-                                                            )}</span
+                                                            class="font-medium text-foreground"
                                                         >
-                                                        <span
-                                                            class="line-clamp-2 break-words text-xs"
-                                                            >{item.description ||
-                                                                "—"}</span
-                                                        >
-                                                        <span
-                                                            class="whitespace-nowrap text-center text-xs"
-                                                            >{item.invoice_number ||
-                                                                "—"}</span
-                                                        >
-                                                        <div
-                                                            class="flex items-center justify-between gap-1 whitespace-nowrap text-xs tabular-nums"
-                                                        >
-                                                            <span
-                                                                class="text-muted-foreground"
-                                                                >NT$</span
-                                                            >
-                                                            <span
-                                                                class="font-medium text-foreground"
-                                                            >
-                                                                {new Intl.NumberFormat(
-                                                                    "en-US",
-                                                                    {
-                                                                        maximumFractionDigits: 0,
-                                                                    },
-                                                                ).format(
-                                                                    Number(
-                                                                        item.amount,
-                                                                    ) || 0,
-                                                                )}
-                                                            </span>
-                                                        </div>
-                                                        <div
-                                                            class="text-center text-xs"
-                                                        >
-                                                            {#if item.attachment_status === "uploaded"}
-                                                                {#if item.extra?.file_path && item.id}
-                                                                    <span
-                                                                        role="link"
-                                                                        tabindex="0"
-                                                                        class="inline-flex items-center gap-1 text-primary hover:underline"
-                                                                        onclick={(
+                                                            {new Intl.NumberFormat(
+                                                                "en-US",
+                                                                {
+                                                                    maximumFractionDigits: 0,
+                                                                },
+                                                            ).format(
+                                                                Number(
+                                                                    item.amount,
+                                                                ) || 0,
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    <div
+                                                        class="text-center text-xs"
+                                                    >
+                                                        {#if item.attachment_status === "uploaded"}
+                                                            {#if item.extra?.file_path && item.id}
+                                                                <span
+                                                                    role="link"
+                                                                    tabindex="0"
+                                                                    class="inline-flex items-center gap-1 text-primary hover:underline"
+                                                                    onclick={(
+                                                                        e,
+                                                                    ) =>
+                                                                        openUploadedAttachment(
+                                                                            item,
                                                                             e,
-                                                                        ) =>
+                                                                        )}
+                                                                    onkeydown={(
+                                                                        e,
+                                                                    ) => {
+                                                                        if (
+                                                                            e.key ===
+                                                                                "Enter" ||
+                                                                            e.key ===
+                                                                                " "
+                                                                        ) {
+                                                                            e.preventDefault();
                                                                             openUploadedAttachment(
                                                                                 item,
                                                                                 e,
-                                                                            )}
-                                                                        onkeydown={(
-                                                                            e,
-                                                                        ) => {
-                                                                            if (
-                                                                                e.key ===
-                                                                                    "Enter" ||
-                                                                                e.key ===
-                                                                                    " "
-                                                                            ) {
-                                                                                e.preventDefault();
-                                                                                openUploadedAttachment(
-                                                                                    item,
-                                                                                    e,
-                                                                                );
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        <Eye
-                                                                            class="h-3 w-3"
-                                                                        /> 查看附件
-                                                                    </span>
-                                                                {:else if pendingUpload[i]}
-                                                                    <span
-                                                                        role="link"
-                                                                        tabindex="0"
-                                                                        class="inline-flex items-center gap-1 text-primary hover:underline"
-                                                                        onclick={(
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Eye
+                                                                        class="h-3 w-3"
+                                                                    /> 查看附件
+                                                                </span>
+                                                            {:else if pendingUpload[i]}
+                                                                <span
+                                                                    role="link"
+                                                                    tabindex="0"
+                                                                    class="inline-flex items-center gap-1 text-primary hover:underline"
+                                                                    onclick={(
+                                                                        event,
+                                                                    ) =>
+                                                                        openPendingAttachment(
+                                                                            i,
                                                                             event,
-                                                                        ) =>
+                                                                        )}
+                                                                    onkeydown={(
+                                                                        event,
+                                                                    ) => {
+                                                                        if (
+                                                                            event.key ===
+                                                                                "Enter" ||
+                                                                            event.key ===
+                                                                                " "
+                                                                        ) {
+                                                                            event.preventDefault();
                                                                             openPendingAttachment(
                                                                                 i,
                                                                                 event,
-                                                                            )}
-                                                                        onkeydown={(
-                                                                            event,
-                                                                        ) => {
-                                                                            if (
-                                                                                event.key ===
-                                                                                    "Enter" ||
-                                                                                event.key ===
-                                                                                    " "
-                                                                            ) {
-                                                                                event.preventDefault();
-                                                                                openPendingAttachment(
-                                                                                    i,
-                                                                                    event,
-                                                                                );
-                                                                            }
-                                                                        }}
-                                                                    >
-                                                                        <Eye
-                                                                            class="h-3 w-3"
-                                                                        />
-                                                                        查看附件
-                                                                    </span>
-                                                                {:else}
-                                                                    <span
-                                                                        class="break-words text-destructive"
-                                                                        >未上傳憑證</span
-                                                                    >
-                                                                {/if}
-                                                            {:else if item.attachment_status === "pending_supplement"}
-                                                                <span
-                                                                    class="break-words text-muted-foreground"
-                                                                    >憑證後補</span
+                                                                            );
+                                                                        }
+                                                                    }}
                                                                 >
+                                                                    <Eye
+                                                                        class="h-3 w-3"
+                                                                    />
+                                                                    查看附件
+                                                                </span>
                                                             {:else}
                                                                 <span
-                                                                    class="line-clamp-2 break-words text-muted-foreground"
+                                                                    class="break-words text-destructive"
+                                                                    >未上傳憑證</span
                                                                 >
-                                                                    {item.exempt_reason ||
-                                                                        "無憑證"}
-                                                                </span>
                                                             {/if}
-                                                        </div>
+                                                        {:else if item.attachment_status === "pending_supplement"}
+                                                            <span
+                                                                class="break-words text-muted-foreground"
+                                                                >憑證後補</span
+                                                            >
+                                                        {:else}
+                                                            <span
+                                                                class="line-clamp-2 break-words text-muted-foreground"
+                                                            >
+                                                                {item.exempt_reason ||
+                                                                    "無憑證"}
+                                                            </span>
+                                                        {/if}
+                                                    </div>
                                                     {#if isEditable}
                                                         <div
                                                             class="flex items-center justify-center gap-1"
@@ -1897,7 +1952,7 @@
     </form>
 
     <Dialog.Root bind:open={itemDrawerOpen}>
-        <Dialog.Content class="max-w-3xl rounded-2xl">
+        <Dialog.Content class="max-w-3xl overflow-visible rounded-2xl">
             <Dialog.Header>
                 <Dialog.Title
                     >{itemDrawerIndex === null
@@ -1951,7 +2006,7 @@
                         </div>
                     {:else}
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <div class="space-y-1.5">
+                            <div class="space-y-1.5 overflow-visible">
                                 <Label for="item-category">類別</Label>
                                 <select
                                     id="item-category"
@@ -1959,7 +2014,7 @@
                                     bind:value={itemDraft.category}
                                     disabled={!canEditCoreItemFields}
                                 >
-                                    {#each CLAIM_ITEM_CATEGORIES as cat}
+                                    {#each resolvedCategoryOptions as cat}
                                         <option value={cat.value}
                                             >{cat.label}</option
                                         >
@@ -2110,7 +2165,9 @@
                                                             void clearItemDraftAttachment()}
                                                         title="移除附件"
                                                     >
-                                                        <X class="h-3.5 w-3.5" />
+                                                        <X
+                                                            class="h-3.5 w-3.5"
+                                                        />
                                                     </button>
                                                 {/if}
                                                 {#if isImagePath(getCurrentAttachmentPath(itemDraft))}
@@ -2168,7 +2225,9 @@
                                                             void clearItemDraftAttachment()}
                                                         title="移除附件"
                                                     >
-                                                        <X class="h-3.5 w-3.5" />
+                                                        <X
+                                                            class="h-3.5 w-3.5"
+                                                        />
                                                     </button>
                                                 {/if}
                                                 <p

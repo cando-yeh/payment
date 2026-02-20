@@ -3,6 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { env } from '$env/dynamic/private';
+import { getExpenseCategories } from '$lib/server/expense-categories';
 
 function getServiceRoleClient() {
     if (!env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -74,15 +75,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
     const status = url.searchParams.get('status');
     const defaultTab = status === 'inactive' ? 'inactive' : 'active';
+    const section = url.searchParams.get('section');
+    const defaultSection = section === 'categories' ? 'categories' : 'users';
 
     return {
         users: users || [],
+        expenseCategories: await getExpenseCategories(locals.supabase),
         approverOptions: (users || []).map((u: any) => ({ id: u.id, full_name: u.full_name })),
         defaultTab,
+        defaultSection,
         currentUserId: session.user.id,
         canManagePermissions: locals.user?.is_admin ?? false,
         canManageLifecycle: locals.user?.is_admin ?? false,
         canManageProfileBasic: canViewUserModule,
+        canManageCategories: locals.user?.is_finance ?? false,
         isAdminViewer: locals.user?.is_admin ?? false,
         isFinanceViewer: locals.user?.is_finance ?? false
     };
@@ -504,5 +510,92 @@ export const actions: Actions = {
         }
 
         return { success: true, profile: data };
+    },
+
+    createExpenseCategory: async ({ request, locals }) => {
+        if (!locals.user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務可管理費用類別' });
+        }
+
+        const formData = await request.formData();
+        const name = String(formData.get('name') || '').trim();
+        const description = String(formData.get('description') || '').trim();
+        if (!name) return fail(400, { message: '請輸入費用類別名稱' });
+        if (!description) return fail(400, { message: '請輸入適用情境說明' });
+
+        const { error } = await locals.supabase.from('expense_categories').insert({
+            name,
+            description,
+            is_active: true
+        });
+        if (error) {
+            if (error.code === '23505') {
+                return fail(409, { message: '此費用類別已存在' });
+            }
+            return fail(500, { message: '新增費用類別失敗', error: error.message });
+        }
+
+        return { success: true };
+    },
+
+    toggleExpenseCategory: async ({ request, locals }) => {
+        if (!locals.user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務可管理費用類別' });
+        }
+
+        const formData = await request.formData();
+        const id = String(formData.get('id') || '').trim();
+        const isActive = String(formData.get('is_active') || '') === 'true';
+        if (!id) return fail(400, { message: '缺少費用類別 ID' });
+
+        const { error } = await locals.supabase
+            .from('expense_categories')
+            .update({ is_active: isActive })
+            .eq('id', id);
+        if (error) {
+            return fail(500, { message: '更新費用類別狀態失敗', error: error.message });
+        }
+
+        return { success: true };
+    },
+
+    deleteExpenseCategory: async ({ request, locals }) => {
+        if (!locals.user?.is_finance) {
+            return fail(403, { message: '權限不足：僅財務可管理費用類別' });
+        }
+
+        const formData = await request.formData();
+        const id = String(formData.get('id') || '').trim();
+        if (!id) return fail(400, { message: '缺少費用類別 ID' });
+
+        const { data: category, error: categoryError } = await locals.supabase
+            .from('expense_categories')
+            .select('id, name')
+            .eq('id', id)
+            .single();
+        if (categoryError || !category) {
+            return fail(404, { message: '找不到費用類別' });
+        }
+
+        const { count, error: referenceError } = await locals.supabase
+            .from('claim_items')
+            .select('id', { head: true, count: 'exact' })
+            .eq('category', String(category.name));
+        if (referenceError) {
+            return fail(500, { message: '檢查類別關聯失敗', error: referenceError.message });
+        }
+        if ((count || 0) > 0) {
+            return fail(409, { message: '此費用類別已被請款明細使用，無法刪除' });
+        }
+
+        const { error } = await locals.supabase
+            .from('expense_categories')
+            .delete()
+            .eq('id', id);
+        if (error) {
+            return fail(500, { message: '刪除費用類別失敗', error: error.message });
+        }
+
+        return { success: true };
     }
 };

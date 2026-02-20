@@ -21,7 +21,7 @@ import {
     resolveRejectNextStatus,
     resolveReviewerFlags
 } from '$lib/server/claims/review-policy';
-import { CLAIM_ITEM_CATEGORIES } from '$lib/claims/constants';
+import { getActiveExpenseCategoryNames, getExpenseCategories } from '$lib/server/expense-categories';
 
 export const load: PageServerLoad = async ({ params, locals: { supabase, getSession } }) => {
     const session = await getSession();
@@ -115,6 +115,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         user: { id: session.user.id, isFinance, isAdmin, isApprover },
         duplicateWarnings,
         payees,
+        categoryOptions: await getExpenseCategories(supabase, { activeOnly: true }),
         viewMode: canEditAsApplicant ? 'edit' : canSupplementAsApplicant ? 'supplement' : 'view'
     };
 
@@ -182,6 +183,13 @@ export const actions: Actions = {
         if (!parsed.ok) {
             return fail(parsed.status, { message: parsed.message });
         }
+        const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
+        for (let i = 0; i < parsed.value.normalizedItems.length; i += 1) {
+            const category = String(parsed.value.normalizedItems[i]?.category || '').trim();
+            if (!category || !activeCategoryNames.has(category)) {
+                return fail(400, { message: `第 ${i + 1} 筆明細的費用類別無效或已停用` });
+            }
+        }
         const persist = await persistEditedClaim(supabase, claimRow as EditableClaimRow, parsed.value);
         if (!persist.ok) {
             return fail(persist.status, { message: persist.message });
@@ -211,6 +219,13 @@ export const actions: Actions = {
         const parsed = parseAndValidateEditForm(formData, claimRow as EditableClaimRow, params.id);
         if (!parsed.ok) {
             return fail(parsed.status, { message: parsed.message });
+        }
+        const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
+        for (let i = 0; i < parsed.value.normalizedItems.length; i += 1) {
+            const category = String(parsed.value.normalizedItems[i]?.category || '').trim();
+            if (!category || !activeCategoryNames.has(category)) {
+                return fail(400, { message: `第 ${i + 1} 筆明細的費用類別無效或已停用` });
+            }
         }
         const persist = await persistEditedClaim(supabase, claimRow as EditableClaimRow, parsed.value);
         if (!persist.ok) {
@@ -743,8 +758,8 @@ export const actions: Actions = {
         const amount = Number(amountRaw);
 
         if (!itemId) return fail(400, { message: 'Missing item_id' });
-        const validCategories = new Set(CLAIM_ITEM_CATEGORIES.map((item) => item.value));
-        if (!validCategories.has(category)) {
+        const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
+        if (!activeCategoryNames.has(category)) {
             return fail(400, { message: 'Invalid category' });
         }
         if (!Number.isFinite(amount) || amount <= 0) {

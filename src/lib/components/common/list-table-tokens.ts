@@ -1,10 +1,10 @@
 export const LIST_TABLE_TOKENS = {
     header: "bg-primary/20",
-    headerRow: "hover:bg-transparent border-none",
+    headerRow: "hover:bg-transparent border-b border-border/60",
     headBase:
         "text-[11px] font-semibold text-primary/95 uppercase tracking-[0.06em] py-4",
-    body: "divide-y divide-border/10 [&_td]:text-[13px] [&_td]:font-medium [&_td]:text-foreground/85",
-    row: "group border-none hover:bg-primary/6 transition-colors h-12",
+    body: "[&_td]:text-[13px] [&_td]:font-medium [&_td]:text-foreground/85",
+    row: "group h-12 border-b border-border/60 hover:bg-primary/6 transition-colors",
     rowClickable: "cursor-pointer",
     cellText: "text-xs",
     monoMuted: "text-[13px] font-mono text-foreground/70",

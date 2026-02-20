@@ -56,7 +56,7 @@ test.describe('Claim Creation Flow', () => {
             items: JSON.stringify([
                 {
                     date: new Date().toISOString().split('T')[0],
-                    category: 'travel',
+                    category: '差旅費',
                     description: 'Taxi to Client',
                     amount: 500
                 }

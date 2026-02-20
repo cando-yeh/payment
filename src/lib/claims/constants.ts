@@ -51,9 +51,9 @@ export function getClaimsTabForStatus(status: string): ClaimsTabKey {
 }
 
 export const CLAIM_ITEM_CATEGORIES = [
-    { value: "travel", label: "差旅費" },
-    { value: "food", label: "伙食費" },
-    { value: "general", label: "一般雜支" }
+    { value: "一般雜支", label: "一般雜支" },
+    { value: "差旅費", label: "差旅費" },
+    { value: "伙食費", label: "伙食費" }
 ] as const;
 
 export function getClaimTypeLabel(type: string): string {

@@ -6,6 +6,7 @@ import {
     ALLOWED_UPLOAD_MIME_TYPES,
     EDITABLE_CLAIM_STATUSES
 } from '$lib/server/claims/constants';
+import { getActiveExpenseCategoryNames, getExpenseCategories } from '$lib/server/expense-categories';
 
 type ClaimItemInput = {
     date?: string;
@@ -55,6 +56,7 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
 
     return {
         payees,
+        categoryOptions: await getExpenseCategories(supabase, { activeOnly: true }),
         hasApprover: Boolean(profile?.approver_id),
         applicantId: session.user.id,
         applicantName:
@@ -205,6 +207,7 @@ export const actions: Actions = {
             attachmentPlans.push({ effectiveStatus, exemptReason: selected.exemptReason, file });
         }
 
+        const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
         const claimItems = safeItems.map((item, index) => {
             const amount = Number(item.amount);
             const dateStart = String(item.date_start || item.date || '').trim();
@@ -214,7 +217,7 @@ export const actions: Actions = {
                 item_index: index + 1,
                 date_start: dateStart || new Date().toISOString().slice(0, 10),
                 date_end: dateEnd || null,
-                category: (item.category || 'general').trim(),
+                category: String(item.category || '一般雜支').trim(),
                 description: String(item.description || '').trim(),
                 amount: Number.isFinite(amount) ? amount : 0,
                 invoice_number: isPersonalService ? null : item.invoice_number || null,
@@ -224,6 +227,13 @@ export const actions: Actions = {
                 extra: {}
             };
         });
+
+        for (let i = 0; i < claimItems.length; i += 1) {
+            const category = String(claimItems[i]?.category || '').trim();
+            if (!category || !activeCategoryNames.has(category)) {
+                return fail(400, { message: `第 ${i + 1} 筆明細的費用類別無效或已停用` });
+            }
+        }
 
         if (isPersonalService && shouldSubmitDirectly) {
             const item = claimItems[0];

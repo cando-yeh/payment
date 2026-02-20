@@ -62,7 +62,7 @@ test.describe.serial('Claim Submit Guards', () => {
             claim_id: id,
             item_index: 1,
             date_start: new Date().toISOString().split('T')[0],
-            category: 'travel',
+            category: '差旅費',
             description: 'Taxi',
             amount: 200
         });
@@ -106,7 +106,7 @@ test.describe.serial('Claim Submit Guards', () => {
             claim_id: id,
             item_index: 1,
             date_start: new Date().toISOString().split('T')[0],
-            category: 'food',
+            category: '伙食費',
             description: 'Lunch',
             amount: 300
         });
@@ -132,7 +132,7 @@ test.describe.serial('Claim Submit Guards', () => {
             claim_id: id,
             item_index: 1,
             date_start: new Date().toISOString().split('T')[0],
-            category: 'travel',
+            category: '差旅費',
             description: 'Taxi',
             amount: 100,
             attachment_status: 'uploaded',
