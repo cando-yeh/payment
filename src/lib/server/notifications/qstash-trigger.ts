@@ -3,8 +3,18 @@ type TriggerOptions = {
     reason?: string;
 };
 
+function normalizeAbsoluteUrl(raw: string): string | null {
+    const value = String(raw || "").trim();
+    if (!value) return null;
+
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith("//")) return `https:${value}`;
+    if (value.startsWith("/")) return null;
+    return `https://${value}`;
+}
+
 function resolveDrainUrl(origin?: string): string | null {
-    const explicit = String(process.env.NOTIFY_DRAIN_URL || "").trim();
+    const explicit = normalizeAbsoluteUrl(process.env.NOTIFY_DRAIN_URL || "");
     if (explicit) return explicit;
 
     const appBase =
@@ -12,7 +22,9 @@ function resolveDrainUrl(origin?: string): string | null {
         String(process.env.PUBLIC_APP_BASE_URL || "").trim() ||
         String(origin || "").trim();
     if (!appBase) return null;
-    return `${appBase.replace(/\/$/, "")}/api/notify/drain`;
+    const normalizedBase = normalizeAbsoluteUrl(appBase);
+    if (!normalizedBase) return null;
+    return `${normalizedBase.replace(/\/$/, "")}/api/notify/drain`;
 }
 
 export async function triggerNotificationDrain(
