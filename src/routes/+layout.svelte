@@ -87,6 +87,7 @@
 	<!-- 已登入且不在登入頁：顯示側邊欄佈局 -->
 	<div
 		class="flex min-h-screen bg-secondary/50 text-foreground transition-all duration-300"
+		style="--sidebar-w: 16rem; --sidebar-gap: 0.75rem;"
 	>
 		<button
 			type="button"
@@ -116,8 +117,8 @@
 				? "translate-x-0"
 				: "-translate-x-full md:translate-x-0"}
 		/>
-		<main class="flex-1 md:ml-64 min-h-screen overflow-x-hidden">
-			<div class="max-w-7xl mx-auto p-8 lg:p-12 space-y-10">
+		<main class="flex-1 md:ml-[calc(var(--sidebar-w)+var(--sidebar-gap))] min-h-screen overflow-x-hidden">
+			<div class="max-w-7xl mx-auto p-6 lg:p-10 space-y-8">
 				{@render children()}
 			</div>
 		</main>

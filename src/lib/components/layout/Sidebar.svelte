@@ -256,7 +256,7 @@
 <!-- 側邊欄容器：macOS 風格設計，高透明度、細緻邊框 -->
 <aside
     class={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-sidebar-border/80 bg-sidebar transition-all duration-300",
+        "fixed inset-y-0 left-0 z-50 flex w-[var(--sidebar-w)] flex-col border-r border-sidebar-border/80 bg-sidebar transition-all duration-300",
         className,
     )}
 >
