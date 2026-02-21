@@ -207,7 +207,7 @@ export function renderClaimEmailTemplate(
         payload.from_status && payload.to_status ? `${fromStatus} → ${toStatus}` : toStatus || fromStatus || "-";
     const copy = getEventCopy(payload.event_code);
 
-    const subject = `[報銷系統][${copy.subjectTag}] ${eventLabel}｜請款單 #${claimNo}`;
+    const subject = `[${copy.subjectTag}] ${eventLabel}｜請款單 #${claimNo}`;
 
     const lines = [
         `${copy.headline}`,

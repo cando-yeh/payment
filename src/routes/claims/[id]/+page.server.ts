@@ -22,6 +22,15 @@ import {
     resolveReviewerFlags
 } from '$lib/server/claims/review-policy';
 import { getActiveExpenseCategoryNames, getExpenseCategories } from '$lib/server/expense-categories';
+import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
+
+async function queueNotificationDrain(origin: string, reason: string): Promise<void> {
+    try {
+        await triggerNotificationDrain({ origin, reason });
+    } catch (drainError) {
+        console.error('[notify:qstash] trigger failed:', reason, drainError);
+    }
+}
 
 export const load: PageServerLoad = async ({ params, locals: { supabase, getSession } }) => {
     const session = await getSession();
@@ -240,6 +249,7 @@ export const actions: Actions = {
         if (!moveResult.ok) {
             return fail(moveResult.status, { message: moveResult.message });
         }
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
 
         throw redirect(303, '/claims?tab=processing');
     },
@@ -316,11 +326,12 @@ export const actions: Actions = {
         if (!moveResult.ok) {
             return fail(moveResult.status, { message: moveResult.message });
         }
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
 
         throw redirect(303, '/claims?tab=processing');
     },
 
-    submitSupplement: async ({ params, locals: { supabase, getSession } }) => {
+    submitSupplement: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: 'Unauthorized' });
 
@@ -389,6 +400,7 @@ export const actions: Actions = {
             .eq('status', 'paid_pending_doc');
 
         if (updateError) return fail(500, { message: '提交補件審核失敗' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.supplement_submit');
 
         throw redirect(303, '/claims?tab=processing');
     },
@@ -429,6 +441,7 @@ export const actions: Actions = {
             .eq('id', id);
 
         if (updateError) return fail(500, { message: '核准失敗' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.approve');
         throw redirect(303, '/approval');
     },
 
@@ -470,10 +483,11 @@ export const actions: Actions = {
             .eq('id', id);
 
         if (updateError) return fail(500, { message: '駁回失敗' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.reject');
         throw redirect(303, '/approval');
     },
 
-    cancel: async ({ params, locals: { supabase, getSession } }) => {
+    cancel: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: 'Unauthorized' });
 
@@ -493,6 +507,7 @@ export const actions: Actions = {
             .eq('id', id);
 
         if (updateError) return fail(500, { message: '撤銷失敗' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.cancel');
         return { success: true };
     },
 
@@ -820,7 +835,7 @@ export const actions: Actions = {
         return { success: true };
     },
 
-    withdraw: async ({ params, locals: { supabase, getSession } }) => {
+    withdraw: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: 'Unauthorized' });
 
@@ -841,6 +856,7 @@ export const actions: Actions = {
             .in('status', ['pending_manager', 'pending_finance']);
 
         if (updateError) return fail(500, { message: 'Withdraw failed' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.withdraw');
         throw redirect(303, '/claims?tab=drafts');
     },
 

@@ -7,6 +7,7 @@ import {
     EDITABLE_CLAIM_STATUSES
 } from '$lib/server/claims/constants';
 import { getActiveExpenseCategoryNames, getExpenseCategories } from '$lib/server/expense-categories';
+import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
 
 type ClaimItemInput = {
     date?: string;
@@ -28,6 +29,14 @@ function normalizeItems(itemsRaw: string): ClaimItemInput[] | null {
         return parsed;
     } catch {
         return null;
+    }
+}
+
+async function queueNotificationDrain(origin: string, reason: string): Promise<void> {
+    try {
+        await triggerNotificationDrain({ origin, reason });
+    } catch (drainError) {
+        console.error('[notify:qstash] trigger failed:', reason, drainError);
     }
 }
 
@@ -390,6 +399,8 @@ export const actions: Actions = {
             if (!updatedClaim) {
                 return fail(409, { message: '請款單狀態已變更，請重新整理後再試' });
             }
+
+            await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
         }
 
         if (shouldSubmitDirectly) {

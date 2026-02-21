@@ -1,5 +1,14 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
+import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
+
+async function queueNotificationDrain(origin: string, reason: string): Promise<void> {
+    try {
+        await triggerNotificationDrain({ origin, reason });
+    } catch (drainError) {
+        console.error('[notify:qstash] trigger failed:', reason, drainError);
+    }
+}
 
 export const load: PageServerLoad = async ({ locals: { supabase, getSession } }) => {
     const session = await getSession();
@@ -162,6 +171,8 @@ export const actions: Actions = {
             console.error('Batch Pay Claim Update Errors:', updateResults);
             return fail(500, { message: '請款單狀態更新失敗' });
         }
+
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.pay');
 
         return { success: true, paymentId: payment.id };
     }

@@ -1,5 +1,14 @@
 import { error, redirect, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
+import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
+
+async function queueNotificationDrain(origin: string, reason: string): Promise<void> {
+    try {
+        await triggerNotificationDrain({ origin, reason });
+    } catch (drainError) {
+        console.error('[notify:qstash] trigger failed:', reason, drainError);
+    }
+}
 
 export const load: PageServerLoad = async ({ params, locals: { supabase, getSession } }) => {
     const session = await getSession();
@@ -36,7 +45,7 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
 };
 
 export const actions: Actions = {
-    cancelPayment: async ({ params, locals: { supabase, getSession } }) => {
+    cancelPayment: async ({ request, params, locals: { supabase, getSession } }) => {
         const session = await getSession();
         if (!session) return fail(401, { message: '尚未登入' });
 
@@ -86,6 +95,8 @@ export const actions: Actions = {
             console.error('Claims Rollback Error:', updateClaimsError);
             return fail(500, { message: '請款單狀態回滾失敗' });
         }
+
+        await queueNotificationDrain(new URL(request.url).origin, 'payment.cancel');
 
         throw redirect(303, `/payments/${id}`);
     }

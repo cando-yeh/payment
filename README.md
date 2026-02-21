@@ -42,6 +42,11 @@ cp .env.example .env
 通知（Email Worker）另需：
 
 - `APP_BASE_URL`（例如 `http://localhost:5173`）
+- `QSTASH_TOKEN`（Upstash QStash token）
+- `NOTIFY_DRAIN_URL`（可選；預設為 `${APP_BASE_URL}/api/notify/drain`）
+- `NOTIFY_DRAIN_TOKEN`（建議設定；保護 `/api/notify/drain`）
+- `NOTIFY_QSTASH_DELAY_SECONDS`（預設 `5`）
+- `NOTIFY_QSTASH_RETRIES`（預設 `2`）
 - `NOTIFY_SMTP_HOST`
 - `NOTIFY_SMTP_PORT`（預設 `465`）
 - `NOTIFY_SMTP_SECURE`（`true/false`，預設 `true`）
@@ -51,6 +56,13 @@ cp .env.example .env
 - `NOTIFY_BATCH_SIZE`（預設 `20`）
 - `NOTIFY_RATE_DELAY_MS`（預設 `200`）
 - `NOTIFY_SMTP_TIMEOUT_MS`（預設 `15000`）
+- `NOTIFY_MAX_ATTEMPTS_CAP`（預設 `5`）
+
+通知觸發流程：
+
+- 狀態轉移成功後，Server Action 會 publish 一筆 QStash delayed message（預設 5 秒）
+- QStash 回呼 `/api/notify/drain`，由該端點執行通知佇列寄送與重試邏輯
+- 本機也可手動執行 `npm run notify:worker` 做排查/補送
 
 ## 測試
 
