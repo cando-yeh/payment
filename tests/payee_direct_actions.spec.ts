@@ -9,6 +9,11 @@ test.describe('Payee Direct Actions (Finance)', () => {
     const password = 'password123';
     let testPayeeId: string;
     let testPayeeName: string;
+    async function focusTestPayee(page: any) {
+        const search = page.getByPlaceholder('搜尋名稱...').first();
+        await search.fill(testPayeeName);
+        await page.waitForTimeout(250);
+    }
     async function ensureShowDisabledOn(page: any) {
         const toggle = page.getByRole('switch', { name: '顯示停用收款人' });
         const checked = await toggle.getAttribute('aria-checked');
@@ -72,6 +77,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
     test('Finance User can directly DISABLE a payee', async ({ page }) => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
+        await focusTestPayee(page);
 
         // Find the payee row
         const row = page.getByTestId(`payee-row-${testPayeeId}`);
@@ -104,6 +110,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
             .toBe('disabled');
 
         await page.reload();
+        await focusTestPayee(page);
         // New UX: disabled payees are hidden by default until "顯示停用" is enabled.
         await expect(page.getByTestId(`payee-row-${testPayeeId}`)).toHaveCount(0);
         await ensureShowDisabledOn(page);
@@ -115,6 +122,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
     test('Finance User can directly ENABLE a payee', async ({ page }) => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
+        await focusTestPayee(page);
         // Ensure disabled rows are visible for re-enable flow.
         await ensureShowDisabledOn(page);
 
@@ -147,6 +155,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
             .toBe('available');
 
         await page.reload();
+        await focusTestPayee(page);
         await expect(
             page.getByTestId(`payee-row-${testPayeeId}`).getByText('已啟用')
         ).toBeVisible();
@@ -155,6 +164,7 @@ test.describe('Payee Direct Actions (Finance)', () => {
     test('Finance User can directly DELETE a payee', async ({ page }) => {
         await injectSession(page, userFinance.email, password);
         await page.goto('/payees');
+        await focusTestPayee(page);
 
         const row = page.getByTestId(`payee-row-${testPayeeId}`);
         await expect(row).toBeVisible();

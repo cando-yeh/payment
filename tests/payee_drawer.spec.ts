@@ -222,7 +222,11 @@ test.describe('Payee Drawer Functionality', () => {
         // Select Bank
         const bankCombobox = page.locator('input#bank_code').first();
         await bankCombobox.click();
-        await page.getByRole('button', { name: /004.*臺灣銀行/ }).click();
+        await page
+            .locator('div.absolute.z-50 button')
+            .filter({ hasText: /004/ })
+            .first()
+            .click();
 
         await page.locator('input[name="bank_account"]').fill('1234567890');
         await page.locator('input[name="service_description"]').fill('Test Service');

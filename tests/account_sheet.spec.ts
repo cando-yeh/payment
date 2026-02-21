@@ -44,31 +44,33 @@ test.describe.serial('Account Sheet', () => {
         for (let i = 0; i < 3; i++) {
             await trigger.click({ force: true });
             await page.waitForTimeout(300);
-            if (await page.getByRole('dialog').isVisible().catch(() => false)) break;
+            if (
+                await page
+                    .getByText('匯款帳號資訊', { exact: true })
+                    .isVisible()
+                    .catch(() => false)
+            )
+                break;
         }
 
-        // Verify form fields
-        const sheetDialog = page.getByRole('dialog');
-        await expect(sheetDialog).toBeVisible();
-        await expect(
-            sheetDialog.getByText('匯款帳號資訊', { exact: true }),
-        ).toBeVisible();
-        const hasBankFields = await sheetDialog
+        // Verify form fields (不依賴 role=dialog，避免 UI 底層實作變動造成假陰性)
+        await expect(page.getByText('匯款帳號資訊', { exact: true })).toBeVisible();
+        const hasBankFields = await page
             .getByText('銀行代碼', { exact: true })
             .isVisible()
             .catch(() => false);
 
         if (!hasBankFields) {
             await expect(
-                sheetDialog.getByText('尚未設定銀行帳號', { exact: true }),
+                page.getByText('尚未設定銀行帳號', { exact: true }),
             ).toBeVisible();
             await expect(
-                sheetDialog.getByRole('button', { name: '新增銀行帳號' }),
+                page.getByRole('button', { name: '新增銀行帳號' }),
             ).toBeVisible();
         }
 
         await expect(
-            sheetDialog.getByRole('button', { name: '編輯姓名' }),
+            page.getByRole('button', { name: '編輯姓名' }),
         ).toBeVisible();
     });
 });

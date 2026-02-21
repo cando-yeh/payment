@@ -39,6 +39,19 @@ cp .env.example .env
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `PUBLIC_GOOGLE_CLIENT_ID`
 
+通知（Email Worker）另需：
+
+- `APP_BASE_URL`（例如 `http://localhost:5173`）
+- `NOTIFY_SMTP_HOST`
+- `NOTIFY_SMTP_PORT`（預設 `465`）
+- `NOTIFY_SMTP_SECURE`（`true/false`，預設 `true`）
+- `NOTIFY_SMTP_USERNAME`
+- `NOTIFY_SMTP_PASSWORD`
+- `NOTIFY_SMTP_FROM`
+- `NOTIFY_BATCH_SIZE`（預設 `20`）
+- `NOTIFY_RATE_DELAY_MS`（預設 `200`）
+- `NOTIFY_SMTP_TIMEOUT_MS`（預設 `15000`）
+
 ## 測試
 
 ```bash
@@ -47,6 +60,7 @@ npm run test:run
 npm run test:e2e:stable
 npm run test:all:stable
 npm run test:cleanup
+npm run notify:worker
 ```
 
 ## Supabase Migration（目前策略）
@@ -79,3 +93,4 @@ tests/                    # Vitest + Playwright
 - `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/02_技術架構與輔助規範.md`
 - `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/03_資料庫與資料規約.md`
 - `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/TESTING.md`
+- `/Users/candoyeh/Downloads/報銷系統/報銷_new/docs/notification_observability.sql`
