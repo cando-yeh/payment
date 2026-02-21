@@ -4,7 +4,11 @@ type TriggerOptions = {
 };
 
 function normalizeAbsoluteUrl(raw: string): string | null {
-    const value = String(raw || "").trim();
+    let value = String(raw || "").trim();
+    if (!value) return null;
+
+    // Strip accidental wrappers from env dashboards: "url", 'url', <url>
+    value = value.replace(/^['"`<\s]+|['"`>\s]+$/g, "");
     if (!value) return null;
 
     if (/^https?:\/\//i.test(value)) return value;
@@ -65,7 +69,15 @@ export async function triggerNotificationDrain(
     });
     if (!response.ok) {
         const text = await response.text().catch(() => "");
-        console.error("[notify:qstash] publish failed", response.status, text);
+        console.error("[notify:qstash] publish failed", response.status, {
+            error: text,
+            drainUrl,
+            hasNotifyDrainUrl: Boolean(String(process.env.NOTIFY_DRAIN_URL || "").trim()),
+            hasAppBaseUrl: Boolean(String(process.env.APP_BASE_URL || "").trim()),
+            hasPublicAppBaseUrl: Boolean(
+                String(process.env.PUBLIC_APP_BASE_URL || "").trim(),
+            ),
+        });
         return false;
     }
 
