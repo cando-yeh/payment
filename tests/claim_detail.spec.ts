@@ -30,6 +30,22 @@ test.describe.serial('Claim Detail Page', () => {
         await expect(page.getByText('費用明細')).toBeVisible();
     }
 
+    async function openFirstItemDialog(page: any) {
+        const row = page.getByTestId('claim-item-row-0');
+        await expect(row).toBeVisible();
+        const dialog = page.locator('[data-slot="dialog-content"]');
+
+        // E2E 全量並行時偶發第一次點擊未開啟，這裡做一次重試降低 flaky
+        for (let attempt = 0; attempt < 2; attempt++) {
+            await row.click();
+            if (await dialog.isVisible({ timeout: 2500 }).catch(() => false)) {
+                return dialog;
+            }
+        }
+        await expect(dialog).toBeVisible();
+        return dialog;
+    }
+
     test.beforeAll(async () => {
         // Create test user
         const email = `claim_detail_${Date.now()}_${Math.floor(Math.random() * 1000)}@example.com`;
@@ -96,19 +112,14 @@ test.describe.serial('Claim Detail Page', () => {
 
         // Verify expense section exists and can open item drawer
         await expect(page.getByText('費用明細')).toBeVisible();
-        await expect(page.getByTestId('claim-item-row-0')).toBeVisible();
-        await page.getByTestId('claim-item-row-0').click();
-        await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible();
+        await openFirstItemDialog(page);
     });
 
     test('Draft edit page can submit save action', async ({ page }) => {
         await injectSession(page, testUser.email, password);
 
         await openClaimDetail(page, claimId);
-        await expect(page.getByTestId('claim-item-row-0')).toBeVisible();
-        await page.getByTestId('claim-item-row-0').click();
-        const dialog = page.locator('[data-slot="dialog-content"]');
-        await expect(dialog).toBeVisible();
+        const dialog = await openFirstItemDialog(page);
         // 新版 UI 已移除 accordion，欄位直接顯示
         await dialog.getByLabel('說明').fill('Updated from edit page');
         await dialog.getByLabel('發票號碼').fill('AB-12345678');

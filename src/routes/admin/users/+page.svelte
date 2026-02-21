@@ -24,6 +24,7 @@
     import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
     import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
+    import ListPagination from "$lib/components/common/ListPagination.svelte";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
     import { cn } from "$lib/utils";
@@ -39,6 +40,9 @@
     let includeInactiveUsers = $state(false);
     let includeInactiveCategories = $state(false);
     let currentSection = $state<"users" | "categories">("users");
+    const PAGE_SIZE = 10;
+    let userPage = $state(1);
+    let categoryPage = $state(1);
     let hasInitializedViewState = $state(false);
     let isCategoryDialogOpen = $state(false);
     let newCategoryName = $state("");
@@ -110,6 +114,9 @@
             return fullName.includes(normalized) || id.includes(normalized);
         });
     });
+    const pagedUsers = $derived.by(() =>
+        filteredUsers.slice((userPage - 1) * PAGE_SIZE, userPage * PAGE_SIZE),
+    );
 
     const emptyMessage = $derived.by(() => {
         const keyword = searchTerm.trim();
@@ -135,6 +142,12 @@
             return name.includes(normalized) || description.includes(normalized);
         });
     });
+    const pagedCategories = $derived.by(() =>
+        filteredCategories.slice(
+            (categoryPage - 1) * PAGE_SIZE,
+            categoryPage * PAGE_SIZE,
+        ),
+    );
     const categoryEmptyMessage = $derived.by(() => {
         if (expenseCategories.length === 0) return "目前尚無費用類別";
         if (searchTerm.trim() && filteredCategories.length === 0) {
@@ -144,6 +157,17 @@
             return "目前篩選條件下沒有結果";
         }
         return "目前尚無費用類別";
+    });
+
+    $effect(() => {
+        const _userKey = `${currentSection}|${includeInactiveUsers}|${searchTerm.trim().toLowerCase()}`;
+        void _userKey;
+        userPage = 1;
+    });
+    $effect(() => {
+        const _categoryKey = `${currentSection}|${includeInactiveCategories}|${searchTerm.trim().toLowerCase()}`;
+        void _categoryKey;
+        categoryPage = 1;
     });
 
     function openSystemConfirm(options: {
@@ -450,7 +474,7 @@
                     </Table.Row>
                 </Table.Header>
                 <Table.Body class={LIST_TABLE_TOKENS.body}>
-                    {#each filteredUsers as user}
+                    {#each pagedUsers as user}
                         <Table.Row
                             class={cn(
                                 LIST_TABLE_TOKENS.row,
@@ -593,6 +617,11 @@
                     {/each}
                 </Table.Body>
             </Table.Root>
+            <ListPagination
+                totalItems={filteredUsers.length}
+                pageSize={PAGE_SIZE}
+                bind:currentPage={userPage}
+            />
             {:else}
                 <Table.Root>
                     <Table.Header class={LIST_TABLE_TOKENS.header}>
@@ -612,7 +641,7 @@
                         </Table.Row>
                     </Table.Header>
                     <Table.Body class={LIST_TABLE_TOKENS.body}>
-                        {#each filteredCategories as item}
+                        {#each pagedCategories as item}
                             <Table.Row class={LIST_TABLE_TOKENS.row}>
                                 <Table.Cell>
                                     <span class="font-medium">{item.name}</span>
@@ -680,6 +709,11 @@
                         {/each}
                     </Table.Body>
                 </Table.Root>
+                <ListPagination
+                    totalItems={filteredCategories.length}
+                    pageSize={PAGE_SIZE}
+                    bind:currentPage={categoryPage}
+                />
             {/if}
     </ListPageScaffold>
 </div>

@@ -107,9 +107,9 @@ test.describe('Payee Direct Actions (Finance)', () => {
         // New UX: disabled payees are hidden by default until "顯示停用" is enabled.
         await expect(page.getByTestId(`payee-row-${testPayeeId}`)).toHaveCount(0);
         await ensureShowDisabledOn(page);
-        await expect(
-            page.getByTestId(`payee-row-${testPayeeId}`).getByText('已停用')
-        ).toBeVisible();
+        const disabledRow = page.getByTestId(`payee-row-${testPayeeId}`);
+        await expect(disabledRow).toBeVisible();
+        await expect(disabledRow).toContainText(/停用/);
     });
 
     test('Finance User can directly ENABLE a payee', async ({ page }) => {

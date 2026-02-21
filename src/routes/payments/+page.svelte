@@ -10,6 +10,7 @@
     import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
+    import ListPagination from "$lib/components/common/ListPagination.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
     import { FileText } from "lucide-svelte";
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
@@ -36,6 +37,8 @@
     let { payments } = $derived(data);
     let searchTerm = $state("");
     let statusTab = $state<"paid" | "pending_doc">("paid");
+    const PAGE_SIZE = 10;
+    let currentPage = $state(1);
 
     function getPaymentViewStatus(
         payment: Payment,
@@ -66,6 +69,18 @@
             const payee = String(payment.payee_name || "").toLowerCase();
             return id.includes(normalized) || payee.includes(normalized);
         });
+    });
+    let pagedPayments = $derived.by(() =>
+        filteredPayments.slice(
+            (currentPage - 1) * PAGE_SIZE,
+            currentPage * PAGE_SIZE,
+        ),
+    );
+
+    $effect(() => {
+        const _key = `${statusTab}|${searchTerm.trim().toLowerCase()}`;
+        void _key;
+        currentPage = 1;
     });
 
     let emptyMessage = $derived.by(() => {
@@ -120,8 +135,10 @@
             {#snippet left()}
                 <Tabs.Root
                     value={statusTab}
-                    onValueChange={(value) =>
-                        (statusTab = value as "paid" | "pending_doc")}
+                    onValueChange={(value) => {
+                        statusTab = value as "paid" | "pending_doc";
+                        currentPage = 1;
+                    }}
                 >
                     <ListTabs>
                         <ListTabTrigger value="paid">已撥款</ListTabTrigger>
@@ -177,7 +194,7 @@
                 </Table.Header>
                 <Table.Body class={LIST_TABLE_TOKENS.body}>
                     {#if filteredPayments.length > 0}
-                        {#each filteredPayments as payment}
+                        {#each pagedPayments as payment}
                             <Table.Row
                                 class={cn(
                                     LIST_TABLE_TOKENS.row,
@@ -252,6 +269,11 @@
                     {/if}
                 </Table.Body>
             </Table.Root>
+            <ListPagination
+                totalItems={filteredPayments.length}
+                pageSize={PAGE_SIZE}
+                bind:currentPage
+            />
         </div>
     </ListPageScaffold>
 </div>

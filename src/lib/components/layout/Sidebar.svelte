@@ -330,8 +330,7 @@
     <!-- 使用者資訊卡片 -->
     <!-- ====================================== -->
     <div
-        class="flex items-center gap-3 rounded-xl bg-transparent px-3 py-2.5"
-    >
+        class="flex items-center gap-3 rounded-xl bg-transparent px-3 p-2.5    >
         <!-- 使用者頭像 -->
         <Avatar.Root class="h-10 w-10">
             {#if user.avatarUrl}

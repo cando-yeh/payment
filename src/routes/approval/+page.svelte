@@ -8,6 +8,7 @@
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
     import ListTabs from "$lib/components/common/ListTabs.svelte";
     import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
+    import ListPagination from "$lib/components/common/ListPagination.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
     import type { PageData } from "./$types";
     import { enhance } from "$app/forms";
@@ -21,12 +22,16 @@
     let selectedClaims = $state<string[]>([]);
     let isBatchPaySubmitting = $state(false);
     let isBatchPayDialogOpen = $state(false);
+    const PAGE_SIZE = 10;
+    let currentPage = $state(1);
 
     // Get initial tab from URL or default to "manager"
     let activeTab = $state(page.url.searchParams.get("tab") || "manager");
 
     function handleTabChange(value: string) {
         activeTab = value;
+        currentPage = 1;
+        selectedClaims = [];
         const newUrl = new URL(page.url);
         newUrl.searchParams.set("tab", value);
         // Use replaceState to update URL without navigation/reload
@@ -44,6 +49,10 @@
         pendingDocReview,
         userRole,
     } = $derived(data);
+
+    function getPagedClaims(claims: any[]) {
+        return claims.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    }
 </script>
 
 <div in:fade={{ duration: 400 }}>
@@ -213,11 +222,16 @@
                                     : pendingDocReview}
 
                         <ClaimTable
-                            claims={currentList}
+                            claims={getPagedClaims(currentList)}
                             selectable={tabValue === "payment"}
                             bind:selectedClaims
                             emptyIcon={CircleCheck}
                             emptyMessage="目前暫時沒有單據需要處理"
+                        />
+                        <ListPagination
+                            totalItems={currentList.length}
+                            pageSize={PAGE_SIZE}
+                            bind:currentPage
                         />
                     </Tabs.Content>
                 {/each}

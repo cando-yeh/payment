@@ -8,6 +8,7 @@
     import ListToolbar from "$lib/components/common/ListToolbar.svelte";
     import ListTabs from "$lib/components/common/ListTabs.svelte";
     import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
+    import ListPagination from "$lib/components/common/ListPagination.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
@@ -19,6 +20,8 @@
     let { data }: { data: PageData } = $props();
     let currentTab = $state<"claims" | "payments">("claims");
     let searchTerm = $state("");
+    const PAGE_SIZE = 10;
+    let currentPage = $state(1);
 
     $effect(() => {
         currentTab = data.tab === "payments" ? "payments" : "claims";
@@ -28,6 +31,7 @@
     function handleSearch(e: Event) {
         const value = (e.target as HTMLInputElement).value;
         searchTerm = value;
+        currentPage = 1;
         const url = new URL(window.location.href);
         if (value.trim()) {
             url.searchParams.set("search", value);
@@ -39,6 +43,7 @@
 
     function handleTabChange(value: string) {
         currentTab = value === "payments" ? "payments" : "claims";
+        currentPage = 1;
         const url = new URL(window.location.href);
         url.searchParams.set("tab", currentTab);
         window.history.replaceState(window.history.state, "", url);
@@ -86,6 +91,12 @@
             );
         });
     });
+    let pagedClaims = $derived.by(() =>
+        filteredClaims.slice(
+            (currentPage - 1) * PAGE_SIZE,
+            currentPage * PAGE_SIZE,
+        ),
+    );
 
     function getPaymentViewStatus(
         payment: any,
@@ -107,6 +118,12 @@
             return id.includes(normalized) || payee.includes(normalized);
         });
     });
+    let pagedPayments = $derived.by(() =>
+        filteredPayments.slice(
+            (currentPage - 1) * PAGE_SIZE,
+            currentPage * PAGE_SIZE,
+        ),
+    );
 
     let emptyClaimsMessage = $derived.by(() => {
         const keyword = searchTerm.trim();
@@ -159,9 +176,14 @@
 
         {#if currentTab === "claims"}
                 <ClaimTable
-                    claims={filteredClaims}
+                    claims={pagedClaims}
                     emptyIcon={FileText}
                     emptyMessage={emptyClaimsMessage}
+                />
+                <ListPagination
+                    totalItems={filteredClaims.length}
+                    pageSize={PAGE_SIZE}
+                    bind:currentPage
                 />
         {:else}
                 <Table.Root>
@@ -202,7 +224,7 @@
                     </Table.Header>
                     <Table.Body class={LIST_TABLE_TOKENS.body}>
                         {#if filteredPayments.length > 0}
-                            {#each filteredPayments as payment}
+                            {#each pagedPayments as payment}
                                 <Table.Row
                                     class={cn(
                                         LIST_TABLE_TOKENS.row,
@@ -260,6 +282,11 @@
                         {/if}
                     </Table.Body>
                 </Table.Root>
+                <ListPagination
+                    totalItems={filteredPayments.length}
+                    pageSize={PAGE_SIZE}
+                    bind:currentPage
+                />
         {/if}
     </ListPageScaffold>
 </div>

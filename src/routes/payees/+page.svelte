@@ -29,6 +29,7 @@
     import RowActionButtons from "$lib/components/common/RowActionButtons.svelte";
     import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
+    import ListPagination from "$lib/components/common/ListPagination.svelte";
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
     import { LIST_TOOLBAR_TOKENS } from "$lib/components/common/list-toolbar-tokens";
     import { cn } from "$lib/utils";
@@ -114,6 +115,8 @@
     let searchTerm = $state("");
     let typeFilter = $state<"vendor" | "personal" | null>(null);
     let includeDisabled = $state(false);
+    const PAGE_SIZE = 10;
+    let currentPage = $state(1);
     let isActionSubmitting = $state(false);
     let revealedAccounts = $state<Record<string, string>>({});
     let revealingById = $state<Record<string, boolean>>({});
@@ -185,7 +188,21 @@
 
     function toggleTypeFilter(next: "vendor" | "personal") {
         typeFilter = typeFilter === next ? null : next;
+        currentPage = 1;
     }
+
+    $effect(() => {
+        const _key = `${searchTerm.trim().toLowerCase()}|${typeFilter || "all"}|${includeDisabled}`;
+        void _key;
+        currentPage = 1;
+    });
+
+    let pagedPayees = $derived.by(() =>
+        filteredPayees.slice(
+            (currentPage - 1) * PAGE_SIZE,
+            currentPage * PAGE_SIZE,
+        ),
+    );
 
     function getTypeLabel(type: string) {
         switch (type) {
@@ -523,7 +540,7 @@
                 </Table.Row>
             </Table.Header>
             <Table.Body class={LIST_TABLE_TOKENS.body}>
-                {#each filteredPayees as payee}
+                {#each pagedPayees as payee}
                     <Table.Row
                         class={cn(
                             LIST_TABLE_TOKENS.row,
@@ -677,6 +694,11 @@
                 {/each}
             </Table.Body>
         </Table.Root>
+        <ListPagination
+            totalItems={filteredPayees.length}
+            pageSize={PAGE_SIZE}
+            bind:currentPage
+        />
     
     </ListPageScaffold>
 </div>

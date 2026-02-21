@@ -8,6 +8,7 @@
     import ListTabs from "$lib/components/common/ListTabs.svelte";
     import ListTabTrigger from "$lib/components/common/ListTabTrigger.svelte";
     import SearchField from "$lib/components/common/SearchField.svelte";
+    import ListPagination from "$lib/components/common/ListPagination.svelte";
     import ClaimTable from "$lib/components/claims/ClaimTable.svelte";
     import {
         getClaimStatusesForTab,
@@ -17,10 +18,13 @@
 
     let { data }: { data: PageData } = $props();
     let searchTerm = $state("");
+    const PAGE_SIZE = 10;
+    let currentPage = $state(1);
 
     function handleSearch(e: Event) {
         const value = (e.target as HTMLInputElement).value;
         searchTerm = value;
+        currentPage = 1;
         const url = new URL(window.location.href);
         if (value.trim()) {
             url.searchParams.set("search", value);
@@ -32,6 +36,7 @@
 
     function handleTabChange(value: string) {
         currentTab = value;
+        currentPage = 1;
         const url = new URL(window.location.href);
         url.searchParams.set("tab", value);
         window.history.replaceState(window.history.state, "", url);
@@ -68,6 +73,12 @@
             );
         });
     });
+    let pagedClaims = $derived.by(() =>
+        filteredClaims.slice(
+            (currentPage - 1) * PAGE_SIZE,
+            currentPage * PAGE_SIZE,
+        ),
+    );
 
     let emptyMessage = $derived.by(() => {
         const keyword = searchTerm.trim();
@@ -143,7 +154,7 @@
 
             <div class="m-0">
                 <ClaimTable
-                    claims={filteredClaims}
+                    claims={pagedClaims}
                     emptyIcon={FileText}
                     {emptyMessage}
                 >
@@ -159,6 +170,11 @@
                         {/if}
                     {/snippet}
                 </ClaimTable>
+                <ListPagination
+                    totalItems={filteredClaims.length}
+                    pageSize={PAGE_SIZE}
+                    bind:currentPage
+                />
             </div>
         </div>
     </ListPageScaffold>
