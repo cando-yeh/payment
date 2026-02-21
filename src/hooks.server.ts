@@ -37,7 +37,10 @@ const authHandle: Handle = async ({ event, resolve }) => {
     const { pathname } = event.url;
 
     // 1. 公開頁面不需要驗證
-    const isPublicRoute = pathname === '/' || pathname.startsWith('/auth');
+    const isPublicRoute =
+        pathname === '/' ||
+        pathname.startsWith('/auth') ||
+        pathname === '/api/notify/drain';
 
     if (!isPublicRoute && !session) {
         // 未登入使用者存取私有頁面，重導向至登入頁

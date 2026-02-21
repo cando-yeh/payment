@@ -184,8 +184,8 @@ test.describe.serial('Payment Module E2E', () => {
 
         await injectSession(page, finance.email, password);
 
-        // 2. Go to Payment History
-        await page.goto('/payments');
+        // 2. Go to Documents Center (payments tab)
+        await page.goto('/documents?tab=payments');
         await expect(page.locator(`text=${paymentId.split('-')[0]}`)).toBeVisible();
         const paidAtCell = page.locator('table tbody tr').first().locator('td').nth(0);
         await expect(paidAtCell).toBeVisible();

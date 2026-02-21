@@ -12,7 +12,7 @@ describe("list page shared-component adoption", () => {
         const rules: Rule[] = [
             { path: "src/routes/claims/+page.svelte", mustContain: ["import ListToolbar", "<ListToolbar"] },
             { path: "src/routes/approval/+page.svelte", mustContain: ["import ListToolbar", "<ListToolbar"] },
-            { path: "src/routes/payments/+page.svelte", mustContain: ["import ListToolbar", "<ListToolbar"] },
+            { path: "src/routes/documents/+page.svelte", mustContain: ["import ListToolbar", "<ListToolbar"] },
             { path: "src/routes/payees/+page.svelte", mustContain: ["import ListToolbar", "<ListToolbar"] },
             { path: "src/routes/admin/users/+page.svelte", mustContain: ["import ListToolbar", "<ListToolbar"] },
         ];
@@ -28,7 +28,7 @@ describe("list page shared-component adoption", () => {
     it("search-enabled list pages use shared SearchField", () => {
         const pages = [
             "src/routes/claims/+page.svelte",
-            "src/routes/payments/+page.svelte",
+            "src/routes/documents/+page.svelte",
             "src/routes/payees/+page.svelte",
             "src/routes/admin/users/+page.svelte",
         ];
@@ -43,7 +43,7 @@ describe("list page shared-component adoption", () => {
     it("status columns rely on shared StatusBadge", () => {
         const files = [
             "src/lib/components/claims/ClaimTable.svelte",
-            "src/routes/payments/+page.svelte",
+            "src/routes/documents/+page.svelte",
             "src/routes/payees/+page.svelte",
             "src/routes/admin/users/+page.svelte",
         ];
