@@ -3,22 +3,8 @@ type TriggerOptions = {
     reason?: string;
 };
 
-function normalizeAbsoluteUrl(raw: string): string | null {
-    let value = String(raw || "").trim();
-    if (!value) return null;
-
-    // Strip accidental wrappers from env dashboards: "url", 'url', <url>
-    value = value.replace(/^['"`<\s]+|['"`>\s]+$/g, "");
-    if (!value) return null;
-
-    if (/^https?:\/\//i.test(value)) return value;
-    if (value.startsWith("//")) return `https:${value}`;
-    if (value.startsWith("/")) return null;
-    return `https://${value}`;
-}
-
 function resolveDrainUrl(origin?: string): string | null {
-    const explicit = normalizeAbsoluteUrl(process.env.NOTIFY_DRAIN_URL || "");
+    const explicit = String(process.env.NOTIFY_DRAIN_URL || "").trim();
     if (explicit) return explicit;
 
     const appBase =
@@ -26,9 +12,7 @@ function resolveDrainUrl(origin?: string): string | null {
         String(process.env.PUBLIC_APP_BASE_URL || "").trim() ||
         String(origin || "").trim();
     if (!appBase) return null;
-    const normalizedBase = normalizeAbsoluteUrl(appBase);
-    if (!normalizedBase) return null;
-    return `${normalizedBase.replace(/\/$/, "")}/api/notify/drain`;
+    return `${appBase.replace(/\/$/, "")}/api/notify/drain`;
 }
 
 export async function triggerNotificationDrain(
@@ -44,9 +28,7 @@ export async function triggerNotificationDrain(
     const retries = Number(process.env.NOTIFY_QSTASH_RETRIES || 2);
     const endpointToken = String(process.env.NOTIFY_DRAIN_TOKEN || "").trim();
 
-    const publishUrl = `https://qstash.upstash.io/v2/publish/${encodeURIComponent(
-        drainUrl,
-    )}`;
+    const publishUrl = `https://qstash.upstash.io/v2/publish/${drainUrl}`;
     const headers: Record<string, string> = {
         Authorization: `Bearer ${qstashToken}`,
         "Content-Type": "application/json",
@@ -69,15 +51,7 @@ export async function triggerNotificationDrain(
     });
     if (!response.ok) {
         const text = await response.text().catch(() => "");
-        console.error("[notify:qstash] publish failed", response.status, {
-            error: text,
-            drainUrl,
-            hasNotifyDrainUrl: Boolean(String(process.env.NOTIFY_DRAIN_URL || "").trim()),
-            hasAppBaseUrl: Boolean(String(process.env.APP_BASE_URL || "").trim()),
-            hasPublicAppBaseUrl: Boolean(
-                String(process.env.PUBLIC_APP_BASE_URL || "").trim(),
-            ),
-        });
+        console.error("[notify:qstash] publish failed", response.status, text);
         return false;
     }
 
