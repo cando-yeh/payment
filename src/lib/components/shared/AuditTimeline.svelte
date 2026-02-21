@@ -20,32 +20,22 @@
 
     const actionMap: Record<string, string> = {
         submit: "送出申請",
-        approve: "審核通過",
-        reject: "審核駁回",
-        pay: "完成撥款",
         withdraw: "撤回草稿",
-        cancel: "撤銷申請",
+        approve_manager: "主管核准",
+        reject_manager: "主管駁回",
+        approve_finance: "財務核准",
+        reject_finance: "財務駁回",
+        reject_payment: "退回財審",
+        pay_completed: "完成撥款",
+        pay_completed_need_doc: "完成撥款",
+        supplement_submitted: "補件送審",
+        supplement_approved: "補件核准",
+        supplement_rejected: "補件駁回",
+        cancelled: "撤銷申請",
+        payment_reversed: "撤銷撥款",
     };
 
-    function getStatusChangeLabel(item: HistoryItem): string {
-        const from = item.from_status;
-        const to = item.to_status;
-
-        if (from === "paid" && to === "pending_payment") return "撤銷撥款";
-        if (from === "pending_payment" && to === "pending_finance")
-            return "退回財審";
-        if (from === "pending_payment" && to === "paid") return "完成撥款";
-        if (from === "pending_payment" && to === "paid_pending_doc")
-            return "完成撥款";
-        if (from === "paid_pending_doc" && to === "pending_doc_review")
-            return "補件送審";
-        if (from === "pending_doc_review" && to === "paid_pending_doc")
-            return "退回補件";
-        return "狀態異動";
-    }
-
     function getActionLabel(item: HistoryItem): string {
-        if (item.action === "status_change") return getStatusChangeLabel(item);
         return actionMap[item.action] || "狀態異動";
     }
 
@@ -74,17 +64,18 @@
                 <div
                     class={cn(
                         "relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border bg-background text-muted-foreground",
-                        item.action === "approve" &&
+                        item.action.includes("approve") &&
                             "text-green-600 border-green-200 bg-green-50",
-                        item.action === "reject" &&
+                        item.action.includes("reject") &&
                             "text-red-600 border-red-200 bg-red-50",
-                        item.action === "submit" &&
+                        (item.action === "submit" ||
+                            item.action === "supplement_submitted") &&
                             "text-blue-600 border-blue-200 bg-blue-50",
                     )}
                 >
-                    {#if item.action === "submit"}
+                    {#if item.action === "submit" || item.action === "supplement_submitted"}
                         <Clock class="h-3 w-3" />
-                    {:else if item.action === "approve" || item.action === "pay"}
+                    {:else if item.action.includes("approve") || item.action.startsWith("pay_")}
                         <User class="h-3 w-3" />
                     {:else}
                         <Clock class="h-3 w-3" />

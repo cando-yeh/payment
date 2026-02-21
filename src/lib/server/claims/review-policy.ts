@@ -48,5 +48,5 @@ export function canRejectClaim(claim: ReviewClaim, flags: ReviewerFlags): boolea
 
 export function resolveRejectNextStatus(status: string): string {
     if (status === "pending_payment") return "pending_finance";
-    return status === "pending_doc_review" ? "paid_pending_doc" : "returned";
+    return status === "pending_doc_review" ? "paid_pending_doc" : "rejected";
 }

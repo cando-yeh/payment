@@ -16,12 +16,12 @@ export const CLAIM_STATUS_LABELS: Record<string, string> = {
     paid: "已付款",
     paid_pending_doc: "已付款(待補件)",
     pending_doc_review: "補件審核中",
-    returned: "已退回",
+    rejected: "已退件",
     cancelled: "已撤銷"
 };
 
 export const CLAIMS_TAB_STATUS_GROUPS = {
-    drafts: ["draft", "returned"],
+    drafts: ["draft", "rejected"],
     processing: [
         "pending_manager",
         "pending_finance",

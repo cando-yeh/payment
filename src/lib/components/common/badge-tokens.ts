@@ -84,7 +84,7 @@ export const APP_BADGE_TONE: Record<
         variant: "secondary",
         className: "bg-orange-100 text-orange-800 border-orange-200",
     },
-    "status.returned": {
+    "status.rejected": {
         variant: "secondary",
         className: "bg-rose-100 text-rose-800 border-rose-200",
     },
@@ -143,7 +143,7 @@ export const APP_BADGE_PRESET: Record<string, AppBadgePreset> = {
     "status.paid": { tone: "status.paid", label: "已撥款" },
     "status.paid_pending_doc": { tone: "status.paid_pending_doc", label: "待補件" },
     "status.pending_doc_review": { tone: "status.pending_doc_review", label: "待補件審核" },
-    "status.returned": { tone: "status.returned", label: "已退回" },
+    "status.rejected": { tone: "status.rejected", label: "已退件" },
     "status.cancelled": { tone: "status.cancelled", label: "已沖帳" },
     "role.admin": { tone: "role.admin", label: "管理員" },
     "role.finance": { tone: "role.finance", label: "財務" },

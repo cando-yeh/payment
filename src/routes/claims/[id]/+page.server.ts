@@ -175,7 +175,7 @@ export const actions: Actions = {
             return fail(404, { message: 'Claim not found' });
         }
         if (!EDITABLE_CLAIM_STATUSES.has(claimRow.status)) {
-            return fail(400, { message: 'Only draft or returned claims can be edited' });
+            return fail(400, { message: 'Only draft or rejected claims can be edited' });
         }
 
         const formData = await request.formData();
@@ -212,7 +212,7 @@ export const actions: Actions = {
             return fail(404, { message: 'Claim not found' });
         }
         if (!EDITABLE_CLAIM_STATUSES.has(claimRow.status)) {
-            return fail(400, { message: 'Only draft or returned claims can be submitted' });
+            return fail(400, { message: 'Only draft or rejected claims can be submitted' });
         }
 
         const formData = await request.formData();
@@ -252,7 +252,7 @@ export const actions: Actions = {
         const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
         if (claimError || !claim) return fail(404, { message: 'Claim not found' });
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
-            return fail(400, { message: 'Only draft or returned claims can be updated' });
+            return fail(400, { message: 'Only draft or rejected claims can be updated' });
         }
 
         const formData = await request.formData();
@@ -290,7 +290,7 @@ export const actions: Actions = {
         }
 
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
-            return fail(400, { message: 'Only draft or returned claims can be submitted' });
+            return fail(400, { message: 'Only draft or rejected claims can be submitted' });
         }
 
         await request.formData();
@@ -485,7 +485,7 @@ export const actions: Actions = {
             .single();
 
         if (!claim || claim.applicant_id !== session.user.id) return fail(404, { message: 'Claim not found' });
-        if (claim.status !== 'returned') return fail(400, { message: '只有已退回的單據可以撤銷' });
+        if (claim.status !== 'rejected') return fail(400, { message: '只有已退件的單據可以撤銷' });
 
         const { error: updateError } = await supabase
             .from('claims')
@@ -505,7 +505,7 @@ export const actions: Actions = {
         const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
         if (claimError || !claim) return fail(404, { message: 'Claim not found' });
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
-            return fail(400, { message: 'Only draft or returned claims can be deleted' });
+            return fail(400, { message: 'Only draft or rejected claims can be deleted' });
         }
 
         const { data: files } = await supabase.storage.from('claims').list(id);
@@ -870,7 +870,7 @@ export const actions: Actions = {
         const isApplicant = claim.applicant_id === session.user.id;
         const isFinance = profile?.is_finance || profile?.is_admin;
 
-        // Restriction: Only applicant in draft/returned or Finance can toggle
+        // Restriction: Only applicant in draft/rejected or Finance can toggle
         const canToggle = (isApplicant && EDITABLE_CLAIM_STATUSES.has(claim.status)) || isFinance;
         if (!canToggle) return fail(403, { message: 'Forbidden' });
 

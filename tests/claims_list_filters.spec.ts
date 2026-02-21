@@ -33,7 +33,7 @@ test.describe.serial('Claims List Filters', () => {
         await waitForProfile(user.id);
 
         ids.draft = cid('FD');
-        ids.returned = cid('FR');
+        ids.rejected = cid('FR');
         ids.pendingManager = cid('FM');
         ids.pendingFinance = cid('FF');
         ids.pendingPayment = cid('FP');
@@ -44,7 +44,7 @@ test.describe.serial('Claims List Filters', () => {
 
         const { error: insertError } = await supabaseAdmin.from('claims').insert([
             { id: ids.draft, applicant_id: user.id, claim_type: 'employee', description: 'filter draft', total_amount: 100, status: 'draft' },
-            { id: ids.returned, applicant_id: user.id, claim_type: 'employee', description: 'filter returned', total_amount: 100, status: 'returned' },
+            { id: ids.rejected, applicant_id: user.id, claim_type: 'employee', description: 'filter rejected', total_amount: 100, status: 'rejected' },
             { id: ids.pendingManager, applicant_id: user.id, claim_type: 'employee', description: 'filter pending manager', total_amount: 100, status: 'pending_manager' },
             { id: ids.pendingFinance, applicant_id: user.id, claim_type: 'employee', description: 'filter pending finance', total_amount: 100, status: 'pending_finance' },
             { id: ids.pendingPayment, applicant_id: user.id, claim_type: 'employee', description: 'filter pending payment', total_amount: 100, status: 'pending_payment' },
@@ -66,7 +66,7 @@ test.describe.serial('Claims List Filters', () => {
         await page.goto('/claims?tab=drafts');
         await expect(page.getByRole('heading', { name: '我的請款單' })).toBeVisible();
         await expect(page.locator(`text=#${ids.draft}`)).toBeVisible();
-        await expect(page.locator(`text=#${ids.returned}`)).toBeVisible();
+        await expect(page.locator(`text=#${ids.rejected}`)).toBeVisible();
         await expect(page.locator(`text=#${ids.pendingManager}`)).toHaveCount(0);
 
         await page.goto('/claims?tab=processing');

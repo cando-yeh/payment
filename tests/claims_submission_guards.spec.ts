@@ -114,7 +114,7 @@ test.describe.serial('Claim Submit Guards', () => {
         await injectSession(page, applicant.email, password);
         await page.goto(`/claims/${id}`);
         const body = await postFormAction(page, `/claims/${id}?/submit`);
-        expect(body).toContain('Only draft or returned claims can be submitted');
+        expect(body).toContain('Only draft or rejected claims can be submitted');
     });
 
     test('inline submit summary shows issues and can jump to item row', async ({ page }) => {

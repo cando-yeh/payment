@@ -66,7 +66,7 @@
     const canCancel = $derived(
         !isEditableApplicant &&
             claim.applicant_id === currentUser.id &&
-            claim.status === "returned",
+            claim.status === "rejected",
     );
     const canApprove = $derived(
         (claim.status === "pending_manager" && currentUser.isApprover) ||
@@ -107,8 +107,8 @@
             return {
                 label: "進行送審",
                 reason:
-                    claim.status === "returned"
-                        ? "此單據已退回，修正後請由右上角重新送審。"
+                    claim.status === "rejected"
+                        ? "此單據已退件，修正後請由右上角重新送審。"
                         : "草稿已可送審，請由右上角送出審核。",
                 kind: "submit",
             };

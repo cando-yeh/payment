@@ -174,7 +174,7 @@
             return CLAIM_ITEM_CATEGORIES.map((item) => ({
                 value: item.value,
                 label: item.label,
-                description: item.description,
+                description: "",
             }));
         }
         return raw

@@ -765,7 +765,7 @@
                     class="min-h-[92px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     bind:value={newCategoryDescription}
                     placeholder="請描述此費用類別的使用情境。"
-                />
+                ></textarea>
             </div>
         </div>
 

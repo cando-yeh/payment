@@ -283,8 +283,8 @@ BEGIN
         RAISE EXCEPTION 'You can only update your own claim';
     END IF;
 
-    IF _claim.status NOT IN ('draft', 'returned') THEN
-        RAISE EXCEPTION 'Only draft or returned claims can be updated';
+    IF _claim.status NOT IN ('draft', 'rejected') THEN
+        RAISE EXCEPTION 'Only draft or rejected claims can be updated';
     END IF;
 
     UPDATE public.claims
@@ -812,14 +812,20 @@ BEGIN
             NEW.id,
             auth.uid(),
             CASE
-                WHEN NEW.status = 'pending_manager' AND OLD.status IN ('draft', 'returned') THEN 'submit'
-                WHEN NEW.status = 'pending_finance' AND OLD.status = 'pending_manager' THEN 'approve'
-                WHEN NEW.status = 'pending_payment' AND OLD.status = 'pending_finance' THEN 'approve'
-                WHEN NEW.status = 'paid' AND OLD.status = 'pending_doc_review' THEN 'approve'
-                WHEN OLD.status = 'pending_payment' AND NEW.status IN ('paid', 'paid_pending_doc') THEN 'pay'
-                WHEN NEW.status = 'returned' THEN 'reject'
-                WHEN NEW.status = 'cancelled' THEN 'cancel'
-                WHEN NEW.status = 'draft' AND OLD.status = 'pending_manager' THEN 'withdraw'
+                WHEN NEW.status = 'pending_manager' AND OLD.status IN ('draft', 'rejected') THEN 'submit'
+                WHEN NEW.status = 'pending_finance' AND OLD.status = 'pending_manager' THEN 'approve_manager'
+                WHEN NEW.status = 'pending_payment' AND OLD.status = 'pending_finance' THEN 'approve_finance'
+                WHEN NEW.status = 'rejected' AND OLD.status = 'pending_manager' THEN 'reject_manager'
+                WHEN NEW.status = 'rejected' AND OLD.status = 'pending_finance' THEN 'reject_finance'
+                WHEN NEW.status = 'paid' AND OLD.status = 'pending_doc_review' THEN 'supplement_approved'
+                WHEN NEW.status = 'paid_pending_doc' AND OLD.status = 'pending_doc_review' THEN 'supplement_rejected'
+                WHEN NEW.status = 'pending_doc_review' AND OLD.status = 'paid_pending_doc' THEN 'supplement_submitted'
+                WHEN OLD.status = 'pending_payment' AND NEW.status = 'paid' THEN 'pay_completed'
+                WHEN OLD.status = 'pending_payment' AND NEW.status = 'paid_pending_doc' THEN 'pay_completed_need_doc'
+                WHEN NEW.status = 'pending_finance' AND OLD.status = 'pending_payment' THEN 'reject_payment'
+                WHEN NEW.status = 'cancelled' THEN 'cancelled'
+                WHEN NEW.status = 'pending_payment' AND OLD.status = 'paid' THEN 'payment_reversed'
+                WHEN NEW.status = 'draft' AND OLD.status IN ('pending_manager', 'pending_finance') THEN 'withdraw'
                 ELSE 'status_change'
             END,
             OLD.status,

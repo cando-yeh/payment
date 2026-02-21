@@ -113,7 +113,7 @@ test.describe.serial('Claim Status Machine', () => {
         await injectSession(page, manager.email, password);
         await page.goto(`/claims/${claimReject}`);
         await postFormAction(page, `/claims/${claimReject}?/reject`, { comment: 'need fix' });
-        await expectStatus(claimReject, 'returned');
+        await expectStatus(claimReject, 'rejected');
 
         await injectSession(page, applicant.email, password);
         await page.goto(`/claims/${claimReject}`);

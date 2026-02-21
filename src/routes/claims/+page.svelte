@@ -90,7 +90,7 @@
     });
 
     const returnedCount = $derived(
-        (data.claims || []).filter((claim) => claim.status === "returned").length,
+        (data.claims || []).filter((claim) => claim.status === "rejected").length,
     );
     const pendingDocCount = $derived(
         (data.claims || []).filter((claim) => claim.status === "paid_pending_doc")

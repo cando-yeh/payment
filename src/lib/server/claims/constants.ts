@@ -1,7 +1,7 @@
-export const EDITABLE_CLAIM_STATUSES = new Set(["draft", "returned"]);
+export const EDITABLE_CLAIM_STATUSES = new Set(["draft", "rejected"]);
 export const UPLOADABLE_CLAIM_STATUSES = new Set([
     "draft",
-    "returned",
+    "rejected",
     "pending_doc_review",
     "paid_pending_doc"
 ]);
@@ -17,4 +17,3 @@ export const ALLOWED_ATTACHMENT_STATUSES = new Set([
     "pending_supplement",
     "exempt"
 ]);
-

@@ -66,7 +66,7 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
                 .from('claims')
                 .select('id', { count: 'exact', head: true })
                 .eq('applicant_id', session.user.id)
-                .in('status', ['returned', 'paid_pending_doc']);
+                .in('status', ['rejected', 'paid_pending_doc']);
 
             const managerPendingPromise = locals.supabase
                 .from('claims')
