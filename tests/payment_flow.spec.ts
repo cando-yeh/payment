@@ -44,17 +44,17 @@ test.describe.serial('Payment Module E2E', () => {
         throw new Error(`Claims did not reach paid status: ${ids.join(', ')}`);
     }
 
-    async function waitForPaymentCancelled(id: string) {
+    async function waitForPaymentReversed(id: string) {
         for (let i = 0; i < 30; i++) {
             const { data } = await supabaseAdmin
                 .from('payments')
                 .select('status, cancelled_at')
                 .eq('id', id)
                 .maybeSingle();
-            if (data?.status === 'cancelled') return data;
+            if (data?.status === 'reversed') return data;
             await sleep(200);
         }
-        throw new Error(`Payment did not become cancelled: ${id}`);
+        throw new Error(`Payment did not become reversed: ${id}`);
     }
 
     test.beforeAll(async () => {
@@ -225,7 +225,7 @@ test.describe.serial('Payment Module E2E', () => {
         expect(cancelResult.body).not.toContain('請款單狀態回滾失敗');
 
         // 5. Verify status change
-        await waitForPaymentCancelled(paymentId);
+        await waitForPaymentReversed(paymentId);
         await page.goto(page.url(), { waitUntil: 'domcontentloaded' });
         await expect(page.locator('text=已沖帳')).toBeVisible();
 

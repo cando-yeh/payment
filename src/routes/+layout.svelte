@@ -87,7 +87,7 @@
 	<!-- 已登入且不在登入頁：顯示側邊欄佈局 -->
 	<div
 		class="flex min-h-screen bg-secondary/50 text-foreground transition-all duration-300"
-		style="--sidebar-w: 16rem; --sidebar-gap: 0.75rem;"
+		style="--sidebar-w: 16rem; --sidebar-gap: 0rem;"
 	>
 		<button
 			type="button"

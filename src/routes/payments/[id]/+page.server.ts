@@ -68,13 +68,13 @@ export const actions: Actions = {
             .single();
 
         if (fetchError || !payment) return fail(404, { message: '找不到此付款單' });
-        if (payment.status === 'cancelled') return fail(400, { message: '此付款單已沖帳' });
+        if (payment.status === 'reversed') return fail(400, { message: '此付款單已沖帳' });
 
-        // 2. 更新付款單為已取消
+        // 2. 更新付款單為已沖帳
         const { error: updatePaymentError } = await supabase
             .from('payments')
             .update({
-                status: 'cancelled',
+                status: 'reversed',
                 cancelled_at: new Date().toISOString()
             })
             .eq('id', id);

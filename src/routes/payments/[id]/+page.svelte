@@ -3,6 +3,7 @@
     import * as Table from "$lib/components/ui/table";
     import * as Card from "$lib/components/ui/card";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
+    import AppBadge from "$lib/components/common/AppBadge.svelte";
     import ConfirmActionDialog from "$lib/components/common/ConfirmActionDialog.svelte";
     import {
         ArrowLeft,
@@ -99,8 +100,8 @@
                         <RotateCcw class="h-4 w-4" /> 撤銷撥款 (沖帳)
                     </Button>
                 </form>
-            {:else if payment.status === "cancelled"}
-                <StatusBadge status="cancelled" />
+            {:else if payment.status === "reversed"}
+                <AppBadge preset="payment.reversed" />
                 <div
                     class="text-xs text-muted-foreground flex items-center gap-1"
                 >

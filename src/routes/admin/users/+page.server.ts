@@ -413,19 +413,15 @@ export const actions: Actions = {
             approver_id: approverId
         };
 
-        // 🔒 姓名權限防範：僅限本人修改
+        // 管理模組可更新目標使用者姓名（admin/finance 皆可）
         const session = await locals.getSession();
         const currentUserId = session?.user?.id;
         if (isAdmin && userId === currentUserId && !nextIsAdmin) {
             return fail(400, { message: '不可移除自己的管理員權限' });
         }
 
-        if (isAdmin && fullName) {
-            if (userId === currentUserId) {
-                updatePayload.full_name = fullName;
-            } else {
-                console.warn(`Admin ${currentUserId} attempted to change name for user ${userId}. Blocked by backend logic.`);
-            }
+        if (fullName) {
+            updatePayload.full_name = fullName;
         }
 
         updatePayload.bank = effectiveBank;
@@ -449,6 +445,16 @@ export const actions: Actions = {
         }
         if (!updatedRow) {
             return fail(403, { message: '更新未生效：請確認權限或資料狀態後再試。' });
+        }
+
+        // 1-1. 同步更新 auth metadata，避免依賴 user_metadata 的頁面顯示舊名稱
+        if (fullName) {
+            const { error: authUpdateError } = await serviceRoleClient.auth.admin.updateUserById(userId, {
+                user_metadata: { full_name: fullName, name: fullName }
+            });
+            if (authUpdateError) {
+                console.warn('Failed to sync auth metadata full_name:', authUpdateError.message);
+            }
         }
 
         // 2. 處理銀行帳號更新 (敏感資料加密路徑)

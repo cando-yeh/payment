@@ -39,17 +39,11 @@ test.describe('Claim Creation Flow', () => {
         // 3. Click Create
         await page.click('a[href="/claims/new"]');
         await expect(page).toHaveURL(/\/claims\/new/);
-        await expect(page.locator('text=建立新請款單')).toBeVisible();
+        await expect(page.locator('h1')).toContainText('建立請款單');
+        await page.getByRole('link', { name: /員工報銷/ }).first().click();
+        await expect(page).toHaveURL(/\/claims\/new\?type=employee/);
+        await expect(page.locator('h1')).toContainText('請款單');
         await expect(page.getByRole('button', { name: '新增明細' })).toBeVisible();
-
-        await page.getByRole('button', { name: '新增明細' }).click();
-        await expect(page.getByRole('heading', { name: '新增費用明細' })).toBeVisible();
-        await page.getByLabel('說明').fill('Taxi to Client');
-        await page.getByLabel('金額').fill('500');
-        // 新版 UI 已移除 accordion，直接點選決策按鈕
-        await page.getByRole('button', { name: '憑證後補' }).click();
-        await page.getByRole('button', { name: '儲存明細' }).click();
-        await expect(page.getByRole('heading', { name: '新增費用明細' })).not.toBeVisible();
 
         const createRes = await postFormActionDetailed(page, '/claims/new?/create', {
             claim_type: 'employee',

@@ -97,6 +97,16 @@ export const actions: Actions = {
             }
         }
 
+        // 同步 auth metadata，避免重新登入或部分頁面 fallback 到舊名稱
+        if (fullName) {
+            const { error: authUpdateError } = await locals.supabase.auth.updateUser({
+                data: { full_name: fullName, name: fullName }
+            });
+            if (authUpdateError) {
+                console.warn('Failed to sync self auth metadata full_name:', authUpdateError.message);
+            }
+        }
+
         /**
          * 2. 處理銀行帳號更新 (敏感資料加密路徑)
          * 

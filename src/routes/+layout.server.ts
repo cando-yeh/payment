@@ -10,6 +10,11 @@ import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { env } from '$env/dynamic/private';
 
+// Module-level singleton: avoid recreating service-role client on every navigation.
+const adminClient = env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
+    : null;
+
 export const load: LayoutServerLoad = async ({ locals, depends }) => {
     const { getSession } = locals;
     // 聲明依賴項，以便在 invalidate('supabase:auth') 時重新執行此 load 函數
@@ -27,7 +32,15 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
         const [profileResponse, approverResponse] = await Promise.all([
             locals.supabase
                 .from('profiles')
-                .select('full_name, email, avatar_url, approver_id, bank, bank_account_tail')
+                .select(`
+                    full_name,
+                    email,
+                    avatar_url,
+                    approver_id,
+                    bank,
+                    bank_account_tail,
+                    approver:profiles!profiles_approver_id_fkey(full_name)
+                `)
                 .eq('id', session.user.id)
                 .single(),
             locals.supabase
@@ -38,14 +51,19 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
         ]);
 
         if (!profileResponse.error && profileResponse.data) {
-            let approverName: string | null = null;
-            if (profileResponse.data.approver_id) {
-                const serviceRoleClient = env.SUPABASE_SERVICE_ROLE_KEY
-                    ? createClient(PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
-                    : null;
+            const approverRelation = profileResponse.data.approver as
+                | { full_name?: string | null }
+                | { full_name?: string | null }[]
+                | null
+                | undefined;
+            let approverName =
+                (Array.isArray(approverRelation)
+                    ? approverRelation[0]?.full_name
+                    : approverRelation?.full_name) || null;
 
-                const queryClient = serviceRoleClient ?? locals.supabase;
-                const { data: approverData } = await queryClient
+            // Safety fallback: only if relation didn't resolve but approver_id exists.
+            if (!approverName && profileResponse.data.approver_id && adminClient) {
+                const { data: approverData } = await adminClient
                     .from('profiles')
                     .select('full_name')
                     .eq('id', profileResponse.data.approver_id)

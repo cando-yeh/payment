@@ -51,7 +51,10 @@
     } = $derived(data);
 
     function getPagedClaims(claims: any[]) {
-        return claims.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+        return claims.slice(
+            (currentPage - 1) * PAGE_SIZE,
+            currentPage * PAGE_SIZE,
+        );
     }
 </script>
 
@@ -101,25 +104,27 @@
                     </ListTabs>
                 {/snippet}
                 {#snippet right()}
-                    {#if selectedClaims.length > 0}
+                    {#if activeTab === "payment"}
                         <div class="flex items-center gap-4" in:fade>
                             <span
                                 class="text-[11px] font-bold text-muted-foreground"
-                                >已選取 {selectedClaims.length} 筆</span
                             >
+                                已選取 {selectedClaims.length} 筆
+                            </span>
                             <Dialog.Root bind:open={isBatchPayDialogOpen}>
                                 <Dialog.Trigger>
                                     <Button
                                         variant="default"
                                         class="rounded-lg bg-primary hover:bg-primary/90 font-bold shadow-md shadow-primary/10 gap-1.5 h-9 px-4 text-xs"
+                                        disabled={selectedClaims.length === 0}
                                     >
                                         <Landmark class="h-3.5 w-3.5" />
-                                        執行批次撥款
+                                        執行撥款
                                     </Button>
                                 </Dialog.Trigger>
                                 <Dialog.Content class="sm:max-w-[425px]">
                                     <Dialog.Header>
-                                        <Dialog.Title>確認批次撥款</Dialog.Title>
+                                        <Dialog.Title>確認撥款</Dialog.Title>
                                         <Dialog.Description>
                                             您即將對 {selectedClaims.length} 筆單據進行撥款。請確認付款日期。
                                         </Dialog.Description>
@@ -139,17 +144,18 @@
                                                             result: result as any,
                                                             update,
                                                             successMessage:
-                                                                UI_MESSAGES.approval
+                                                                UI_MESSAGES
+                                                                    .approval
                                                                     .batchPayDone,
                                                             failureMessage:
-                                                                UI_MESSAGES.approval
+                                                                UI_MESSAGES
+                                                                    .approval
                                                                     .batchPayFailed,
                                                         },
                                                     );
                                                 if (ok) {
                                                     selectedClaims = [];
-                                                    isBatchPayDialogOpen =
-                                                        false;
+                                                    isBatchPayDialogOpen = false;
                                                 }
                                                 isBatchPaySubmitting = false;
                                             };
@@ -186,8 +192,7 @@
                                                 type="button"
                                                 variant="outline"
                                                 onclick={() =>
-                                                    (isBatchPayDialogOpen =
-                                                        false)}
+                                                    (isBatchPayDialogOpen = false)}
                                             >
                                                 取消
                                             </Button>

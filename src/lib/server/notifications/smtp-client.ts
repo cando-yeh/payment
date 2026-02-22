@@ -1,7 +1,3 @@
-import net from "node:net";
-import tls from "node:tls";
-import { Buffer } from "node:buffer";
-
 type SendMailParams = {
     host: string;
     port?: number;
@@ -16,92 +12,6 @@ type SendMailParams = {
     html: string;
     timeoutMs?: number;
 };
-
-function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function base64(value: string) {
-    return Buffer.from(String(value), "utf8").toString("base64");
-}
-
-function base64Chunked(value: string) {
-    const b64 = Buffer.from(String(value), "utf8").toString("base64");
-    return b64.replace(/.{1,76}/g, "$&\r\n").trimEnd();
-}
-
-function encodeMimeWord(value: string) {
-    return `=?UTF-8?B?${Buffer.from(String(value || ""), "utf8").toString("base64")}?=`;
-}
-
-function parseCode(line: string) {
-    const match = String(line).match(/^(\d{3})/);
-    return match ? Number(match[1]) : null;
-}
-
-async function readReply(socket: tls.TLSSocket | net.Socket, timeoutMs: number) {
-    let buffer = "";
-    const lines: string[] = [];
-
-    return new Promise<string[]>((resolve, reject) => {
-        const onData = (chunk: Buffer) => {
-            buffer += chunk.toString("utf8");
-            const parts = buffer.split(/\r?\n/);
-            buffer = parts.pop() || "";
-            for (const raw of parts) {
-                if (!raw) continue;
-                lines.push(raw);
-                const code = parseCode(raw);
-                const isDone = code && raw[3] === " ";
-                if (isDone) {
-                    cleanup();
-                    resolve(lines);
-                    return;
-                }
-            }
-        };
-        const onError = (err: Error) => {
-            cleanup();
-            reject(err);
-        };
-        const onClose = () => {
-            cleanup();
-            reject(new Error("SMTP socket closed unexpectedly"));
-        };
-        const timeout = setTimeout(() => {
-            cleanup();
-            reject(new Error("SMTP response timeout"));
-        }, timeoutMs);
-
-        const cleanup = () => {
-            clearTimeout(timeout);
-            socket.off("data", onData);
-            socket.off("error", onError);
-            socket.off("close", onClose);
-        };
-
-        socket.on("data", onData);
-        socket.on("error", onError);
-        socket.on("close", onClose);
-    });
-}
-
-async function sendCommand(
-    socket: tls.TLSSocket | net.Socket,
-    command: string,
-    expectedCodes: number[],
-    timeoutMs: number,
-) {
-    if (command) socket.write(`${command}\r\n`);
-    const lines = await readReply(socket, timeoutMs);
-    const last = lines[lines.length - 1] || "";
-    const code = parseCode(last);
-    if (!code || !expectedCodes.includes(code)) {
-        throw new Error(
-            `SMTP command failed: ${command || "<greeting>"} -> ${last}`,
-        );
-    }
-}
 
 export async function sendMailSmtp({
     host,
@@ -120,83 +30,38 @@ export async function sendMailSmtp({
     const recipients = [...to, ...cc].filter(Boolean);
     if (recipients.length === 0) throw new Error("No recipients");
 
-    const socket = secure
-        ? tls.connect({
-              host,
-              port,
-              servername: host,
-              rejectUnauthorized: true,
-          })
-        : net.createConnection({ host, port });
-
-    await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(
-            () => reject(new Error("SMTP connect timeout")),
-            timeoutMs,
+    let nodemailer: any;
+    try {
+        const mod = await import("nodemailer");
+        nodemailer = mod.default ?? mod;
+    } catch {
+        throw new Error(
+            'Missing dependency "nodemailer". Please run: npm install nodemailer',
         );
-        socket.once("error", (err) => {
-            clearTimeout(timeout);
-            reject(err);
-        });
-        socket.once("connect", () => {
-            clearTimeout(timeout);
-            resolve();
-        });
-        socket.once("secureConnect", () => {
-            clearTimeout(timeout);
-            resolve();
-        });
+    }
+
+    const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure,
+        auth:
+            username && password
+                ? {
+                      user: username,
+                      pass: password,
+                  }
+                : undefined,
+        connectionTimeout: timeoutMs,
+        greetingTimeout: timeoutMs,
+        socketTimeout: timeoutMs,
     });
 
-    try {
-        await sendCommand(socket, "", [220], timeoutMs);
-        await sendCommand(socket, `EHLO ${host}`, [250], timeoutMs);
-
-        if (username && password) {
-            await sendCommand(socket, "AUTH LOGIN", [334], timeoutMs);
-            await sendCommand(socket, base64(username), [334], timeoutMs);
-            await sendCommand(socket, base64(password), [235], timeoutMs);
-        }
-
-        await sendCommand(socket, `MAIL FROM:<${from}>`, [250], timeoutMs);
-        for (const recipient of recipients) {
-            await sendCommand(socket, `RCPT TO:<${recipient}>`, [250, 251], timeoutMs);
-        }
-
-        await sendCommand(socket, "DATA", [354], timeoutMs);
-        const mime = [
-            `From: ${from}`,
-            `To: ${to.join(", ")}`,
-            cc.length ? `Cc: ${cc.join(", ")}` : "",
-            `Subject: ${encodeMimeWord(subject)}`,
-            `Date: ${new Date().toUTCString()}`,
-            `Message-ID: <${Date.now()}.${Math.random().toString(16).slice(2)}@${host}>`,
-            "MIME-Version: 1.0",
-            'Content-Type: multipart/alternative; boundary="boundary_001"',
-            "",
-            "--boundary_001",
-            "Content-Type: text/plain; charset=UTF-8",
-            "Content-Transfer-Encoding: base64",
-            "",
-            base64Chunked(text || ""),
-            "",
-            "--boundary_001",
-            "Content-Type: text/html; charset=UTF-8",
-            "Content-Transfer-Encoding: base64",
-            "",
-            base64Chunked(html || ""),
-            "",
-            "--boundary_001--",
-            ".",
-        ]
-            .filter(Boolean)
-            .join("\r\n");
-
-        socket.write(`${mime}\r\n`);
-        await sendCommand(socket, "", [250], timeoutMs);
-        await sendCommand(socket, "QUIT", [221], timeoutMs);
-    } finally {
-        await sleep(10);
-        socket.end();
-    }
+    await transporter.sendMail({
+        from,
+        to,
+        cc,
+        subject,
+        text: text || "",
+        html: html || "",
+    });
 }

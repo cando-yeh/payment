@@ -30,7 +30,7 @@ const STATUS_LABELS = {
     paid_pending_doc: "待補件",
     pending_doc_review: "待補件審核",
     rejected: "已退件",
-    cancelled: "已沖帳"
+    cancelled: "已撤銷"
 };
 
 const EVENT_COPY = {
@@ -108,12 +108,12 @@ const EVENT_COPY = {
     },
     cancelled: {
         headline: "請款單已撤銷",
-        summary: "此單據流程已終止並沖帳。",
+        summary: "此單據流程已終止。",
         nextStep: "如需申請請建立新單。",
         subjectTag: "通知"
     },
     payment_reversed: {
-        headline: "付款已撤銷",
+        headline: "付款已沖帳",
         summary: "該付款已回退為待付款流程。",
         nextStep: "請確認後續處理方式。",
         subjectTag: "通知"

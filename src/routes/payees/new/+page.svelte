@@ -5,6 +5,7 @@
      * The request is sent to the Finance team for approval.
      */
     import { enhance } from "$app/forms";
+    import { page } from "$app/state";
     import { Button } from "$lib/components/ui/button";
     import { Input } from "$lib/components/ui/input";
     import { Switch } from "$lib/components/ui/switch";
@@ -24,6 +25,16 @@
     let isLoading = $state(false);
     let payeeType = $state("vendor"); // "vendor" | "personal" - Controls dynamic form fields
     let editableAccount = $state(false);
+
+    $effect(() => {
+        const initialType = page.url.searchParams.get("type");
+        if (initialType === "vendor" || initialType === "personal") {
+            payeeType = initialType;
+            if (payeeType !== "vendor") {
+                editableAccount = false;
+            }
+        }
+    });
 
     /**
      * Handles the form submission using SvelteKit's standard `enhance` action.

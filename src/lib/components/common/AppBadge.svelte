@@ -5,7 +5,6 @@
         APP_BADGE_PRESET,
         APP_BADGE_SHAPE_CLASS,
         APP_BADGE_SIZE_CLASS,
-        APP_BADGE_TONE,
         type AppBadgePreset,
         type AppBadgeShape,
         type AppBadgeSize,
@@ -27,29 +26,25 @@
         className?: string;
     } = $props();
 
+    const resolvedKey = $derived(preset || tone);
     const presetDef = $derived(
-        (preset ? APP_BADGE_PRESET[preset] : undefined) as
-            | AppBadgePreset
-            | undefined,
+        APP_BADGE_PRESET[resolvedKey] as AppBadgePreset | undefined,
     );
-    const resolvedTone = $derived(presetDef?.tone || tone);
-    const resolvedLabel = $derived(label || presetDef?.label || tone);
+    const resolvedLabel = $derived(label || presetDef?.label || resolvedKey);
     const resolvedSize = $derived(presetDef?.size || size);
     const resolvedShape = $derived(presetDef?.shape || shape);
-    const toneDef = $derived(
-        APP_BADGE_TONE[resolvedTone] || {
-            variant: "outline",
-            className: "text-muted-foreground",
-        },
+    const resolvedVariant = $derived(presetDef?.variant || "outline");
+    const resolvedToneClass = $derived(
+        presetDef?.className || "text-muted-foreground",
     );
 </script>
 
 <Badge
-    variant={toneDef.variant}
+    variant={resolvedVariant}
     class={cn(
         APP_BADGE_SIZE_CLASS[resolvedSize],
         APP_BADGE_SHAPE_CLASS[resolvedShape],
-        toneDef.className,
+        resolvedToneClass,
         className,
     )}
 >

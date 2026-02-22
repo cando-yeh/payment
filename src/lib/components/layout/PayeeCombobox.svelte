@@ -1,6 +1,7 @@
 <script lang="ts">
     import { Input } from "$lib/components/ui/input";
     import { cn } from "$lib/utils";
+    import { Plus } from "lucide-svelte";
 
     type PayeeOption = { id: string; name: string };
 
@@ -14,6 +15,8 @@
         class: className = "",
         inputClass = "",
         emptyText = "找不到符合的收款人",
+        quickActionHref = "",
+        quickActionLabel = "新增收款人",
     } = $props();
 
     let open = $state(false);
@@ -100,25 +103,39 @@
     </div>
 
     {#if open}
-        <div class="absolute z-50 mt-1 max-h-[260px] w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
-            {#if filteredOptions.length === 0}
-                <p class="py-3 text-center text-sm text-muted-foreground">
-                    {emptyText}
-                </p>
-            {:else}
-                {#each filteredOptions as option}
-                    <button
-                        type="button"
-                        class={cn(
-                            "flex h-9 w-full items-center rounded-sm px-2 text-left text-sm hover:bg-accent",
-                            option.id === value && "bg-accent/70 font-semibold",
-                        )}
-                        onclick={() => handleSelect(option.id)}
+        <div class="absolute z-50 mt-1 max-h-[300px] w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+            {#if quickActionHref}
+                <div class="border-b border-border/60 pb-1 mb-1">
+                    <a
+                        href={quickActionHref}
+                        class="flex h-9 w-full items-center gap-1.5 rounded-sm px-2 text-sm font-medium text-primary hover:bg-accent"
                     >
-                        <span class="truncate">{option.name}</span>
-                    </button>
-                {/each}
+                        <Plus class="h-4 w-4" />
+                        {quickActionLabel}
+                    </a>
+                </div>
             {/if}
+
+            <div>
+                {#if filteredOptions.length === 0}
+                    <p class="py-3 text-center text-sm text-muted-foreground">
+                        {emptyText}
+                    </p>
+                {:else}
+                    {#each filteredOptions as option}
+                        <button
+                            type="button"
+                            class={cn(
+                                "flex h-9 w-full items-center rounded-sm px-2 text-left text-sm hover:bg-accent",
+                                option.id === value && "bg-accent/70 font-semibold",
+                            )}
+                            onclick={() => handleSelect(option.id)}
+                        >
+                            <span class="truncate">{option.name}</span>
+                        </button>
+                    {/each}
+                {/if}
+            </div>
         </div>
     {/if}
 </div>

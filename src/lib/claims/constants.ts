@@ -13,9 +13,9 @@ export const CLAIM_STATUS_LABELS: Record<string, string> = {
     pending_manager: "待主管審核",
     pending_finance: "待財務審核",
     pending_payment: "待付款",
-    paid: "已付款",
-    paid_pending_doc: "已付款(待補件)",
-    pending_doc_review: "補件審核中",
+    paid: "已撥款",
+    paid_pending_doc: "待補件",
+    pending_doc_review: "待補件審核",
     rejected: "已退件",
     cancelled: "已撤銷"
 };

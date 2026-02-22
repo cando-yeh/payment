@@ -67,6 +67,18 @@
             value: (match?.[2] || formatted).trim(),
         };
     }
+
+    function getRecipientName(claim: any) {
+        const payeeName = String(claim?.payee?.name || "").trim();
+        const applicantName = String(claim?.applicant?.full_name || "").trim();
+
+        // 員工報銷應以申請人姓名為主，避免被 payee 名稱覆蓋。
+        if (claim?.claim_type === "employee") {
+            return applicantName || payeeName || "—";
+        }
+
+        return payeeName || applicantName || "—";
+    }
 </script>
 
 <Table.Root>
@@ -158,7 +170,7 @@
                         </div>
                     </Table.Cell>
                     <Table.Cell class={LIST_TABLE_TOKENS.roleCell}>
-                        {claim.payee?.name || claim.applicant?.full_name || "—"}
+                        {getRecipientName(claim)}
                     </Table.Cell>
                     <Table.Cell class={LIST_TABLE_TOKENS.amountCell}>
                         {@const amountParts = splitCurrencyParts(

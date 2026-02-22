@@ -40,10 +40,19 @@ async function queueNotificationDrain(origin: string, reason: string): Promise<v
     }
 }
 
-export const load: PageServerLoad = async ({ locals: { supabase, getSession } }) => {
+export const load: PageServerLoad = async ({ url, locals: { supabase, getSession } }) => {
     const session = await getSession();
     if (!session) {
         throw redirect(303, '/auth');
+    }
+
+    const VALID_TYPES = new Set(['employee', 'vendor', 'personal_service']);
+    const rawType = url.searchParams.get('type') || '';
+    const claimType = VALID_TYPES.has(rawType) ? rawType : '';
+
+    // If no valid type selected, return minimal data for the selection page
+    if (!claimType) {
+        return { claimType: '', payees: [], categoryOptions: [], hasApprover: false, applicantId: '', applicantName: '', applicantBank: '', applicantBankAccountTail: '' };
     }
 
     const { data: profile } = await supabase
@@ -60,10 +69,11 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
 
     if (error) {
         console.error('Error fetching payees:', error);
-        return { payees: [] };
+        return { claimType, payees: [] };
     }
 
     return {
+        claimType,
         payees,
         categoryOptions: await getExpenseCategories(supabase, { activeOnly: true }),
         hasApprover: Boolean(profile?.approver_id),

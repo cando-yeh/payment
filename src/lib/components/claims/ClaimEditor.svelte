@@ -308,11 +308,22 @@
     const canSaveItemDraft = $derived(
         canEditVoucherSection || isFinanceReviewMode,
     );
-    const canEditClaimType = $derived(isEditable && isCreate);
+
     const vendorPayees = $derived(payees.filter((p) => p.type === "vendor"));
     const personalPayees = $derived(
         payees.filter((p) => p.type === "personal"),
     );
+    const payeeQuickCreateHref = $derived.by(() => {
+        if (claimType === "vendor") return "/payees/new?type=vendor";
+        if (claimType === "personal_service")
+            return "/payees/new?type=personal";
+        return "";
+    });
+    const payeeQuickCreateLabel = $derived.by(() => {
+        if (claimType === "vendor") return "新增廠商收款人";
+        if (claimType === "personal_service") return "新增個人收款人";
+        return "新增收款人";
+    });
     const selectedPayeeName = $derived.by(() => {
         if (claimType === "employee") return claim.applicant_name || "—";
         const selected = payees.find((p) => p.id === payeeId)?.name;
@@ -451,17 +462,6 @@
         return isCreate ? "直接提交" : "提交審核";
     }
 
-    function handleClaimTypeChange(nextType: string) {
-        if (!canEditClaimType || claimType === nextType) return;
-        claimType = nextType;
-        payeeId = "";
-        bankCode = "";
-        bankAccount = "";
-        if (nextType === "personal_service") {
-            items = [emptyItem()];
-        }
-    }
-
     async function togglePayeeBankAccountReveal() {
         const id = bankRevealKey;
         if (!id) return;
@@ -595,8 +595,7 @@
     function categoryLabel(value: string) {
         return (
             resolvedCategoryOptions.find((item) => item.value === value)
-                ?.label ||
-            value
+                ?.label || value
         );
     }
 
@@ -754,7 +753,7 @@
         return true;
     }
 
-    async function saveItemDraft() {
+    async function saveItemDraft(options?: { keepOpen?: boolean }) {
         const normalized = normalizeItemForEditor(itemDraft);
         normalized.amount = String(itemDraft.amount || "").replaceAll(",", "");
         const status = normalized.attachment_status;
@@ -847,6 +846,22 @@
                     ...pendingUpload,
                     [nextIndex]: itemDraftUpload,
                 };
+            }
+
+            // "儲存並新增下一筆" mode: reset form for next item
+            if (options?.keepOpen) {
+                const savedCount = items.length;
+                toast.success(`已儲存第 ${savedCount} 筆明細 ✓`);
+                const nextItem = emptyItem();
+                // Inherit date and category from the just-saved item
+                nextItem.date =
+                    normalized.date || new Date().toISOString().split("T")[0];
+                nextItem.category = normalized.category || defaultCategory;
+                itemDraft = nextItem;
+                itemDraftUpload = null;
+                itemDraftAmountDisplay = "";
+                itemDraftSnapshot = itemSnapshot(nextItem);
+                return; // keep drawer open
             }
         } else {
             const targetIndex = itemDrawerIndex;
@@ -1323,31 +1338,6 @@
         />
 
         <div class="space-y-4">
-            {#if canEditClaimType}
-                <div class="space-y-3 px-1">
-                    <Tabs.Root
-                        value={claimType}
-                        onValueChange={(value) => {
-                            handleClaimTypeChange(value);
-                        }}
-                    >
-                        <ListTabs>
-                            {#each CLAIM_TYPE_OPTIONS as option}
-                                <ListTabTrigger
-                                    value={option.value}
-                                    disabled={!canEditClaimType}
-                                >
-                                    {option.label}
-                                </ListTabTrigger>
-                            {/each}
-                        </ListTabs>
-                    </Tabs.Root>
-                    <p class="text-xs text-muted-foreground">
-                        {claimTypeDescription}
-                    </p>
-                </div>
-            {/if}
-
             <!-- Header + Basic Info (single container) -->
             <Card.Root
                 class="overflow-visible rounded-xl border border-border/40 bg-background"
@@ -1457,6 +1447,8 @@
                                             }))}
                                             placeholder="請選擇收款人"
                                             inputClass="h-8 text-xs"
+                                            quickActionHref={payeeQuickCreateHref}
+                                            quickActionLabel={payeeQuickCreateLabel}
                                         />
                                     {:else}
                                         <Input
@@ -2301,9 +2293,22 @@
                     {#if canSaveItemDraft}
                         <Button
                             type="button"
+                            variant={itemDrawerIndex === null
+                                ? "outline"
+                                : "default"}
                             onclick={() => void saveItemDraft()}
-                            >儲存明細</Button
+                            >{itemDrawerIndex === null
+                                ? "儲存並關閉"
+                                : "儲存明細"}</Button
                         >
+                        {#if itemDrawerIndex === null}
+                            <Button
+                                type="button"
+                                onclick={() =>
+                                    void saveItemDraft({ keepOpen: true })}
+                                >儲存並新增下一筆</Button
+                            >
+                        {/if}
                     {/if}
                 </div>
             </div>

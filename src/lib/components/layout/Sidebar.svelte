@@ -40,11 +40,12 @@
     // Lucide 圖標：提供導航項目的視覺識別
     import {
         FileText, // Logo 圖標
-        Building2, // 廠商管理
-        User, // 個人帳戶
-        Settings, // 使用者設定
+        ReceiptText, // 我的請款
+        ClipboardCheck, // 審核中心
+        Building2, // 收款人管理
+        Settings, // 系統設定
         LogOut, // 登出按鈕
-        Landmark, // 單據中心
+        FolderOpen, // 單據中心
         MoreVertical,
     } from "lucide-svelte";
 
@@ -78,13 +79,13 @@
      */
     const navItems: NavItem[] = [
         // 我的請款：所有使用者可見
-        { label: "我的請款", href: "/claims", icon: FileText },
+        { label: "我的請款", href: "/claims", icon: ReceiptText },
 
         // 審核中心：僅主管、財務、管理員可見
         {
             label: "審核中心",
             href: "/approval",
-            icon: FileText,
+            icon: ClipboardCheck,
             requiredRoles: ["finance", "admin", "approver"],
         },
 
@@ -103,7 +104,7 @@
         {
             label: "單據中心",
             href: "/documents",
-            icon: Landmark,
+            icon: FolderOpen,
             requiredRoles: ["finance"],
         },
     ];
@@ -329,9 +330,7 @@
     <!-- ====================================== -->
     <!-- 使用者資訊卡片 -->
     <!-- ====================================== -->
-    <div
-        class="flex items-center gap-3 rounded-xl bg-transparent px-3 py-2.5"
-    >
+    <div class="flex items-center gap-3 rounded-xl bg-transparent px-3 py-2.5">
         <!-- 使用者頭像 -->
         <Avatar.Root class="h-10 w-10">
             {#if user.avatarUrl}
@@ -357,9 +356,7 @@
                 >
                     {user.name}
                 </p>
-                <p class="truncate text-xs text-muted-foreground/90">
-                    {user.email}
-                </p>
+
                 <div class="mt-0.5 flex flex-wrap gap-1">
                     {#if user.isAdmin}
                         <span

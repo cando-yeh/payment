@@ -54,7 +54,7 @@ const STATUS_LABELS: Record<string, string> = {
     paid_pending_doc: "待補件",
     pending_doc_review: "待補件審核",
     rejected: "已退件",
-    cancelled: "已沖帳"
+    cancelled: "已撤銷"
 };
 
 const EVENT_COPY: Record<string, EventCopy> = {
@@ -137,7 +137,7 @@ const EVENT_COPY: Record<string, EventCopy> = {
         subjectTag: "通知"
     },
     payment_reversed: {
-        headline: "付款已撤銷",
+        headline: "付款已沖帳",
         summary: "該付款已回退為待付款流程。",
         nextStep: "請確認後續處理方式。",
         subjectTag: "通知"

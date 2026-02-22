@@ -32,6 +32,111 @@ async function queueNotificationDrain(origin: string, reason: string): Promise<v
     }
 }
 
+async function requireSession(getSession: () => Promise<any>, message = 'Unauthorized') {
+    const session = await getSession();
+    if (!session) {
+        return { ok: false as const, response: fail(401, { message }) };
+    }
+    return { ok: true as const, session };
+}
+
+async function resolveReviewContext(supabase: any, claimId: string, reviewerId: string) {
+    const { data: claim } = await supabase
+        .from('claims')
+        .select('id, applicant_id, status')
+        .eq('id', claimId)
+        .single();
+    if (!claim) {
+        return { ok: false as const, response: fail(404, { message: 'Claim not found' }) };
+    }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_finance, is_admin')
+        .eq('id', reviewerId)
+        .single();
+
+    const reviewer = resolveReviewerFlags(claim, reviewerId, profile);
+    return { ok: true as const, claim, reviewer };
+}
+
+async function requireOwnedClaim(supabase: any, claimId: string, userId: string) {
+    const { data: claim, error: claimError } = await getOwnedClaim(supabase, claimId, userId);
+    if (claimError || !claim) {
+        return { ok: false as const, response: fail(404, { message: 'Claim not found' }) };
+    }
+    return { ok: true as const, claim };
+}
+
+async function runEditAction({
+    request,
+    params,
+    supabase,
+    session,
+    mode
+}: {
+    request: Request;
+    params: { id: string };
+    supabase: any;
+    session: any;
+    mode: 'update' | 'submit';
+}) {
+    const { data: claimRow, error: claimFetchError } = await supabase
+        .from('claims')
+        .select('id, applicant_id, claim_type, status, description')
+        .eq('id', params.id)
+        .eq('applicant_id', session.user.id)
+        .single();
+    if (claimFetchError || !claimRow) {
+        return fail(404, { message: 'Claim not found' });
+    }
+    if (!EDITABLE_CLAIM_STATUSES.has(claimRow.status)) {
+        return fail(400, {
+            message: mode === 'submit'
+                ? 'Only draft or rejected claims can be submitted'
+                : 'Only draft or rejected claims can be edited'
+        });
+    }
+
+    const formData = await request.formData();
+    const parsed = parseAndValidateEditForm(formData, claimRow as EditableClaimRow, params.id, {
+        isDraft: mode === 'update'
+    });
+    if (!parsed.ok) {
+        return fail(parsed.status, { message: parsed.message });
+    }
+
+    const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
+    for (let i = 0; i < parsed.value.normalizedItems.length; i += 1) {
+        const category = String(parsed.value.normalizedItems[i]?.category || '').trim();
+        if (!category || !activeCategoryNames.has(category)) {
+            return fail(400, { message: `第 ${i + 1} 筆明細的費用類別無效或已停用` });
+        }
+    }
+
+    const persist = await persistEditedClaim(supabase, claimRow as EditableClaimRow, parsed.value);
+    if (!persist.ok) {
+        return fail(persist.status, { message: persist.message });
+    }
+
+    if (mode === 'update') {
+        throw redirect(303, '/claims');
+    }
+
+    const approverCheck = await ensureApproverAssigned(supabase, claimRow.applicant_id);
+    if (!approverCheck.ok) {
+        return fail(approverCheck.status, { message: approverCheck.message });
+    }
+
+    const moveResult = await moveClaimToPendingManager(supabase, params.id, session.user.id);
+    if (!moveResult.ok) {
+        return fail(moveResult.status, { message: moveResult.message });
+    }
+
+    await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
+    throw redirect(303, '/claims?tab=processing');
+}
+
 export const load: PageServerLoad = async ({ params, locals: { supabase, getSession } }) => {
     const session = await getSession();
     if (!session) {
@@ -132,8 +237,8 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
 
 export const actions: Actions = {
     revealApplicantAccount: async ({ request, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: '未登入' });
+        const auth = await requireSession(getSession, '未登入');
+        if (!auth.ok) return auth.response;
 
         const formData = await request.formData();
         const targetId = String(formData.get('targetId') || '').trim();
@@ -151,8 +256,8 @@ export const actions: Actions = {
         return { success: true, decryptedAccount: data };
     },
     revealPayeeAccount: async ({ request, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: '未登入' });
+        const auth = await requireSession(getSession, '未登入');
+        if (!auth.ok) return auth.response;
 
         const formData = await request.formData();
         const payeeId = String(formData.get('payeeId') || '').trim();
@@ -170,97 +275,26 @@ export const actions: Actions = {
         return { success: true, decryptedAccount: data };
     },
     editUpdate: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
-
-        const { data: claimRow, error: claimFetchError } = await supabase
-            .from('claims')
-            .select('id, applicant_id, claim_type, status, description')
-            .eq('id', params.id)
-            .eq('applicant_id', session.user.id)
-            .single();
-
-        if (claimFetchError || !claimRow) {
-            return fail(404, { message: 'Claim not found' });
-        }
-        if (!EDITABLE_CLAIM_STATUSES.has(claimRow.status)) {
-            return fail(400, { message: 'Only draft or rejected claims can be edited' });
-        }
-
-        const formData = await request.formData();
-        const parsed = parseAndValidateEditForm(formData, claimRow as EditableClaimRow, params.id, { isDraft: true });
-        if (!parsed.ok) {
-            return fail(parsed.status, { message: parsed.message });
-        }
-        const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
-        for (let i = 0; i < parsed.value.normalizedItems.length; i += 1) {
-            const category = String(parsed.value.normalizedItems[i]?.category || '').trim();
-            if (!category || !activeCategoryNames.has(category)) {
-                return fail(400, { message: `第 ${i + 1} 筆明細的費用類別無效或已停用` });
-            }
-        }
-        const persist = await persistEditedClaim(supabase, claimRow as EditableClaimRow, parsed.value);
-        if (!persist.ok) {
-            return fail(persist.status, { message: persist.message });
-        }
-
-        throw redirect(303, '/claims');
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        return runEditAction({ request, params, supabase, session: auth.session, mode: 'update' });
     },
 
     editSubmit: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
-
-        const { data: claimRow, error: claimFetchError } = await supabase
-            .from('claims')
-            .select('id, applicant_id, claim_type, status, description')
-            .eq('id', params.id)
-            .eq('applicant_id', session.user.id)
-            .single();
-        if (claimFetchError || !claimRow) {
-            return fail(404, { message: 'Claim not found' });
-        }
-        if (!EDITABLE_CLAIM_STATUSES.has(claimRow.status)) {
-            return fail(400, { message: 'Only draft or rejected claims can be submitted' });
-        }
-
-        const formData = await request.formData();
-        const parsed = parseAndValidateEditForm(formData, claimRow as EditableClaimRow, params.id);
-        if (!parsed.ok) {
-            return fail(parsed.status, { message: parsed.message });
-        }
-        const activeCategoryNames = await getActiveExpenseCategoryNames(supabase);
-        for (let i = 0; i < parsed.value.normalizedItems.length; i += 1) {
-            const category = String(parsed.value.normalizedItems[i]?.category || '').trim();
-            if (!category || !activeCategoryNames.has(category)) {
-                return fail(400, { message: `第 ${i + 1} 筆明細的費用類別無效或已停用` });
-            }
-        }
-        const persist = await persistEditedClaim(supabase, claimRow as EditableClaimRow, parsed.value);
-        if (!persist.ok) {
-            return fail(persist.status, { message: persist.message });
-        }
-
-        const approverCheck = await ensureApproverAssigned(supabase, claimRow.applicant_id);
-        if (!approverCheck.ok) {
-            return fail(approverCheck.status, { message: approverCheck.message });
-        }
-        const moveResult = await moveClaimToPendingManager(supabase, params.id, session.user.id);
-        if (!moveResult.ok) {
-            return fail(moveResult.status, { message: moveResult.message });
-        }
-        await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
-
-        throw redirect(303, '/claims?tab=processing');
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        return runEditAction({ request, params, supabase, session: auth.session, mode: 'submit' });
     },
 
     update: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
-        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
-        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
             return fail(400, { message: 'Only draft or rejected claims can be updated' });
         }
@@ -283,21 +317,15 @@ export const actions: Actions = {
     },
 
     submit: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
 
-        // Fetch claim and profile for validation
-        const { data: claim, error: claimError } = await supabase
-            .from('claims')
-            .select('id, applicant_id, status')
-            .eq('id', id)
-            .single();
-
-        if (claimError || !claim || claim.applicant_id !== session.user.id) {
-            return fail(404, { message: 'Claim not found' });
-        }
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
 
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
             return fail(400, { message: 'Only draft or rejected claims can be submitted' });
@@ -332,19 +360,14 @@ export const actions: Actions = {
     },
 
     submitSupplement: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
-        const { data: claim, error: claimError } = await supabase
-            .from('claims')
-            .select('id, applicant_id, status')
-            .eq('id', id)
-            .single();
-
-        if (claimError || !claim || claim.applicant_id !== session.user.id) {
-            return fail(404, { message: 'Claim not found' });
-        }
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
         if (claim.status !== 'paid_pending_doc') {
             return fail(400, { message: 'Only pending supplement claims can be submitted' });
         }
@@ -406,28 +429,17 @@ export const actions: Actions = {
     },
 
     approve: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
         const formData = await request.formData();
         const comment = String(formData.get('comment') || '').trim();
 
-        // Fetch claim for status + owner check
-        const { data: claim } = await supabase
-            .from('claims')
-            .select('id, applicant_id, status')
-            .eq('id', id)
-            .single();
-
-        if (!claim) return fail(404, { message: 'Claim not found' });
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_finance, is_admin')
-            .eq('id', session.user.id)
-            .single();
-        const reviewer = resolveReviewerFlags(claim, session.user.id, profile);
+        const reviewContext = await resolveReviewContext(supabase, id, session.user.id);
+        if (!reviewContext.ok) return reviewContext.response;
+        const { claim, reviewer } = reviewContext;
         const nextStatus = resolveApproveNextStatus(claim, reviewer);
         if (!nextStatus) return fail(403, { message: 'Forbidden' });
 
@@ -446,8 +458,9 @@ export const actions: Actions = {
     },
 
     reject: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
         const formData = await request.formData();
@@ -455,21 +468,9 @@ export const actions: Actions = {
 
         if (!comment) return fail(400, { message: '請提供駁回原因' });
 
-        // Fetch claim
-        const { data: claim } = await supabase
-            .from('claims')
-            .select('id, applicant_id, status')
-            .eq('id', id)
-            .single();
-
-        if (!claim) return fail(404, { message: 'Claim not found' });
-
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_finance, is_admin')
-            .eq('id', session.user.id)
-            .single();
-        const reviewer = resolveReviewerFlags(claim, session.user.id, profile);
+        const reviewContext = await resolveReviewContext(supabase, id, session.user.id);
+        if (!reviewContext.ok) return reviewContext.response;
+        const { claim, reviewer } = reviewContext;
         if (!canRejectClaim(claim, reviewer)) return fail(403, { message: 'Forbidden' });
         const nextStatus = resolveRejectNextStatus(claim.status);
 
@@ -488,17 +489,14 @@ export const actions: Actions = {
     },
 
     cancel: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
-        const { data: claim } = await supabase
-            .from('claims')
-            .select('id, applicant_id, status')
-            .eq('id', id)
-            .single();
-
-        if (!claim || claim.applicant_id !== session.user.id) return fail(404, { message: 'Claim not found' });
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
         if (claim.status !== 'rejected') return fail(400, { message: '只有已退件的單據可以撤銷' });
 
         const { error: updateError } = await supabase
@@ -513,12 +511,14 @@ export const actions: Actions = {
 
 
     delete: async ({ params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
-        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
-        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
         if (!EDITABLE_CLAIM_STATUSES.has(claim.status)) {
             return fail(400, { message: 'Only draft or rejected claims can be deleted' });
         }
@@ -541,12 +541,14 @@ export const actions: Actions = {
     },
 
     upload: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
-        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
-        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
         if (!UPLOADABLE_CLAIM_STATUSES.has(claim.status)) {
             return fail(400, { message: 'Attachments are not allowed in current claim status' });
         }
@@ -615,12 +617,14 @@ export const actions: Actions = {
     },
 
     delete_attachment: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
-        const { data: claim, error: claimError } = await getOwnedClaim(supabase, id, session.user.id);
-        if (claimError || !claim) return fail(404, { message: 'Claim not found' });
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
         if (!UPLOADABLE_CLAIM_STATUSES.has(claim.status)) {
             return fail(400, { message: 'Attachments are not editable in current claim status' });
         }
@@ -659,8 +663,9 @@ export const actions: Actions = {
     },
 
     updateItemVoucher: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { data: claim, error: claimError } = await supabase
             .from('claims')
@@ -742,8 +747,9 @@ export const actions: Actions = {
     },
 
     reviewUpdateItem: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -836,13 +842,15 @@ export const actions: Actions = {
     },
 
     withdraw: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
 
-        const { data: claim, error: fetchError } = await getOwnedClaim(supabase, id, session.user.id);
-        if (fetchError || !claim) return fail(404, { message: 'Claim not found' });
+        const owned = await requireOwnedClaim(supabase, id, session.user.id);
+        if (!owned.ok) return owned.response;
+        const { claim } = owned;
 
         if (claim.status !== 'pending_manager' && claim.status !== 'pending_finance') {
             return fail(400, { message: '只有等待審核中的單據可以撤回' });
@@ -861,8 +869,9 @@ export const actions: Actions = {
     },
 
     togglePayFirst: async ({ request, params, locals: { supabase, getSession } }) => {
-        const session = await getSession();
-        if (!session) return fail(401, { message: 'Unauthorized' });
+        const auth = await requireSession(getSession);
+        if (!auth.ok) return auth.response;
+        const { session } = auth;
 
         const { id } = params;
         const formData = await request.formData();
