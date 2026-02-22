@@ -303,6 +303,14 @@
         formData.append("bankAccount", account);
 
         const ok = await submitSelfProfileUpdate(formData, () => {
+            // 先做本地快照同步，避免快照刷新失敗時 UI 仍顯示「尚未設定銀行帳號」
+            const tail = account.length <= 5 ? account : account.slice(-5);
+            user = {
+                ...user,
+                bank,
+                bank_account_tail: tail,
+                bankAccountTail: tail,
+            };
             isAddingBankAccount = false;
             inputBankAccount = "";
             showAccountValue = false;

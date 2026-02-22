@@ -8,6 +8,9 @@
 - UI：shadcn-svelte + Tailwind CSS
 - 後端：Supabase (PostgreSQL / Auth / Storage)
 - 測試：Vitest + Playwright
+- 通知：QStash + SMTP
+- Google OAuth
+- Vercel部署 - 注意server和supabase的距離
 
 ## 主要模組
 
@@ -42,7 +45,7 @@ cp .env.example .env
 通知（Email Worker）另需：
 
 - `APP_BASE_URL`（例如 `http://localhost:5173`）
-- `QSTASH_TOKEN`（Upstash QStash token）
+- `QSTASH_TOKEN`（QSTASH可直接在Vercel安裝，自動帶入環境變數）
 - `NOTIFY_DRAIN_URL`（可選；預設為 `${APP_BASE_URL}/api/notify/drain`）
 - `NOTIFY_DRAIN_TOKEN`（建議設定；保護 `/api/notify/drain`）
 - `NOTIFY_QSTASH_DELAY_SECONDS`（預設 `5`）
@@ -57,6 +60,7 @@ cp .env.example .env
 - `NOTIFY_RATE_DELAY_MS`（預設 `200`）
 - `NOTIFY_SMTP_TIMEOUT_MS`（預設 `15000`）
 - `NOTIFY_MAX_ATTEMPTS_CAP`（預設 `5`）
+
 
 通知觸發流程：
 
@@ -80,6 +84,9 @@ npm run notify:worker
 目前 repo 已收斂為單一 migration 檔：
 
 - `/Users/candoyeh/Downloads/報銷系統/報銷_new/supabase/migrations/20260220012000_consolidate_current_schema.sql`
+
+- 需設定Google OAuth Client ID & Secret
+- 需設定redirect URL
 
 用途：
 
