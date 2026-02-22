@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '$env/dynamic/private';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
+import { enqueuePayeeRequestNotifications } from '$lib/server/notifications/payee-enqueue';
+import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
@@ -67,6 +69,14 @@ function getServiceRoleClient() {
         throw new Error('SUPABASE_SERVICE_ROLE_KEY 未設定');
     }
     return createClient(PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function queueNotificationDrain(origin: string, reason: string): Promise<void> {
+    try {
+        await triggerNotificationDrain({ origin, reason });
+    } catch (drainError) {
+        console.error('[notify:qstash] trigger failed:', reason, drainError);
+    }
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -503,7 +513,7 @@ export const actions: Actions = {
             return fail(400, { message: '至少需修改一項資料後才能提交異動申請' });
         }
 
-        const { error: rpcError } = await supabase.rpc('submit_payee_change_request', {
+        const { data: requestId, error: rpcError } = await supabase.rpc('submit_payee_change_request', {
             _change_type: 'update',
             _payee_id: payeeId,
             _proposed_data: proposed_data,
@@ -516,6 +526,20 @@ export const actions: Actions = {
         if (rpcError) {
             console.error('Update Request Error:', rpcError);
             return fail(500, { message: '提交更新申請失敗：' + rpcError.message });
+        }
+
+        try {
+            if (requestId) {
+                await enqueuePayeeRequestNotifications({
+                    eventCode: 'payee_update_submitted',
+                    requestId: String(requestId),
+                    actorId: session.user.id,
+                    reason
+                });
+                await queueNotificationDrain(new URL(request.url).origin, 'payee.update.submit');
+            }
+        } catch (notifyError) {
+            console.error('[notify:payee] update request enqueue failed', notifyError);
         }
 
         return { success: true, message: '更新申請已提交' };
@@ -588,6 +612,17 @@ export const actions: Actions = {
             return fail(500, { message: '核准失敗：' + rpcError.message });
         }
 
+        try {
+            await enqueuePayeeRequestNotifications({
+                eventCode: 'payee_request_approved',
+                requestId,
+                actorId: session.user.id
+            });
+            await queueNotificationDrain(new URL(request.url).origin, 'payee.request.approve');
+        } catch (notifyError) {
+            console.error('[notify:payee] approve enqueue failed', notifyError);
+        }
+
         return { success: true, message: '申請已核准' };
     },
 
@@ -612,6 +647,17 @@ export const actions: Actions = {
         if (rpcError) {
             console.error('Rejection RPC Error:', rpcError);
             return fail(500, { message: '駁回失敗：' + rpcError.message });
+        }
+
+        try {
+            await enqueuePayeeRequestNotifications({
+                eventCode: 'payee_request_rejected',
+                requestId,
+                actorId: session.user.id
+            });
+            await queueNotificationDrain(new URL(request.url).origin, 'payee.request.reject');
+        } catch (notifyError) {
+            console.error('[notify:payee] reject enqueue failed', notifyError);
         }
 
         return { success: true, message: '申請已駁回' };
@@ -659,6 +705,17 @@ export const actions: Actions = {
             return fail(500, { message: '撤銷失敗', error: updateError.message });
         }
 
+        try {
+            await enqueuePayeeRequestNotifications({
+                eventCode: 'payee_request_withdrawn',
+                requestId,
+                actorId: session.user.id
+            });
+            await queueNotificationDrain(new URL(request.url).origin, 'payee.request.withdraw');
+        } catch (notifyError) {
+            console.error('[notify:payee] withdraw enqueue failed', notifyError);
+        }
+
         return { success: true, message: '申請已撤銷' };
     },
 
@@ -676,7 +733,7 @@ export const actions: Actions = {
 
         if (!payeeId) return fail(400, { message: '缺少收款人 ID' });
 
-        const { error: rpcError } = await supabase.rpc('submit_payee_change_request', {
+        const { data: requestId, error: rpcError } = await supabase.rpc('submit_payee_change_request', {
             _change_type: 'disable',
             _payee_id: payeeId,
             _proposed_data: {},
@@ -688,6 +745,20 @@ export const actions: Actions = {
         if (rpcError) {
             console.error('Disable Request Error:', rpcError);
             return fail(500, { message: '提交停用申請失敗：' + rpcError.message });
+        }
+
+        try {
+            if (requestId) {
+                await enqueuePayeeRequestNotifications({
+                    eventCode: 'payee_disable_submitted',
+                    requestId: String(requestId),
+                    actorId: session.user.id,
+                    reason
+                });
+                await queueNotificationDrain(new URL(request.url).origin, 'payee.disable.submit');
+            }
+        } catch (notifyError) {
+            console.error('[notify:payee] disable enqueue failed', notifyError);
         }
 
         return { success: true, message: '停用申請已提交，請等待財務審核' };

@@ -9,6 +9,22 @@ type ClaimNotificationPayload = {
     claim_link_path?: string;
 };
 
+type PayeeNotificationPayload = {
+    event_code: string;
+    object_type?: "payee_request";
+    payee_request_id?: string;
+    payee_id?: string | null;
+    payee_name?: string;
+    change_type?: string;
+    change_type_label?: string;
+    request_status?: string;
+    actor_name?: string;
+    reason?: string;
+    request_link_path?: string;
+};
+
+type NotificationPayload = ClaimNotificationPayload | PayeeNotificationPayload;
+
 type RenderedEmail = {
     subject: string;
     text: string;
@@ -36,7 +52,13 @@ const EVENT_LABELS: Record<string, string> = {
     supplement_approved: "補件核准",
     supplement_rejected: "補件駁回",
     cancelled: "撤銷申請",
-    payment_reversed: "撤銷撥款"
+    payment_reversed: "撤銷撥款",
+    payee_create_submitted: "收款人新增申請",
+    payee_update_submitted: "收款人變更申請",
+    payee_disable_submitted: "收款人停用申請",
+    payee_request_withdrawn: "收款人申請撤回",
+    payee_request_approved: "收款人申請核准",
+    payee_request_rejected: "收款人申請駁回"
 };
 
 const CLAIM_TYPE_LABELS: Record<string, string> = {
@@ -141,6 +163,42 @@ const EVENT_COPY: Record<string, EventCopy> = {
         summary: "該付款已回退為待付款流程。",
         nextStep: "請確認後續處理方式。",
         subjectTag: "通知"
+    },
+    payee_create_submitted: {
+        headline: "有新的收款人新增申請待審核",
+        summary: "請確認收款人基本資料與銀行資訊是否正確。",
+        nextStep: "請於系統中完成核准或駁回。",
+        subjectTag: "待辦"
+    },
+    payee_update_submitted: {
+        headline: "有新的收款人變更申請待審核",
+        summary: "請確認異動內容與附件是否完整。",
+        nextStep: "請於系統中完成核准或駁回。",
+        subjectTag: "待辦"
+    },
+    payee_disable_submitted: {
+        headline: "有新的收款人停用申請待審核",
+        summary: "請確認停用原因與關聯影響。",
+        nextStep: "請於系統中完成核准或駁回。",
+        subjectTag: "待辦"
+    },
+    payee_request_withdrawn: {
+        headline: "收款人申請已被撤回",
+        summary: "該收款人申請已由申請人撤回。",
+        nextStep: "如仍需異動，請由申請人重新提交。",
+        subjectTag: "通知"
+    },
+    payee_request_approved: {
+        headline: "收款人申請已核准",
+        summary: "申請內容已正式生效。",
+        nextStep: "可至收款人管理查看最新資料。",
+        subjectTag: "通知"
+    },
+    payee_request_rejected: {
+        headline: "收款人申請已駁回",
+        summary: "申請未通過，請依原因調整內容。",
+        nextStep: "修正完成後可重新提交。",
+        subjectTag: "待辦"
     }
 };
 
@@ -188,6 +246,61 @@ function getEventCopy(eventCode: string): EventCopy {
 
 export function isMvpTemplateKey(templateKey: string): boolean {
     return MVP_TEMPLATE_KEYS.has(templateKey);
+}
+
+function isPayeeNotificationPayload(payload: NotificationPayload): payload is PayeeNotificationPayload {
+    return Boolean(
+        (payload as PayeeNotificationPayload)?.object_type === "payee_request" ||
+        String(payload?.event_code || "").startsWith("payee_")
+    );
+}
+
+function renderPayeeEmailTemplate(
+    payload: PayeeNotificationPayload,
+    appBaseUrl: string
+): RenderedEmail {
+    const eventLabel = EVENT_LABELS[payload.event_code] || payload.event_code;
+    const actorName = payload.actor_name || "系統";
+    const reason = (payload.reason || "").trim();
+    const requestId = payload.payee_request_id || "-";
+    const payeeName = payload.payee_name || "收款人";
+    const changeTypeLabel = payload.change_type_label || payload.change_type || "-";
+    const statusLine = payload.request_status || "-";
+    const copy = getEventCopy(payload.event_code);
+    const link = withHost(appBaseUrl, payload.request_link_path || "/payees");
+    const subject = `[${copy.subjectTag}] ${eventLabel}｜收款人 ${payeeName}`;
+
+    const lines = [
+        `${copy.headline}`,
+        `${copy.summary}`,
+        `申請單：${requestId}`,
+        `收款人：${payeeName}`,
+        `申請類型：${changeTypeLabel}`,
+        `申請狀態：${statusLine}`,
+        `操作者：${actorName}`,
+        reason ? `原因：${reason}` : "原因：-",
+        `下一步：${copy.nextStep}`,
+        `連結：${link}`
+    ];
+
+    const text = lines.join("\n");
+    const html = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1f2937; line-height: 1.6;">
+            <h2 style="margin: 0 0 6px; font-size: 18px;">${escapeHtml(copy.headline)}</h2>
+            <p style="margin: 0 0 14px; color: #4b5563;">${escapeHtml(copy.summary)}</p>
+            <p style="margin: 0 0 8px;"><strong>事件：</strong>${escapeHtml(eventLabel)}</p>
+            <p style="margin: 0 0 8px;"><strong>申請單：</strong>${escapeHtml(requestId)}</p>
+            <p style="margin: 0 0 8px;"><strong>收款人：</strong>${escapeHtml(payeeName)}</p>
+            <p style="margin: 0 0 8px;"><strong>申請類型：</strong>${escapeHtml(changeTypeLabel)}</p>
+            <p style="margin: 0 0 8px;"><strong>申請狀態：</strong>${escapeHtml(statusLine)}</p>
+            <p style="margin: 0 0 8px;"><strong>操作者：</strong>${escapeHtml(actorName)}</p>
+            <p style="margin: 0 0 8px;"><strong>原因：</strong>${escapeHtml(reason || "-")}</p>
+            <p style="margin: 0 0 8px;"><strong>下一步：</strong>${escapeHtml(copy.nextStep)}</p>
+            <p style="margin: 16px 0 0;"><a href="${escapeHtml(link)}">前往查看收款人申請</a></p>
+        </div>
+    `.trim();
+
+    return { subject, text, html };
 }
 
 export function renderClaimEmailTemplate(
@@ -239,4 +352,15 @@ export function renderClaimEmailTemplate(
     `.trim();
 
     return { subject, text, html };
+}
+
+export function renderNotificationEmailTemplate(
+    templateKey: string,
+    payload: NotificationPayload,
+    appBaseUrl: string
+): RenderedEmail {
+    if (isPayeeNotificationPayload(payload)) {
+        return renderPayeeEmailTemplate(payload, appBaseUrl);
+    }
+    return renderClaimEmailTemplate(templateKey, payload as ClaimNotificationPayload, appBaseUrl);
 }

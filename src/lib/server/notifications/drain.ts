@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { renderClaimEmailTemplate } from "./email-templates";
+import { renderNotificationEmailTemplate } from "./email-templates";
 import { sendMailSmtp } from "./smtp-client";
 
 type DrainResult = {
@@ -85,7 +85,7 @@ export async function drainNotificationJobs(limit?: number): Promise<DrainResult
     for (const job of claimedJobs) {
         try {
             const payload = job.payload || {};
-            const rendered = renderClaimEmailTemplate(
+            const rendered = renderNotificationEmailTemplate(
                 String(job.template_key || ""),
                 payload,
                 appBaseUrl,

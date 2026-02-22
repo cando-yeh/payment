@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
     isMvpTemplateKey,
-    renderClaimEmailTemplate
+    renderClaimEmailTemplate,
+    renderNotificationEmailTemplate
 } from "./email-templates";
 
 describe("email notification templates", () => {
@@ -78,5 +79,30 @@ describe("email notification templates", () => {
         expect(isMvpTemplateKey("claim.submit")).toBe(true);
         expect(isMvpTemplateKey("claim.supplement_submitted")).toBe(true);
         expect(isMvpTemplateKey("claim.approve_manager")).toBe(false);
+    });
+
+    it("renders payee request email via generic renderer", () => {
+        const rendered = renderNotificationEmailTemplate(
+            "payee.create_submitted",
+            {
+                object_type: "payee_request",
+                event_code: "payee_create_submitted",
+                payee_request_id: "req-001",
+                payee_name: "Fuku 富可",
+                change_type: "create",
+                change_type_label: "新增",
+                request_status: "pending",
+                actor_name: "Candoo",
+                reason: "新增供應商",
+                request_link_path: "/payees"
+            },
+            "https://example.com"
+        );
+
+        expect(rendered.subject).toContain("收款人新增申請");
+        expect(rendered.text).toContain("收款人：Fuku 富可");
+        expect(rendered.text).toContain("申請類型：新增");
+        expect(rendered.text).toContain("https://example.com/payees");
+        expect(rendered.html).toContain("前往查看收款人申請");
     });
 });

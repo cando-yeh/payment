@@ -1,6 +1,8 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
+import { enqueuePayeeRequestNotifications } from '$lib/server/notifications/payee-enqueue';
+import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -148,7 +150,7 @@ export const actions: Actions = {
         // 1. Encryption of identity_no and bank_account (using pgp_sym_encrypt)
         // 2. Insertion into payee_change_requests table
         // 3. Setting initial status to 'pending'
-        const { error: rpcError } = await supabase.rpc('submit_payee_change_request', {
+        const { data: requestId, error: rpcError } = await supabase.rpc('submit_payee_change_request', {
             _change_type: 'create',
             _payee_id: null, // New payee, so no ID yet
             _proposed_data: proposed_data,
@@ -161,6 +163,23 @@ export const actions: Actions = {
         if (rpcError) {
             console.error('RPC Error:', rpcError);
             return fail(500, { message: '提交失敗：' + rpcError.message });
+        }
+
+        try {
+            if (requestId) {
+                await enqueuePayeeRequestNotifications({
+                    eventCode: 'payee_create_submitted',
+                    requestId: String(requestId),
+                    actorId: session.user.id,
+                    reason: 'New payee request'
+                });
+                await triggerNotificationDrain({
+                    origin: new URL(request.url).origin,
+                    reason: 'payee.create.submit'
+                });
+            }
+        } catch (notifyError) {
+            console.error('[notify:payee] create request enqueue failed', notifyError);
         }
 
         // Redirect to the Payee List page on success
