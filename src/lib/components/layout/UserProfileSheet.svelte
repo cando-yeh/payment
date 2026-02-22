@@ -92,8 +92,32 @@
                 result?.type === "success" &&
                 result?.data?.profile
             ) {
-                user = { ...user, ...result.data.profile };
-                if (!isEditing) {
+                const incomingProfile = result.data.profile as Record<
+                    string,
+                    unknown
+                >;
+                user = {
+                    ...user,
+                    ...incomingProfile,
+                    // 後端快照偶發回 null 時，保留目前畫面已有值，避免成功更新後又回到「新增銀行帳號」態
+                    bank:
+                        typeof incomingProfile.bank === "string"
+                            ? incomingProfile.bank
+                            : (user?.bank ?? ""),
+                    bank_account_tail:
+                        typeof incomingProfile.bank_account_tail === "string"
+                            ? incomingProfile.bank_account_tail
+                            : (user?.bank_account_tail ??
+                              user?.bankAccountTail ??
+                              ""),
+                    bankAccountTail:
+                        typeof incomingProfile.bank_account_tail === "string"
+                            ? incomingProfile.bank_account_tail
+                            : (user?.bankAccountTail ??
+                              user?.bank_account_tail ??
+                              ""),
+                };
+                if (!isEditing && !savingProfile) {
                     resetFormFromUser();
                 }
             }
@@ -347,25 +371,52 @@
             return;
         }
 
-        const formData = new FormData();
-        formData.append("bank", bank);
-        formData.append("bankAccount", account);
+        loading = true;
+        savingProfile = true;
+        try {
+            const formData = new FormData();
+            formData.append("bank", bank);
+            formData.append("bankAccount", account);
 
-        const ok = await submitSelfProfileUpdate(formData, () => {
-            // 先做本地快照同步，避免快照刷新失敗時 UI 仍顯示「尚未設定銀行帳號」
-            const tail = account.length <= 5 ? account : account.slice(-5);
-            user = {
-                ...user,
-                bank,
-                bank_account_tail: tail,
-                bankAccountTail: tail,
-            };
-            isAddingBankAccount = false;
-            inputBankAccount = "";
-            showAccountValue = false;
-            decryptedAccount = null;
-        });
-        if (!ok) return;
+            const response = await timedFetch("/account?/updateProfile", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const text = await response.text();
+            const result = deserialize(text) as any;
+
+            if (response.ok && result?.type === "success") {
+                // 立即做本地快照同步
+                const tail = account.length <= 5 ? account : account.slice(-5);
+                user = {
+                    ...user,
+                    bank,
+                    bank_account_tail: tail,
+                    bankAccountTail: tail,
+                };
+                isAddingBankAccount = false;
+                inputBankAccount = "";
+                showAccountValue = false;
+                decryptedAccount = null;
+
+                toast.success(UI_MESSAGES.user.selfProfileUpdated);
+
+                // 僅刷新快照，不呼叫 invalidateAll() 以避免觸發
+                // parent 重新推送 user prop 導致 hasBankInfo 短暫歸零
+                await refreshUserSnapshot();
+                return;
+            }
+
+            toast.error(
+                result?.data?.message || UI_MESSAGES.common.updateFailed,
+            );
+        } catch {
+            toast.error(UI_MESSAGES.common.updateFailed);
+        } finally {
+            loading = false;
+            savingProfile = false;
+        }
     }
 
     async function toggleReveal() {

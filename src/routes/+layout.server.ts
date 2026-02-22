@@ -38,8 +38,7 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
                     avatar_url,
                     approver_id,
                     bank,
-                    bank_account_tail,
-                    approver:profiles!profiles_approver_id_fkey(full_name)
+                    bank_account_tail
                 `)
                 .eq('id', session.user.id)
                 .single(),
@@ -51,18 +50,10 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
         ]);
 
         if (!profileResponse.error && profileResponse.data) {
-            const approverRelation = profileResponse.data.approver as
-                | { full_name?: string | null }
-                | { full_name?: string | null }[]
-                | null
-                | undefined;
-            let approverName =
-                (Array.isArray(approverRelation)
-                    ? approverRelation[0]?.full_name
-                    : approverRelation?.full_name) || null;
-
-            // Safety fallback: only if relation didn't resolve but approver_id exists.
-            if (!approverName && profileResponse.data.approver_id && adminClient) {
+            // 核准人名稱: 自引用 FK 在 PostgREST schema cache 中可能找不到 (PGRST200)
+            // 因此改用獨立查詢取得
+            let approverName: string | null = null;
+            if (profileResponse.data.approver_id && adminClient) {
                 const { data: approverData } = await adminClient
                     .from('profiles')
                     .select('full_name')
@@ -127,6 +118,7 @@ export const load: LayoutServerLoad = async ({ locals, depends }) => {
             };
         } else {
             // fallback: profile 讀取失敗時，至少保留 session 與 hooks 注入的角色資訊
+            console.error('[layout.server] Profile query FAILED!', 'error:', profileResponse.error, 'data:', profileResponse.data);
             profile = {
                 full_name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || 'User',
                 email: session.user.email || '',
