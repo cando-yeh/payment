@@ -70,7 +70,7 @@
 </script>
 
 <div class="space-y-4 pb-16">
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center gap-4">
         <Button
             variant="ghost"
             class="h-9 px-3 text-base font-semibold text-muted-foreground hover:text-foreground"
@@ -78,21 +78,6 @@
         >
             <ArrowLeft class="mr-1.5 h-4 w-4" />
             返回列表
-        </Button>
-
-        <Button
-            type="submit"
-            form="payee-create-form"
-            size="sm"
-            disabled={isLoading}
-        >
-            {#if isLoading}
-                <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                提交中...
-            {:else}
-                <Send class="mr-1.5 h-3.5 w-3.5" />
-                直接提交
-            {/if}
         </Button>
     </div>
 
@@ -383,6 +368,30 @@
                         </div>
                     </div>
                 {/if}
+
+                <div class="flex items-center justify-end gap-3 pt-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        class="min-w-[120px]"
+                        onclick={() => goto("/payees")}
+                    >
+                        取消
+                    </Button>
+                    <Button
+                        type="submit"
+                        class="min-w-[140px]"
+                        disabled={isLoading}
+                    >
+                        {#if isLoading}
+                            <LoaderCircle class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            提交中...
+                        {:else}
+                            <Send class="mr-1.5 h-3.5 w-3.5" />
+                            直接提交
+                        {/if}
+                    </Button>
+                </div>
             </form>
         </Card.Content>
     </Card.Root>

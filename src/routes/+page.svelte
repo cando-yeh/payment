@@ -33,12 +33,7 @@
             >
                 <Sparkles class="h-3 w-3" /> Enterprise Solutions
             </div>
-            <h1
-                class="text-7xl font-bold tracking-tight text-foreground leading-[1.1]"
-            >
-                簡約、精確、<br />
-                <span class="text-primary">極致流暢</span>
-            </h1>
+
             <p
                 class="text-muted-foreground text-xl max-w-xl mx-auto leading-relaxed font-medium"
             >
