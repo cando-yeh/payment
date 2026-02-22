@@ -1295,6 +1295,15 @@
             isSubmitting = true;
             return async ({ result }) => {
                 isSubmitting = false;
+                const hasInlineSubmitErrors =
+                    formSubmitIntent === "submit" && submitErrors.length > 0;
+
+                if (result?.type === "failure" && hasInlineSubmitErrors) {
+                    // 已有頁面內卡控提示時，不再重複顯示左下角 toast。
+                    await applyAction(result);
+                    return;
+                }
+
                 await handleEnhancedActionFeedback({
                     result,
                     update: () => applyAction(result),
