@@ -88,15 +88,21 @@ export async function enqueuePayeeRequestNotifications({
 }: EnqueuePayeeNotificationInput): Promise<number> {
     const supabase = getServiceRoleClient();
 
-    const { data: mapping } = await supabase
+    const { data: mapping, error: mappingError } = await supabase
         .from("notification_event_template_map")
         .select("template_key, is_active")
         .eq("event_code", eventCode)
         .eq("channel", "email")
         .maybeSingle();
-    if (!mapping || !mapping.is_active || !mapping.template_key) return 0;
+    if (mappingError) {
+        console.error("[notify:payee] mapping query error", mappingError);
+    }
+    if (!mapping || !mapping.is_active || !mapping.template_key) {
+        console.warn("[notify:payee] no active mapping for", eventCode, "mapping:", mapping);
+        return 0;
+    }
 
-    const { data: request } = await supabase
+    const { data: request, error: requestError } = await supabase
         .from("payee_change_requests")
         .select(`
             id,
@@ -107,12 +113,28 @@ export async function enqueuePayeeRequestNotifications({
             proposed_data,
             requested_by,
             requested_by_profile:profiles!payee_change_requests_requested_by_fkey(id, full_name, email),
-            reviewed_by_profile:profiles!payee_change_requests_reviewed_by_fkey(id, full_name, email),
-            payee:payees(id, name)
+            reviewed_by_profile:profiles!payee_change_requests_reviewed_by_fkey(id, full_name, email)
         `)
         .eq("id", requestId)
         .maybeSingle();
-    if (!request) return 0;
+    if (requestError) {
+        console.error("[notify:payee] request query error", requestError);
+    }
+    if (!request) {
+        console.warn("[notify:payee] request not found for id:", requestId);
+        return 0;
+    }
+
+    // Fetch payee name separately (no FK between payee_change_requests and payees)
+    let payeeNameFromDb: string | null = null;
+    if (request.payee_id) {
+        const { data: payeeRow } = await supabase
+            .from("payees")
+            .select("name")
+            .eq("id", request.payee_id)
+            .maybeSingle();
+        payeeNameFromDb = payeeRow?.name || null;
+    }
 
     const { data: actorProfile } = await supabase
         .from("profiles")
@@ -126,9 +148,14 @@ export async function enqueuePayeeRequestNotifications({
         .eq("is_finance", true)
         .eq("is_active", true);
 
+    // Supabase FK joins are typed as arrays; safely unwrap to single objects.
+    const requesterProfile: any = Array.isArray(request.requested_by_profile)
+        ? request.requested_by_profile[0]
+        : request.requested_by_profile;
+
     const recipients = resolveRecipients({
         eventCode,
-        requester: request.requested_by_profile || undefined,
+        requester: requesterProfile || undefined,
         financeRecipients: financeUsers || [],
         actorEmail: actorProfile?.email || null
     });
@@ -136,7 +163,7 @@ export async function enqueuePayeeRequestNotifications({
 
     const payeeName = String(
         request?.proposed_data?.name ||
-        request?.payee?.name ||
+        payeeNameFromDb ||
         "收款人"
     ).trim();
     const finalReason = String(reason || request.reason || "").trim();
