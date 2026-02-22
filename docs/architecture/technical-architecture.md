@@ -1,4 +1,4 @@
-# 02_技術架構與輔助規範
+# 技術架構與輔助規範
 
 > 彙整文件：技術架構文件、技術決策紀錄 (ADR)、專案結構說明、測試策略文件  
 > 最後更新：2026-02-20
@@ -412,7 +412,7 @@ main (生產環境)
 ├── supabase/
 │   ├── migrations/            # DB schema / RPC / policy migration
 │   └── .temp/                 # Supabase CLI 暫存
-├── 參考文件/                  # 專案文件
+├── docs/                      # 專案文件
 ├── playwright-report/         # E2E 報表輸出（測試產物，已 gitignore）
 ├── test-results/              # E2E 執行產物（已 gitignore）
 ├── package.json

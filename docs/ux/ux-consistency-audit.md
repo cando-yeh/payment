@@ -1,6 +1,6 @@
 # 全域互動一致性稽核報告（2026-02-18）
 
-依據：`/Users/candoyeh/Downloads/報銷系統/報銷_new/UX_CONSISTENCY_GUIDELINES.md`
+依據：`/Users/candoyeh/Downloads/報銷系統/報銷_new/docs/ux/ux-consistency-guidelines.md`
 
 稽核範圍：
 - `/Users/candoyeh/Downloads/報銷系統/報銷_new/src/routes/claims/+page.svelte`

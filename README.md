@@ -96,13 +96,16 @@ src/
   lib/client/             # 前端工具
 supabase/migrations/      # DB migration
 tests/                    # Vitest + Playwright
-參考文件/                 # 規格與維運文件
+docs/                     # 規格、流程與維運文件
 ```
 
 ## 參考文件
 
-- `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/01_產品藍圖與開發計畫.md`
-- `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/02_技術架構與輔助規範.md`
-- `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/03_資料庫與資料規約.md`
-- `/Users/candoyeh/Downloads/報銷系統/報銷_new/參考文件/TESTING.md`
-- `/Users/candoyeh/Downloads/報銷系統/報銷_new/docs/notification_observability.sql`
+- `docs/product/product-roadmap.md`
+- `docs/architecture/technical-architecture.md`
+- `docs/architecture/component-dataflow.md`
+- `docs/database/data-spec.md`
+- `docs/testing/testing-guide.md`
+- `docs/ux/ux-consistency-guidelines.md`
+- `docs/ux/ux-consistency-audit.md`
+- `docs/operations/notification-observability.sql`

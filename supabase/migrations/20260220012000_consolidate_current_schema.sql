@@ -73,6 +73,7 @@ ALTER TABLE public.payees
 ALTER TABLE public.payee_change_requests
     ADD COLUMN IF NOT EXISTS proposed_unified_no text,
     ADD COLUMN IF NOT EXISTS proposed_national_id bytea,
+    DROP COLUMN IF EXISTS reject_reason,
     DROP COLUMN IF EXISTS proposed_tax_id,
     DROP COLUMN IF EXISTS proposed_national_id_tail;
 
