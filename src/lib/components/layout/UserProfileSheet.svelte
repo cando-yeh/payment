@@ -440,43 +440,50 @@
 
         <div class="mt-4 space-y-4 pb-4">
             <div class="flex flex-col items-center gap-4">
-                <Avatar.Root
-                    class="h-16 w-16 border-2 border-background shadow-md"
-                >
-                    {#if user.avatar_url || user.avatarUrl}
-                        <Avatar.Image
-                            src={user.avatar_url || user.avatarUrl}
-                            alt={user.full_name || user.name}
+                <div class="relative">
+                    <Avatar.Root
+                        class="h-16 w-16 border-2 border-background shadow-md"
+                    >
+                        {#if user.avatar_url || user.avatarUrl}
+                            <Avatar.Image
+                                src={user.avatar_url || user.avatarUrl}
+                                alt={user.full_name || user.name}
+                            />
+                        {/if}
+                        <Avatar.Fallback
+                            class="bg-primary/5 text-2xl text-primary font-bold"
+                        >
+                            {(user.full_name || user.name || "?")
+                                .charAt(0)
+                                .toUpperCase()}
+                        </Avatar.Fallback>
+                    </Avatar.Root>
+                    {#if !isManagementMode && isSelf}
+                        <input
+                            bind:this={avatarInputEl}
+                            type="file"
+                            class="hidden"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onchange={uploadAvatar}
                         />
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="secondary"
+                            class="absolute -right-1 -bottom-1 h-7 w-7 rounded-full shadow-sm"
+                            onclick={triggerAvatarPicker}
+                            disabled={avatarUploading || loading}
+                            aria-label={avatarUploading
+                                ? "頭像上傳中"
+                                : "編輯頭像"}
+                            title={avatarUploading
+                                ? "頭像上傳中..."
+                                : "更換頭像"}
+                        >
+                            <Camera class="h-3.5 w-3.5" />
+                        </Button>
                     {/if}
-                    <Avatar.Fallback
-                        class="bg-primary/5 text-2xl text-primary font-bold"
-                    >
-                        {(user.full_name || user.name || "?")
-                            .charAt(0)
-                            .toUpperCase()}
-                    </Avatar.Fallback>
-                </Avatar.Root>
-                {#if !isManagementMode && isSelf}
-                    <input
-                        bind:this={avatarInputEl}
-                        type="file"
-                        class="hidden"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        onchange={uploadAvatar}
-                    />
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        class="h-8 gap-1.5"
-                        onclick={triggerAvatarPicker}
-                        disabled={avatarUploading || loading}
-                    >
-                        <Camera class="h-3.5 w-3.5" />
-                        {avatarUploading ? "上傳中..." : "更換頭像"}
-                    </Button>
-                {/if}
+                </div>
 
                 <div class="text-center w-full px-4">
                     {#if !isManagementMode && isSelf}
