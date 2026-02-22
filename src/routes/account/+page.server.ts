@@ -1,4 +1,5 @@
 import { fail, redirect, type Actions, type RequestEvent } from '@sveltejs/kit';
+import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
 
 /**
  * Account Page Server Actions
@@ -126,5 +127,87 @@ export const actions: Actions = {
         }
 
         return { success: true };
+    },
+
+    updateAvatar: async ({ request, locals }: RequestEvent) => {
+        const session = await locals.getSession();
+        if (!session) throw redirect(303, '/auth');
+
+        const formData = await request.formData();
+        const avatarRaw = formData.get('avatar');
+        const avatar = avatarRaw instanceof File ? avatarRaw : null;
+
+        try {
+            validateFileUpload(avatar, '頭像', {
+                required: true,
+                maxBytes: 2 * 1024 * 1024,
+                allowedTypes: new Set([
+                    'image/jpeg',
+                    'image/png',
+                    'image/webp',
+                    'image/gif'
+                ])
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '頭像上傳失敗';
+            return fail(400, { message });
+        }
+
+        if (!avatar) {
+            return fail(400, { message: '請選擇頭像檔案' });
+        }
+
+        const { data: currentProfile } = await locals.supabase
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+        let uploadedPath = '';
+        try {
+            uploadedPath = await uploadFileToStorage(locals.supabase, avatar, {
+                bucket: 'avatars',
+                folder: session.user.id,
+                prefix: 'avatar'
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '頭像上傳失敗';
+            return fail(500, { message });
+        }
+
+        const { data: publicData } = locals.supabase.storage
+            .from('avatars')
+            .getPublicUrl(uploadedPath);
+        const avatarUrl = publicData.publicUrl;
+
+        const { error: updateError } = await locals.supabase
+            .from('profiles')
+            .update({
+                avatar_url: avatarUrl,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', session.user.id);
+
+        if (updateError) {
+            return fail(500, { message: '頭像更新失敗', error: updateError.message });
+        }
+
+        const previousUrl = currentProfile?.avatar_url;
+        const bucketPrefix = '/storage/v1/object/public/avatars/';
+        if (previousUrl?.includes(bucketPrefix)) {
+            const oldPath = previousUrl.split(bucketPrefix)[1];
+            if (oldPath && oldPath !== uploadedPath) {
+                await locals.supabase.storage.from('avatars').remove([oldPath]);
+            }
+        }
+
+        const { error: authUpdateError } = await locals.supabase.auth.updateUser({
+            data: { avatar_url: avatarUrl }
+        });
+        if (authUpdateError) {
+            console.warn('Failed to sync self auth metadata avatar_url:', authUpdateError.message);
+        }
+
+        return { success: true, avatarUrl };
     }
 };

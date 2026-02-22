@@ -14,7 +14,7 @@
     import * as Avatar from "$lib/components/ui/avatar";
     import * as Sheet from "$lib/components/ui/sheet";
     import { toast } from "svelte-sonner";
-    import { User, Save, Check, Pencil, X } from "lucide-svelte";
+    import { User, Save, Check, Pencil, X, Camera } from "lucide-svelte";
     import { deserialize, applyAction } from "$app/forms";
     import { untrack } from "svelte";
     import { timedFetch } from "$lib/client/timed-fetch";
@@ -44,6 +44,8 @@
     let isEditing = $state(false);
     let isEditingName = $state(false);
     let isAddingBankAccount = $state(false);
+    let avatarInputEl = $state<HTMLInputElement | null>(null);
+    let avatarUploading = $state(false);
     let isAdmin = $state(false);
     let isFinance = $state(false);
     let approverId = $state("");
@@ -258,6 +260,50 @@
         }
     }
 
+    function triggerAvatarPicker() {
+        avatarInputEl?.click();
+    }
+
+    async function uploadAvatar(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+
+        avatarUploading = true;
+        try {
+            const formData = new FormData();
+            formData.append("avatar", file);
+
+            const response = await timedFetch("/account?/updateAvatar", {
+                method: "POST",
+                body: formData,
+                headers: { "x-sveltekit-action": "true" },
+            });
+            const text = await response.text();
+            const result = deserialize(text) as any;
+
+            if (response.ok && result?.type === "success") {
+                const avatarUrl = String(result?.data?.avatarUrl || "");
+                if (avatarUrl) {
+                    user = { ...user, avatar_url: avatarUrl, avatarUrl };
+                }
+                toast.success("頭像已更新");
+                await applyAction(result);
+                await invalidateAll();
+                await refreshUserSnapshot();
+            } else {
+                toast.error(
+                    result?.data?.message || UI_MESSAGES.common.updateFailed,
+                );
+            }
+        } catch {
+            toast.error(UI_MESSAGES.common.updateFailed);
+        } finally {
+            avatarUploading = false;
+            input.value = "";
+        }
+    }
+
     async function saveSelfName() {
         const trimmed = fullName.trim();
         if (!trimmed) {
@@ -411,6 +457,26 @@
                             .toUpperCase()}
                     </Avatar.Fallback>
                 </Avatar.Root>
+                {#if !isManagementMode && isSelf}
+                    <input
+                        bind:this={avatarInputEl}
+                        type="file"
+                        class="hidden"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        onchange={uploadAvatar}
+                    />
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        class="h-8 gap-1.5"
+                        onclick={triggerAvatarPicker}
+                        disabled={avatarUploading || loading}
+                    >
+                        <Camera class="h-3.5 w-3.5" />
+                        {avatarUploading ? "上傳中..." : "更換頭像"}
+                    </Button>
+                {/if}
 
                 <div class="text-center w-full px-4">
                     {#if !isManagementMode && isSelf}
