@@ -96,27 +96,34 @@
                     string,
                     unknown
                 >;
-                user = {
-                    ...user,
-                    ...incomingProfile,
-                    // 後端快照偶發回 null 時，保留目前畫面已有值，避免成功更新後又回到「新增銀行帳號」態
-                    bank:
-                        typeof incomingProfile.bank === "string"
-                            ? incomingProfile.bank
-                            : (user?.bank ?? ""),
-                    bank_account_tail:
-                        typeof incomingProfile.bank_account_tail === "string"
-                            ? incomingProfile.bank_account_tail
-                            : (user?.bank_account_tail ??
-                              user?.bankAccountTail ??
-                              ""),
-                    bankAccountTail:
-                        typeof incomingProfile.bank_account_tail === "string"
-                            ? incomingProfile.bank_account_tail
-                            : (user?.bankAccountTail ??
-                              user?.bank_account_tail ??
-                              ""),
-                };
+                if (isManagementMode) {
+                    // admin 編輯：直接以後端回傳值為準，不做 null 卡控
+                    user = { ...user, ...incomingProfile };
+                } else {
+                    // 自行編輯：後端快照偶發回 null 時，保留目前畫面已有值
+                    user = {
+                        ...user,
+                        ...incomingProfile,
+                        bank:
+                            typeof incomingProfile.bank === "string"
+                                ? incomingProfile.bank
+                                : (user?.bank ?? ""),
+                        bank_account_tail:
+                            typeof incomingProfile.bank_account_tail ===
+                            "string"
+                                ? incomingProfile.bank_account_tail
+                                : (user?.bank_account_tail ??
+                                  user?.bankAccountTail ??
+                                  ""),
+                        bankAccountTail:
+                            typeof incomingProfile.bank_account_tail ===
+                            "string"
+                                ? incomingProfile.bank_account_tail
+                                : (user?.bankAccountTail ??
+                                  user?.bank_account_tail ??
+                                  ""),
+                    };
+                }
                 if (!isEditing && !savingProfile) {
                     resetFormFromUser();
                 }
