@@ -96,7 +96,14 @@
                             id={bankAccountFieldId}
                             name={bankAccountFieldName}
                             type={showAccountValue ? "text" : "password"}
-                            bind:value={inputBankAccount}
+                            value={inputBankAccount}
+                            oninput={(e: Event) => {
+                                const input =
+                                    e.currentTarget as HTMLInputElement;
+                                input.value = input.value.replace(/[^\d]/g, "");
+                                inputBankAccount = input.value;
+                            }}
+                            inputmode="numeric"
                             placeholder={showAccountValue
                                 ? decryptedAccount || "請輸入新帳號..."
                                 : "••••••••••••"}
@@ -108,7 +115,14 @@
                             id={bankAccountFieldId}
                             name={bankAccountFieldName}
                             type={showAccountValue ? "text" : "password"}
-                            bind:value={inputBankAccount}
+                            value={inputBankAccount}
+                            oninput={(e: Event) => {
+                                const input =
+                                    e.currentTarget as HTMLInputElement;
+                                input.value = input.value.replace(/[^\d]/g, "");
+                                inputBankAccount = input.value;
+                            }}
+                            inputmode="numeric"
                             placeholder={showAccountValue
                                 ? decryptedAccount || "請輸入新帳號..."
                                 : maskedAccountTail || "••••••••••••"}
@@ -120,7 +134,14 @@
                             id={bankAccountFieldId}
                             name={bankAccountFieldName}
                             type={showAccountValue ? "text" : "password"}
-                            bind:value={inputBankAccount}
+                            value={inputBankAccount}
+                            oninput={(e: Event) => {
+                                const input =
+                                    e.currentTarget as HTMLInputElement;
+                                input.value = input.value.replace(/[^\d]/g, "");
+                                inputBankAccount = input.value;
+                            }}
+                            inputmode="numeric"
                             placeholder={showAccountValue
                                 ? inputBankAccount || "請輸入銀行帳號"
                                 : "••••••••••••"}

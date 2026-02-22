@@ -103,7 +103,9 @@
             >
                 新增收款人
             </h1>
-            <p class="mt-1 text-[15px] leading-6 font-medium text-foreground/65">
+            <p
+                class="mt-1 text-[15px] leading-6 font-medium text-foreground/65"
+            >
                 提交新的收款對象資料。送出後需經財務審核才可正式啟用。
             </p>
         </div>
@@ -154,21 +156,69 @@
 
                 <div class="form-row-box grid gap-4 md:grid-cols-2">
                     <div class="space-y-2">
-                        <Label for="name">公司/個人名稱 <span class="text-red-500">*</span></Label>
+                        <Label for="name"
+                            >公司/個人名稱 <span class="text-red-500">*</span
+                            ></Label
+                        >
                         <Input
                             id="name"
                             name="name"
-                            placeholder={payeeType === "vendor" ? "公司全名" : "真實姓名"}
+                            placeholder={payeeType === "vendor"
+                                ? "公司全名"
+                                : "真實姓名"}
                             required
                         />
                     </div>
                     <div class="space-y-2">
                         {#if payeeType === "vendor"}
-                            <Label for="identity_no">統一編號 (8碼) <span class="text-red-500">*</span></Label>
-                            <Input id="identity_no" name="identity_no" placeholder="12345678" maxlength={8} required />
+                            <Label for="identity_no"
+                                >統一編號 (8碼) <span class="text-red-500"
+                                    >*</span
+                                ></Label
+                            >
+                            <Input
+                                id="identity_no"
+                                name="identity_no"
+                                placeholder="12345678"
+                                maxlength={8}
+                                inputmode="numeric"
+                                required
+                                oninput={(e: Event) => {
+                                    const input =
+                                        e.currentTarget as HTMLInputElement;
+                                    input.value = input.value.replace(
+                                        /[^\d]/g,
+                                        "",
+                                    );
+                                }}
+                            />
                         {:else}
-                            <Label for="identity_no">身分證字號 <span class="text-red-500">*</span></Label>
-                            <Input id="identity_no" name="identity_no" placeholder="A123456789" maxlength={10} required />
+                            <Label for="identity_no"
+                                >身分證字號 <span class="text-red-500">*</span
+                                ></Label
+                            >
+                            <Input
+                                id="identity_no"
+                                name="identity_no"
+                                placeholder="A123456789"
+                                maxlength={10}
+                                required
+                                oninput={(e: Event) => {
+                                    const input =
+                                        e.currentTarget as HTMLInputElement;
+                                    let v = input.value;
+                                    // 第一碼：僅大寫英文
+                                    const first = v
+                                        .charAt(0)
+                                        .replace(/[^a-zA-Z]/, "")
+                                        .toUpperCase();
+                                    // 後面：僅數字
+                                    const rest = v
+                                        .slice(1)
+                                        .replace(/[^\d]/g, "");
+                                    input.value = first + rest;
+                                }}
+                            />
                         {/if}
                     </div>
                 </div>
@@ -176,19 +226,40 @@
                 {#if payeeType === "personal"}
                     <div class="form-row-box grid gap-4 md:grid-cols-2">
                         <div class="space-y-2">
-                            <Label for="email">電子郵件 <span class="text-red-500">*</span></Label>
-                            <Input id="email" name="email" type="email" placeholder="example@email.com" required />
+                            <Label for="email"
+                                >電子郵件 <span class="text-red-500">*</span
+                                ></Label
+                            >
+                            <Input
+                                id="email"
+                                name="email"
+                                type="email"
+                                placeholder="example@email.com"
+                                required
+                            />
                         </div>
                         <div class="space-y-2">
-                            <Label for="address">戶籍/通訊地址 <span class="text-red-500">*</span></Label>
-                            <Input id="address" name="address" placeholder="請填寫完整地址" required />
+                            <Label for="address"
+                                >戶籍/通訊地址 <span class="text-red-500"
+                                    >*</span
+                                ></Label
+                            >
+                            <Input
+                                id="address"
+                                name="address"
+                                placeholder="請填寫完整地址"
+                                required
+                            />
                         </div>
                     </div>
                 {/if}
 
                 <div class="form-row-box">
                     <div class="space-y-2">
-                        <Label for="service_description">服務項目說明 <span class="text-red-500">*</span></Label>
+                        <Label for="service_description"
+                            >服務項目說明 <span class="text-red-500">*</span
+                            ></Label
+                        >
                         <Input
                             id="service_description"
                             name="service_description"
@@ -202,7 +273,10 @@
                     <h3 class="mb-4 text-base font-semibold">銀行匯款資訊</h3>
                     <div class="grid gap-4 md:grid-cols-2">
                         <div class="space-y-2">
-                            <Label for="bank_code">銀行代碼 <span class="text-red-500">*</span></Label>
+                            <Label for="bank_code"
+                                >銀行代碼 <span class="text-red-500">*</span
+                                ></Label
+                            >
                             <BankCodeCombobox
                                 id="bank_code"
                                 name="bank_code"
@@ -212,7 +286,9 @@
                             {#if payeeType === "vendor"}
                                 <div class="mb-4 flex flex-col gap-1.5">
                                     <div class="flex items-center gap-2">
-                                        <Label for="editable_account">非固定帳號</Label>
+                                        <Label for="editable_account"
+                                            >非固定帳號</Label
+                                        >
                                         <Switch
                                             id="editable_account"
                                             aria-label="非固定帳號"
@@ -226,17 +302,26 @@
                             {/if}
                         </div>
                         <div class="space-y-2">
-                            <Label for="bank_account">銀行帳號 <span class="text-red-500">*</span></Label>
+                            <Label for="bank_account"
+                                >銀行帳號 <span class="text-red-500">*</span
+                                ></Label
+                            >
                             <Input
                                 id="bank_account"
                                 name="bank_account"
-                                type="password"
+                                type="text"
+                                inputmode="numeric"
                                 placeholder="請輸入帳號"
                                 required
+                                oninput={(e: Event) => {
+                                    const input =
+                                        e.currentTarget as HTMLInputElement;
+                                    input.value = input.value.replace(
+                                        /[^\d]/g,
+                                        "",
+                                    );
+                                }}
                             />
-                            <p class="text-xs text-muted-foreground">
-                                帳號將加密儲存，僅財務人員可查看。
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -245,57 +330,56 @@
                     <div class="form-row-box">
                         <h3 class="mb-4 text-base font-semibold">必要附件</h3>
                         <div class="grid gap-4 md:grid-cols-2">
-                                <div class="space-y-2">
-                                    <Label for="attachment_id_front"
-                                        >身分證正面 <span class="text-red-500"
-                                            >*</span
-                                        ></Label
-                                    >
-                                    <Input
-                                        id="attachment_id_front"
-                                        name="attachment_id_front"
-                                        type="file"
-                                        accept="image/*,.pdf"
-                                        required
-                                    />
-                                    <p class="text-xs text-muted-foreground">
-                                        支援 JPG, PNG, PDF (最大 10MB)
-                                    </p>
-                                </div>
-                                <div class="space-y-2">
-                                    <Label for="attachment_id_back"
-                                        >身分證反面 <span class="text-red-500"
-                                            >*</span
-                                        ></Label
-                                    >
-                                    <Input
-                                        id="attachment_id_back"
-                                        name="attachment_id_back"
-                                        type="file"
-                                        accept="image/*,.pdf"
-                                        required
-                                    />
-                                    <p class="text-xs text-muted-foreground">
-                                        支援 JPG, PNG, PDF (最大 10MB)
-                                    </p>
-                                </div>
-                                <div class="space-y-2">
-                                    <Label for="attachment_bank_cover"
-                                        >存摺封面 <span class="text-red-500"
-                                            >*</span
-                                        ></Label
-                                    >
-                                    <Input
-                                        id="attachment_bank_cover"
-                                        name="attachment_bank_cover"
-                                        type="file"
-                                        accept="image/*,.pdf"
-                                        required
-                                    />
-                                    <p class="text-xs text-muted-foreground">
-                                        需包含銀行帳號與戶名
-                                    </p>
-                                </div>
+                            <div class="space-y-2">
+                                <Label for="attachment_id_front"
+                                    >身分證正面 <span class="text-red-500"
+                                        >*</span
+                                    ></Label
+                                >
+                                <Input
+                                    id="attachment_id_front"
+                                    name="attachment_id_front"
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    required
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    支援 JPG, PNG, PDF (最大 10MB)
+                                </p>
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="attachment_id_back"
+                                    >身分證反面 <span class="text-red-500"
+                                        >*</span
+                                    ></Label
+                                >
+                                <Input
+                                    id="attachment_id_back"
+                                    name="attachment_id_back"
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    required
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    支援 JPG, PNG, PDF (最大 10MB)
+                                </p>
+                            </div>
+                            <div class="space-y-2">
+                                <Label for="attachment_bank_cover"
+                                    >存摺封面 <span class="text-red-500">*</span
+                                    ></Label
+                                >
+                                <Input
+                                    id="attachment_bank_cover"
+                                    name="attachment_bank_cover"
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    required
+                                />
+                                <p class="text-xs text-muted-foreground">
+                                    需包含銀行帳號與戶名
+                                </p>
+                            </div>
                         </div>
                     </div>
                 {/if}

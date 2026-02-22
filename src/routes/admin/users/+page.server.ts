@@ -194,7 +194,6 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const userId = formData.get('userId');
-        const reason = (formData.get('reason') as string | null)?.trim() || null;
         if (typeof userId !== 'string' || !userId.trim()) {
             return fail(400, { message: '缺少必要參數' });
         }
@@ -218,7 +217,6 @@ export const actions: Actions = {
                 is_active: false,
                 deactivated_at: new Date().toISOString(),
                 deactivated_by: session?.user?.id || null,
-                deactivate_reason: reason,
                 is_admin: false,
                 is_finance: false,
                 approver_id: null
@@ -248,8 +246,7 @@ export const actions: Actions = {
             .update({
                 is_active: true,
                 deactivated_at: null,
-                deactivated_by: null,
-                deactivate_reason: null
+                deactivated_by: null
             })
             .eq('id', userId);
 

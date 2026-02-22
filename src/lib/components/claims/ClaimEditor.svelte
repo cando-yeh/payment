@@ -899,6 +899,17 @@
         const digits = input.value.replace(/[^\d]/g, "");
         itemDraft.amount = digits;
         itemDraftAmountDisplay = formatAmountInput(digits);
+        input.value = itemDraftAmountDisplay;
+    }
+
+    /** 發票號碼：僅允許英文(自動轉大寫)、數字與 dash */
+    function handleInvoiceInput(event: Event) {
+        const input = event.currentTarget as HTMLInputElement;
+        const cleaned = input.value
+            .replace(/[^a-zA-Z0-9\-]/g, "")
+            .toUpperCase();
+        itemDraft.invoice_number = cleaned;
+        input.value = cleaned;
     }
 
     const submitCheckIssues = $derived.by(() => {
@@ -1506,10 +1517,16 @@
                                         {#if isEditablePayeeAccount && isEditable}
                                             <Input
                                                 value={bankAccount}
+                                                inputmode="numeric"
                                                 oninput={(event) => {
-                                                    bankAccount = (
-                                                        event.currentTarget as HTMLInputElement
-                                                    ).value;
+                                                    const input =
+                                                        event.currentTarget as HTMLInputElement;
+                                                    input.value =
+                                                        input.value.replace(
+                                                            /[^\d]/g,
+                                                            "",
+                                                        );
+                                                    bankAccount = input.value;
                                                 }}
                                                 placeholder="請輸入本次匯款帳號"
                                                 class="h-8 w-full text-xs"
@@ -2127,8 +2144,9 @@
                                     <Label for="item-invoice">發票號碼</Label>
                                     <Input
                                         id="item-invoice"
-                                        bind:value={itemDraft.invoice_number}
-                                        placeholder="AB-12345678"
+                                        value={itemDraft.invoice_number}
+                                        oninput={handleInvoiceInput}
+                                        placeholder="AB12345678"
                                         disabled={!canEditVoucherSection ||
                                             itemDraft.attachment_status !==
                                                 "uploaded"}
