@@ -33,6 +33,7 @@
     } = $props();
 
     let loading = $state(false);
+    let savingProfile = $state(false);
 
     let showAccountValue = $state(false);
     let decryptedAccount = $state<string | null>(null);
@@ -149,7 +150,7 @@
             return;
         }
 
-        if (!isEditing) {
+        if (!isEditing && !savingProfile) {
             resetFormFromUser();
         }
     });
@@ -230,6 +231,7 @@
         optimistic?: () => void,
     ) {
         loading = true;
+        savingProfile = true;
         try {
             const response = await timedFetch("/account?/updateProfile", {
                 method: "POST",
@@ -257,6 +259,7 @@
             return false;
         } finally {
             loading = false;
+            savingProfile = false;
         }
     }
 
