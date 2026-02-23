@@ -393,18 +393,12 @@ export const actions: Actions = {
             return fail(404, { message: '找不到使用者資料，請重新整理後再試。' });
         }
 
+        // 銀行欄位驗證：僅在「有提供新銀行帳號」時才強制要求銀行代碼
+        if (bankAccount && !bankName && !String(currentProfile.bank || '').trim()) {
+            return fail(400, { message: '新增銀行帳號時，銀行代碼為必填' });
+        }
+
         const effectiveBank = bankName || String(currentProfile.bank || '').trim();
-        const hasEffectiveBankAccount =
-            Boolean(bankAccount) ||
-            Boolean(String(currentProfile.bank_account_tail || '').trim());
-
-        if (!effectiveBank) {
-            return fail(400, { message: '銀行代碼為必填，不能為空' });
-        }
-
-        if (!hasEffectiveBankAccount) {
-            return fail(400, { message: '銀行帳號為必填，不能為空' });
-        }
 
         const updatePayload: Record<string, any> = {
             approver_id: approverId
@@ -421,7 +415,9 @@ export const actions: Actions = {
             updatePayload.full_name = fullName;
         }
 
-        updatePayload.bank = effectiveBank;
+        if (effectiveBank) {
+            updatePayload.bank = effectiveBank;
+        }
 
         if (isAdmin) {
             updatePayload.is_admin = nextIsAdmin;
