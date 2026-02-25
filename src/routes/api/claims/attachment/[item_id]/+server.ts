@@ -31,10 +31,23 @@ export const GET: RequestHandler = async ({ params, locals: { supabase, getSessi
 
     const claimRelation = Array.isArray(item.claim) ? item.claim[0] : item.claim;
     const applicantId = claimRelation?.applicant_id;
+
+    // Check if current user is the applicant's designated approver
+    let isApprover = false;
+    if (applicantId && applicantId !== session.user.id) {
+        const { data: applicantProfile } = await supabase
+            .from('profiles')
+            .select('approver_id')
+            .eq('id', applicantId)
+            .single();
+        isApprover = applicantProfile?.approver_id === session.user.id;
+    }
+
     const canView =
         applicantId === session.user.id ||
         profile?.is_admin === true ||
-        profile?.is_finance === true;
+        profile?.is_finance === true ||
+        isApprover;
 
     if (!canView) {
         throw error(403, 'Forbidden');
