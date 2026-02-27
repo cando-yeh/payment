@@ -61,11 +61,41 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
         pendingDocReview = pdr || [];
     }
 
+    // 3. Approved By Me (User acted as manager and approved it before)
+    // We use a query with an inner join on claim_history to find historical approvals.
+    const { data: approvedRaw } = await supabase
+        .from('claims')
+        .select(`
+            *,
+            applicant:profiles!claims_applicant_id_fkey(full_name, email),
+            payee:payees(name),
+            history:claim_history!inner(actor_id, action, from_status)
+        `)
+        .eq('history.actor_id', session.user.id)
+        .eq('history.action', 'approve_manager')
+        .eq('history.from_status', 'pending_manager')
+        .order('created_at', { ascending: false });
+
+    // Deduplicate in case a claim went through the manager step multiple times
+    let approvedByMe = [];
+    if (approvedRaw) {
+        const seen = new Set();
+        for (const claim of approvedRaw) {
+            if (!seen.has(claim.id)) {
+                seen.add(claim.id);
+                // Strip the history array so it doesn't leak or clutter the frontend
+                const { history, ...cleanClaim } = claim;
+                approvedByMe.push(cleanClaim);
+            }
+        }
+    }
+
     return {
         pendingManager: pendingManager || [],
         pendingFinance,
         pendingPayment,
         pendingDocReview,
+        approvedByMe,
         userRole: { isFinance, isAdmin }
     };
 };

@@ -47,6 +47,7 @@
         pendingFinance,
         pendingPayment,
         pendingDocReview,
+        approvedByMe,
         userRole,
     } = $derived(data);
 
@@ -101,6 +102,10 @@
                                 <History class="h-3.5 w-3.5" /> 補件審核
                             </ListTabTrigger>
                         {/if}
+
+                        <ListTabTrigger value="approved">
+                            <CircleCheck class="h-3.5 w-3.5" /> 已審核 ({approvedByMe.length})
+                        </ListTabTrigger>
                     </ListTabs>
                 {/snippet}
                 {#snippet right()}
@@ -215,7 +220,7 @@
 
             <!-- Tab Contents -->
             <div class="m-0">
-                {#each ["manager", "finance", "payment", "doc"] as tabValue}
+                {#each ["manager", "finance", "payment", "doc", "approved"] as tabValue}
                     <Tabs.Content value={tabValue} class="m-0">
                         {@const currentList =
                             tabValue === "manager"
@@ -224,7 +229,9 @@
                                   ? pendingFinance
                                   : tabValue === "payment"
                                     ? pendingPayment
-                                    : pendingDocReview}
+                                    : tabValue === "doc"
+                                      ? pendingDocReview
+                                      : approvedByMe}
 
                         <ClaimTable
                             claims={getPagedClaims(currentList)}

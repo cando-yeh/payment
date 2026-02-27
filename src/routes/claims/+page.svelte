@@ -90,11 +90,26 @@
     });
 
     const returnedCount = $derived(
-        (data.claims || []).filter((claim) => claim.status === "rejected").length,
+        (data.claims || []).filter((c) => c.status === "rejected").length,
+    );
+    const processingCount = $derived(
+        (data.claims || []).filter((c) =>
+            [
+                "pending_manager",
+                "pending_finance",
+                "pending_payment",
+                "pending_doc_review",
+            ].includes(c.status),
+        ).length,
     );
     const pendingDocCount = $derived(
-        (data.claims || []).filter((claim) => claim.status === "paid_pending_doc")
+        (data.claims || []).filter((c) => c.status === "paid_pending_doc")
             .length,
+    );
+    const historyCount = $derived(
+        (data.claims || []).filter((c) =>
+            ["paid", "cancelled"].includes(c.status),
+        ).length,
     );
 </script>
 
@@ -129,7 +144,7 @@
                                 草稿/退回
                             </ListTabTrigger>
                             <ListTabTrigger value="processing">
-                                審核中
+                                審核中 ({processingCount})
                             </ListTabTrigger>
                             <ListTabTrigger
                                 value="action_required"
@@ -138,7 +153,7 @@
                                 待補件
                             </ListTabTrigger>
                             <ListTabTrigger value="history">
-                                已結案
+                                已結案 ({historyCount})
                             </ListTabTrigger>
                         </ListTabs>
                     </Tabs.Root>
