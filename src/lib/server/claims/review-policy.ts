@@ -1,6 +1,7 @@
 type ReviewClaim = {
     applicant_id: string;
     status: string;
+    applicant?: any;
 };
 
 type ReviewProfile = {
@@ -21,11 +22,18 @@ export function resolveReviewerFlags(
 ): ReviewerFlags {
     const isFinance = Boolean(profile?.is_finance);
     const isAdmin = Boolean(profile?.is_admin);
-    const isApprover =
-        claim.status === "pending_manager" &&
-        claim.applicant_id !== currentUserId &&
-        !isFinance &&
-        !isAdmin;
+
+    let isApprover = false;
+    if (claim.applicant) {
+        const applicantObj = Array.isArray(claim.applicant) ? claim.applicant[0] : claim.applicant;
+        isApprover = applicantObj?.approver_id === currentUserId;
+    } else {
+        isApprover =
+            claim.status === "pending_manager" &&
+            claim.applicant_id !== currentUserId &&
+            !isFinance &&
+            !isAdmin;
+    }
 
     return { isFinance, isAdmin, isApprover };
 }

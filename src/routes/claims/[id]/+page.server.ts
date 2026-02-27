@@ -43,7 +43,7 @@ async function requireSession(getSession: () => Promise<any>, message = 'Unautho
 async function resolveReviewContext(supabase: any, claimId: string, reviewerId: string) {
     const { data: claim } = await supabase
         .from('claims')
-        .select('id, applicant_id, status')
+        .select('id, applicant_id, status, applicant:profiles!claims_applicant_id_fkey(approver_id)')
         .eq('id', claimId)
         .single();
     if (!claim) {
@@ -178,14 +178,9 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
         throw error(403, 'Forbidden');
     }
 
-    // Fallback approver inference:
-    // When user can access a pending_manager claim but is neither applicant nor finance/admin,
-    // treat them as the current approver for UI action gating.
-    const isApprover =
-        claim.status === 'pending_manager' &&
-        !isApplicant &&
-        !isFinance &&
-        !isAdmin;
+    // Accurately determine if the user is the designated approver for the applicant
+    const applicantObj = Array.isArray(claim.applicant) ? claim.applicant[0] : claim.applicant;
+    const isApprover = applicantObj?.approver_id === session.user.id;
 
     const { data: history } = await supabase
         .from('claim_history')
