@@ -1,6 +1,8 @@
 <script lang="ts">
+    import { goto } from "$app/navigation";
     import { Button } from "$lib/components/ui/button";
     import { Plus, FileText } from "lucide-svelte";
+    import { onDestroy } from "svelte";
     import { fade } from "svelte/transition";
     import * as Tabs from "$lib/components/ui/tabs";
     import ListPageScaffold from "$lib/components/common/ListPageScaffold.svelte";
@@ -18,99 +20,99 @@
 
     let { data }: { data: PageData } = $props();
     let searchTerm = $state("");
-    const PAGE_SIZE = 10;
     let currentPage = $state(1);
+    let currentTab = $state("drafts");
+    let syncedPage = $state(1);
+    let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function buildClaimsUrl(next: {
+        tab?: string;
+        search?: string;
+        page?: number;
+    }) {
+        const url = new URL(window.location.href);
+        const tab = next.tab ?? currentTab;
+        const search = next.search ?? searchTerm;
+        const page = next.page ?? currentPage;
+
+        url.searchParams.set("tab", tab);
+        if (search.trim()) {
+            url.searchParams.set("search", search.trim());
+        } else {
+            url.searchParams.delete("search");
+        }
+        if (page > 1) {
+            url.searchParams.set("page", String(page));
+        } else {
+            url.searchParams.delete("page");
+        }
+        return `${url.pathname}${url.search}`;
+    }
+
+    async function navigateClaims(next: {
+        tab?: string;
+        search?: string;
+        page?: number;
+    }) {
+        await goto(buildClaimsUrl(next), {
+            replaceState: true,
+            noScroll: true,
+            keepFocus: true,
+            invalidateAll: true,
+        });
+    }
 
     function handleSearch(e: Event) {
         const value = (e.target as HTMLInputElement).value;
         searchTerm = value;
         currentPage = 1;
-        const url = new URL(window.location.href);
-        if (value.trim()) {
-            url.searchParams.set("search", value);
-        } else {
-            url.searchParams.delete("search");
+        syncedPage = 1;
+
+        if (searchTimer) {
+            clearTimeout(searchTimer);
         }
-        window.history.replaceState(window.history.state, "", url);
+        searchTimer = setTimeout(() => {
+            void navigateClaims({ search: value, page: 1 });
+        }, 250);
     }
 
     function handleTabChange(value: string) {
         currentTab = value;
         currentPage = 1;
-        const url = new URL(window.location.href);
-        url.searchParams.set("tab", value);
-        window.history.replaceState(window.history.state, "", url);
+        syncedPage = 1;
+        void navigateClaims({ tab: value, page: 1 });
     }
-
-    let currentTab = $state("drafts");
 
     $effect(() => {
         currentTab = data.tab || "drafts";
         searchTerm = data.search || "";
+        currentPage = data.page || 1;
+        syncedPage = data.page || 1;
     });
 
-    let tabClaims = $derived.by(() => {
-        if (!data.claims) return [];
-        if (!isClaimsTabKey(currentTab)) return data.claims;
-        const statuses = getClaimStatusesForTab(currentTab);
-        return data.claims.filter((claim) => statuses.includes(claim.status));
+    $effect(() => {
+        if (currentPage === syncedPage) return;
+        syncedPage = currentPage;
+        void navigateClaims({ page: currentPage });
     });
-
-    let filteredClaims = $derived.by(() => {
-        const normalizedSearch = searchTerm.trim().toLowerCase();
-        if (!normalizedSearch) return tabClaims;
-
-        return tabClaims.filter((claim) => {
-            const id = String(claim.id || "").toLowerCase();
-            const payeeName = String(claim.payee?.name || "").toLowerCase();
-            const applicantName = String(
-                claim.applicant?.full_name || "",
-            ).toLowerCase();
-            return (
-                id.includes(normalizedSearch) ||
-                payeeName.includes(normalizedSearch) ||
-                applicantName.includes(normalizedSearch)
-            );
-        });
-    });
-    let pagedClaims = $derived.by(() =>
-        filteredClaims.slice(
-            (currentPage - 1) * PAGE_SIZE,
-            currentPage * PAGE_SIZE,
-        ),
-    );
 
     let emptyMessage = $derived.by(() => {
         const keyword = searchTerm.trim();
-        if ((data.claims?.length || 0) === 0) return "目前尚無請款單";
-        if (keyword && filteredClaims.length === 0)
+        if ((data.totalItems || 0) === 0 && !keyword) return "目前尚無請款單";
+        if (keyword && (data.totalItems || 0) === 0)
             return `找不到符合「${keyword}」的結果`;
-        if (tabClaims.length === 0) return "目前篩選條件下沒有結果";
+        if ((data.totalItems || 0) === 0) return "目前篩選條件下沒有結果";
         return "目前尚無相關請款紀錄";
     });
 
-    const returnedCount = $derived(
-        (data.claims || []).filter((c) => c.status === "rejected").length,
-    );
-    const processingCount = $derived(
-        (data.claims || []).filter((c) =>
-            [
-                "pending_manager",
-                "pending_finance",
-                "pending_payment",
-                "pending_doc_review",
-            ].includes(c.status),
-        ).length,
-    );
-    const pendingDocCount = $derived(
-        (data.claims || []).filter((c) => c.status === "paid_pending_doc")
-            .length,
-    );
-    const historyCount = $derived(
-        (data.claims || []).filter((c) =>
-            ["paid", "cancelled"].includes(c.status),
-        ).length,
-    );
+    const returnedCount = $derived(data.tabCounts?.drafts || 0);
+    const processingCount = $derived(data.tabCounts?.processing || 0);
+    const pendingDocCount = $derived(data.tabCounts?.actionRequired || 0);
+    const historyCount = $derived(data.tabCounts?.history || 0);
+
+    onDestroy(() => {
+        if (searchTimer) clearTimeout(searchTimer);
+    });
 </script>
 
 <div in:fade={{ duration: 400 }}>
@@ -169,12 +171,12 @@
 
             <div class="m-0">
                 <ClaimTable
-                    claims={pagedClaims}
+                    claims={data.claims || []}
                     emptyIcon={FileText}
                     {emptyMessage}
                 >
                     {#snippet emptyAction()}
-                        {#if (data.claims?.length || 0) === 0}
+                        {#if (data.totalItems || 0) === 0}
                             <Button
                                 href="/claims/new"
                                 variant="outline"
@@ -186,8 +188,8 @@
                     {/snippet}
                 </ClaimTable>
                 <ListPagination
-                    totalItems={filteredClaims.length}
-                    pageSize={PAGE_SIZE}
+                    totalItems={data.totalItems || 0}
+                    pageSize={data.pageSize || 10}
                     bind:currentPage
                 />
             </div>
