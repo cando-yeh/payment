@@ -158,16 +158,21 @@ async function getClaimBankSnapshot(supabase: any, claimId: string) {
 }
 
 async function deleteClaimCascade(supabase: any, claimId: string) {
-    const cleanupResults = await Promise.all([
-        supabase.from('notification_logs').delete().eq('claim_id', claimId),
-        supabase.from('notification_jobs').delete().eq('claim_id', claimId),
-        supabase.from('claim_history').delete().eq('claim_id', claimId),
-        supabase.from('claim_items').delete().eq('claim_id', claimId)
-    ]);
+    // 順序很重要：
+    // notification_logs 可能透過 job_id 參照 notification_jobs。
+    // 若並行刪除會造成偶發 FK 衝突（第一次失敗、第二次成功）。
+    const cleanupSteps = [
+        () => supabase.from('notification_logs').delete().eq('claim_id', claimId),
+        () => supabase.from('notification_jobs').delete().eq('claim_id', claimId),
+        () => supabase.from('claim_history').delete().eq('claim_id', claimId),
+        () => supabase.from('claim_items').delete().eq('claim_id', claimId)
+    ];
 
-    const cleanupError = cleanupResults.find((result) => result.error)?.error;
-    if (cleanupError) {
-        return { ok: false as const, error: cleanupError };
+    for (const runStep of cleanupSteps) {
+        const { error } = await runStep();
+        if (error) {
+            return { ok: false as const, error };
+        }
     }
 
     const { error: deleteError } = await supabase
