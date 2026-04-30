@@ -127,8 +127,7 @@ async function getClaimAccessContext(supabase: any, claimId: string, viewerId: s
         isApplicant ||
         isFinance ||
         isAdmin ||
-        isApprover ||
-        claim.status === 'pending_manager';
+        isApprover;
 
     if (!canView) {
         return { ok: false as const, response: fail(403, { message: 'Forbidden' }) };
@@ -294,13 +293,12 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, getSess
     const isFinance = profile?.is_finance || false;
     const isAdmin = profile?.is_admin || false;
 
-    if (!isApplicant && !isFinance && !isAdmin && claim.status !== 'pending_manager') {
-        throw error(403, 'Forbidden');
-    }
-
-    // Accurately determine if the user is the designated approver for the applicant
     const applicantObj = Array.isArray(claim.applicant) ? claim.applicant[0] : claim.applicant;
     const isApprover = applicantObj?.approver_id === session.user.id;
+
+    if (!isApplicant && !isFinance && !isAdmin && !isApprover) {
+        throw error(403, 'Forbidden');
+    }
 
     const { data: history } = await supabase
         .from('claim_history')

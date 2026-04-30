@@ -9,7 +9,7 @@ export const config = {
 
 function isAuthorized(request: Request): boolean {
     const expected = String(process.env.NOTIFY_DRAIN_TOKEN || "").trim();
-    if (!expected) return true;
+    if (!expected) return false;
 
     const auth = request.headers.get("authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
