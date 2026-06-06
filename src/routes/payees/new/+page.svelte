@@ -25,8 +25,12 @@
     let isLoading = $state(false);
     let payeeType = $state("vendor"); // "vendor" | "personal" - Controls dynamic form fields
     let editableAccount = $state(false);
+    let initializedFromQuery = $state(false);
 
     $effect(() => {
+        if (initializedFromQuery) return;
+        initializedFromQuery = true;
+
         const initialType = page.url.searchParams.get("type");
         if (initialType === "vendor" || initialType === "personal") {
             payeeType = initialType;

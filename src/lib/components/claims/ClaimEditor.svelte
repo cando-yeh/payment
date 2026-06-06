@@ -1110,6 +1110,83 @@
         return true;
     }
 
+    function persistOpenItemDraftForCreate() {
+        const normalized = normalizeItemForEditor(itemDraft);
+        normalized.amount = String(itemDraft.amount || "").replaceAll(",", "");
+        const status = normalized.attachment_status;
+        const hasNewAttachment = Boolean(itemDraftUpload);
+
+        if (status === "uploaded") {
+            if (!String(normalized.date || "").trim()) {
+                toast.error("上傳憑證時，日期為必填");
+                return false;
+            }
+            if (!String(normalized.invoice_number || "").trim()) {
+                toast.error("上傳憑證時，發票號碼為必填");
+                return false;
+            }
+            if (!hasNewAttachment) {
+                toast.error("上傳憑證時，請先上傳附件才能儲存明細");
+                return false;
+            }
+            normalized.exempt_reason = "";
+        } else if (status === "exempt") {
+            if (!String(normalized.date || "").trim()) {
+                toast.error("無憑證時，日期為必填");
+                return false;
+            }
+            normalized.invoice_number = "";
+        } else {
+            normalized.date = "";
+            normalized.invoice_number = "";
+            normalized.exempt_reason = "";
+        }
+
+        if (itemDrawerIndex === null) {
+            const nextIndex = items.length;
+            items = [...items, normalized];
+            if (normalized.attachment_status === "uploaded" && itemDraftUpload) {
+                pendingUpload = {
+                    ...pendingUpload,
+                    [nextIndex]: itemDraftUpload,
+                };
+            }
+        } else {
+            const targetIndex = itemDrawerIndex;
+            items = items.map((item, idx) =>
+                idx === targetIndex ? normalized : item,
+            );
+
+            if (normalized.attachment_status !== "uploaded") {
+                const next = { ...pendingUpload };
+                delete next[targetIndex];
+                pendingUpload = next;
+            } else if (itemDraftUpload) {
+                pendingUpload = {
+                    ...pendingUpload,
+                    [targetIndex]: itemDraftUpload,
+                };
+            }
+        }
+
+        itemDraft = normalized;
+        itemDraftSnapshot = itemSnapshot(normalized);
+        itemDrawerOpen = false;
+        return true;
+    }
+
+    function ensureNoUnsavedOpenItemDraft() {
+        if (!itemDrawerOpen || !hasUnsavedItemDraftChanges()) {
+            return true;
+        }
+        if (isCreate) {
+            return persistOpenItemDraftForCreate();
+        }
+
+        toast.error("請先儲存目前開啟的明細變更，再儲存或送出請款單");
+        return false;
+    }
+
     function onSubmitCapture(event: SubmitEvent) {
         const submitter = event.submitter as
             | HTMLButtonElement
@@ -1117,6 +1194,10 @@
             | null;
         const value = submitter?.value;
         formSubmitIntent = value === "submit" ? "submit" : "save";
+        if (!ensureNoUnsavedOpenItemDraft()) {
+            event.preventDefault();
+            return;
+        }
         if (value !== "submit") return;
         if (!validateBeforeDirectSubmit()) {
             event.preventDefault();
@@ -1125,6 +1206,7 @@
 
     async function submitForReview() {
         if (!submitAction || isSubmitting) return;
+        if (!ensureNoUnsavedOpenItemDraft()) return;
         if (!validateBeforeDirectSubmit()) return;
         isSubmitting = true;
         try {
