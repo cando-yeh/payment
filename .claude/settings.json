@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(cd \"/Users/candoyeh/Library/CloudStorage/GoogleDrive-cando.yeh@ycfinance.tw/共用雲端硬碟/奕成財創｜YiCheng/07 產品/請款系統\" && sed -n '/approval/,/}/p' src/lib/constants/ui-messages.ts | head -40; echo \"=== review-policy exports ===\"; grep -n \"export\" src/lib/server/claims/review-policy.ts)",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Bash(xargs ls)"
     ],
     "additionalDirectories": [
       "/Users/candoyeh/Library/CloudStorage/GoogleDrive-cando.yeh@ycfinance.tw/共用雲端硬碟/奕成財創｜YiCheng/07 產品/請款系統/src/lib/constants"

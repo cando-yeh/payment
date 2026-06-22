@@ -23,14 +23,21 @@
     let isBatchPaySubmitting = $state(false);
     let isBatchPayDialogOpen = $state(false);
     const PAGE_SIZE = 10;
-    let currentPage = $state(1);
+    // 每個頁籤獨立分頁：所有 Tabs.Content 會同時掛載，
+    // 共用單一 currentPage 會被只有 1 頁的頁籤夾回，導致「次頁沒反應」。
+    let pageByTab = $state<Record<string, number>>({
+        manager: 1,
+        finance: 1,
+        payment: 1,
+        doc: 1,
+        approved: 1,
+    });
 
     // Get initial tab from URL or default to "manager"
     let activeTab = $state(page.url.searchParams.get("tab") || "manager");
 
     function handleTabChange(value: string) {
         activeTab = value;
-        currentPage = 1;
         selectedClaims = [];
         const newUrl = new URL(page.url);
         newUrl.searchParams.set("tab", value);
@@ -51,10 +58,10 @@
         userRole,
     } = $derived(data);
 
-    function getPagedClaims(claims: any[]) {
+    function getPagedClaims(claims: any[], pageNum: number) {
         return claims.slice(
-            (currentPage - 1) * PAGE_SIZE,
-            currentPage * PAGE_SIZE,
+            (pageNum - 1) * PAGE_SIZE,
+            pageNum * PAGE_SIZE,
         );
     }
 </script>
@@ -234,7 +241,10 @@
                                       : approvedByMe}
 
                         <ClaimTable
-                            claims={getPagedClaims(currentList)}
+                            claims={getPagedClaims(
+                                currentList,
+                                pageByTab[tabValue],
+                            )}
                             selectable={tabValue === "payment"}
                             showRowActions={tabValue === "manager" ||
                                 tabValue === "finance"}
@@ -245,7 +255,7 @@
                         <ListPagination
                             totalItems={currentList.length}
                             pageSize={PAGE_SIZE}
-                            bind:currentPage
+                            bind:currentPage={pageByTab[tabValue]}
                         />
                     </Tabs.Content>
                 {/each}
