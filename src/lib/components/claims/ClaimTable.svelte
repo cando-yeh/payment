@@ -1,5 +1,7 @@
 <script lang="ts">
     import * as Table from "$lib/components/ui/table";
+    import * as Dialog from "$lib/components/ui/dialog";
+    import { Button } from "$lib/components/ui/button";
     import AppBadge from "$lib/components/common/AppBadge.svelte";
     import ListTableEmptyState from "$lib/components/common/ListTableEmptyState.svelte";
     import StatusBadge from "$lib/components/common/StatusBadge.svelte";
@@ -7,6 +9,9 @@
     import { LIST_TABLE_TOKENS } from "$lib/components/common/list-table-tokens";
     import { getClaimTypeLabel } from "$lib/claims/constants";
     import { goto } from "$app/navigation";
+    import { enhance } from "$app/forms";
+    import { handleEnhancedActionFeedback } from "$lib/utils/action-feedback";
+    import { CircleCheck, CircleX } from "lucide-svelte";
     import { type Snippet } from "svelte";
 
     let {
@@ -16,6 +21,7 @@
         selectable = false,
         selectedClaims = $bindable([]),
         emptyAction,
+        showRowActions = false,
     }: {
         claims?: any[];
         emptyMessage?: string;
@@ -23,11 +29,31 @@
         selectable?: boolean;
         selectedClaims?: string[];
         emptyAction?: Snippet;
+        showRowActions?: boolean;
     } = $props();
 
+    // 逐列駁回對話框狀態
+    let rejectingClaimId = $state<string | null>(null);
+    let rejectComment = $state("");
+    let isRejectSubmitting = $state(false);
+    let approvingId = $state<string | null>(null);
+
+    function openRejectDialog(e: Event, claimId: string) {
+        e.stopPropagation();
+        rejectingClaimId = claimId;
+        rejectComment = "";
+    }
+
+    function closeRejectDialog() {
+        rejectingClaimId = null;
+        rejectComment = "";
+    }
+
     function handleRowClick(e: MouseEvent, claimId: string) {
-        // Prevent navigation if clicking on checkbox or input
-        if ((e.target as HTMLElement).tagName === "INPUT") return;
+        // Prevent navigation if clicking on checkbox, input, or row action buttons
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT") return;
+        if (target.closest("[data-row-action]")) return;
 
         const currentPath = window.location.pathname;
         const currentSearch = window.location.search;
@@ -122,6 +148,15 @@
                     LIST_TABLE_TOKENS.colStatus,
                 )}>申請進度</Table.Head
             >
+            {#if showRowActions}
+                <Table.Head
+                    class={cn(
+                        LIST_TABLE_TOKENS.headBase,
+                        LIST_TABLE_TOKENS.colActions,
+                        "text-center pr-8",
+                    )}>操作</Table.Head
+                >
+            {/if}
         </Table.Row>
     </Table.Header>
     <Table.Body class={LIST_TABLE_TOKENS.body}>
@@ -190,15 +225,124 @@
                             <StatusBadge status={claim.status} />
                         </div>
                     </Table.Cell>
+                    {#if showRowActions}
+                        <Table.Cell class="pr-8">
+                            <div
+                                class="flex items-center justify-center gap-1.5"
+                                data-row-action
+                            >
+                                <form
+                                    action="/approval?/approve"
+                                    method="POST"
+                                    use:enhance={() => {
+                                        approvingId = claim.id;
+                                        return async ({ result, update }) => {
+                                            await handleEnhancedActionFeedback({
+                                                result: result as any,
+                                                update,
+                                                successMessage: "核准成功",
+                                                failureMessage: "核准失敗",
+                                            });
+                                            approvingId = null;
+                                        };
+                                    }}
+                                >
+                                    <input
+                                        type="hidden"
+                                        name="claimId"
+                                        value={claim.id}
+                                    />
+                                    <Button
+                                        type="submit"
+                                        variant="default"
+                                        class="h-7 gap-1 px-2.5 text-xs font-semibold"
+                                        disabled={approvingId === claim.id}
+                                    >
+                                        <CircleCheck class="h-3.5 w-3.5" /> 核准
+                                    </Button>
+                                </form>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    class="h-7 gap-1 border-destructive/20 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/5"
+                                    onclick={(e) =>
+                                        openRejectDialog(e, claim.id)}
+                                >
+                                    <CircleX class="h-3.5 w-3.5" /> 駁回
+                                </Button>
+                            </div>
+                        </Table.Cell>
+                    {/if}
                 </Table.Row>
             {/each}
         {:else}
             <ListTableEmptyState
                 icon={emptyIcon}
                 description={emptyMessage}
-                colspan={selectable ? 7 : 6}
+                colspan={6 + (selectable ? 1 : 0) + (showRowActions ? 1 : 0)}
                 action={emptyAction}
             />
         {/if}
     </Table.Body>
 </Table.Root>
+
+{#if showRowActions}
+    <Dialog.Root
+        open={rejectingClaimId !== null}
+        onOpenChange={(open) => {
+            if (!open) closeRejectDialog();
+        }}
+    >
+        <Dialog.Content class="max-w-md rounded-2xl">
+            <Dialog.Header>
+                <Dialog.Title>駁回此申請</Dialog.Title>
+                <Dialog.Description
+                    >請提供具體的駁回原因，這將通知申請人。</Dialog.Description
+                >
+            </Dialog.Header>
+            <form
+                action="/approval?/reject"
+                method="POST"
+                use:enhance={() => {
+                    isRejectSubmitting = true;
+                    return async ({ result, update }) => {
+                        const ok = await handleEnhancedActionFeedback({
+                            result: result as any,
+                            update,
+                            successMessage: "已駁回申請",
+                            failureMessage: "駁回失敗",
+                        });
+                        isRejectSubmitting = false;
+                        if (ok) closeRejectDialog();
+                    };
+                }}
+                class="space-y-4"
+            >
+                <input
+                    type="hidden"
+                    name="claimId"
+                    value={rejectingClaimId ?? ""}
+                />
+                <textarea
+                    name="comment"
+                    bind:value={rejectComment}
+                    required
+                    placeholder="請輸入駁回原因"
+                    class="min-h-[120px] w-full rounded-xl border p-3 text-sm"
+                ></textarea>
+                <Dialog.Footer>
+                    <Button
+                        variant="outline"
+                        type="button"
+                        onclick={closeRejectDialog}>取消</Button
+                    >
+                    <Button
+                        type="submit"
+                        disabled={!rejectComment.trim() || isRejectSubmitting}
+                        >{isRejectSubmitting ? "處理中..." : "確認駁回"}</Button
+                    >
+                </Dialog.Footer>
+            </form>
+        </Dialog.Content>
+    </Dialog.Root>
+{/if}

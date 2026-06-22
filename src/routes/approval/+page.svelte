@@ -236,6 +236,8 @@
                         <ClaimTable
                             claims={getPagedClaims(currentList)}
                             selectable={tabValue === "payment"}
+                            showRowActions={tabValue === "manager" ||
+                                tabValue === "finance"}
                             bind:selectedClaims
                             emptyIcon={CircleCheck}
                             emptyMessage="目前暫時沒有單據需要處理"

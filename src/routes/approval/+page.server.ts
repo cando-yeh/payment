@@ -1,6 +1,36 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
+import {
+    canRejectClaim,
+    resolveApproveNextStatus,
+    resolveRejectNextStatus,
+    resolveReviewerFlags
+} from '$lib/server/claims/review-policy';
+
+/**
+ * 解析審核脈絡：讀取單據與審核者權限旗標。
+ * 與 claims/[id] 詳情頁的同名 helper 行為一致，差別在於 claimId 來自 form data。
+ */
+async function resolveReviewContext(supabase: any, claimId: string, reviewerId: string) {
+    const { data: claim } = await supabase
+        .from('claims')
+        .select('id, applicant_id, status, applicant:profiles!claims_applicant_id_fkey(approver_id)')
+        .eq('id', claimId)
+        .single();
+    if (!claim) {
+        return { ok: false as const, response: fail(404, { message: '找不到單據' }) };
+    }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_finance, is_admin')
+        .eq('id', reviewerId)
+        .single();
+
+    const reviewer = resolveReviewerFlags(claim, reviewerId, profile);
+    return { ok: true as const, claim, reviewer };
+}
 
 async function queueNotificationDrain(origin: string, reason: string): Promise<void> {
     try {
@@ -101,6 +131,71 @@ export const load: PageServerLoad = async ({ locals: { supabase, getSession } })
 };
 
 export const actions: Actions = {
+    /**
+     * 逐列核准 Action（審核中心列表直接操作，免進詳情頁）
+     */
+    approve: async ({ request, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: '尚未登入' });
+
+        const formData = await request.formData();
+        const claimId = String(formData.get('claimId') || '').trim();
+        const comment = String(formData.get('comment') || '').trim();
+        if (!claimId) return fail(400, { message: '缺少單據資訊' });
+
+        const reviewContext = await resolveReviewContext(supabase, claimId, session.user.id);
+        if (!reviewContext.ok) return reviewContext.response;
+        const { claim, reviewer } = reviewContext;
+        const nextStatus = resolveApproveNextStatus(claim, reviewer);
+        if (!nextStatus) return fail(403, { message: '權限不足或單據狀態已變更' });
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({
+                status: nextStatus as any,
+                last_comment: comment || null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', claimId);
+
+        if (updateError) return fail(500, { message: '核准失敗' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.approve');
+        return { success: true };
+    },
+
+    /**
+     * 逐列駁回 Action（需附駁回原因）
+     */
+    reject: async ({ request, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        if (!session) return fail(401, { message: '尚未登入' });
+
+        const formData = await request.formData();
+        const claimId = String(formData.get('claimId') || '').trim();
+        const comment = String(formData.get('comment') || '').trim();
+        if (!claimId) return fail(400, { message: '缺少單據資訊' });
+        if (!comment) return fail(400, { message: '請提供駁回原因' });
+
+        const reviewContext = await resolveReviewContext(supabase, claimId, session.user.id);
+        if (!reviewContext.ok) return reviewContext.response;
+        const { claim, reviewer } = reviewContext;
+        if (!canRejectClaim(claim, reviewer)) return fail(403, { message: '權限不足或單據狀態已變更' });
+        const nextStatus = resolveRejectNextStatus(claim.status);
+
+        const { error: updateError } = await supabase
+            .from('claims')
+            .update({
+                status: nextStatus,
+                last_comment: comment,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', claimId);
+
+        if (updateError) return fail(500, { message: '駁回失敗' });
+        await queueNotificationDrain(new URL(request.url).origin, 'claim.reject');
+        return { success: true };
+    },
+
     /**
      * 批次撥款 Action
      */
