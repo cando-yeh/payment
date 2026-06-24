@@ -346,7 +346,7 @@
     {backHref}
     {backLabel}
     formAction="?/editUpdate"
-    submitAction={isSupplementApplicant ? "?/submitSupplement" : "?/submit"}
+    submitAction={isSupplementApplicant ? "?/submitSupplement" : "?/editSubmit"}
     showSaveButton={isEditableApplicant}
     showSubmitButton={isEditableApplicant || isSupplementApplicant}
     submitButtonLabel={isSupplementApplicant ? "提交補件審核" : undefined}

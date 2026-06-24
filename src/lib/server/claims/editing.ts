@@ -70,7 +70,10 @@ export function parseAndValidateEditForm(
     options: { isDraft?: boolean } = {}
 ): { ok: true; value: ParsedEditForm } | { ok: false; status: number; message: string } {
     const payeeId = String(formData.get("payee_id") || "");
-    const isFloating = formData.get("is_floating") === "on";
+    // 編輯器表單送出時用 is_floating_account=true；舊版/直接 fetch 流程用 is_floating=on，兩者皆接受。
+    const isFloating =
+        formData.get("is_floating") === "on" ||
+        formData.get("is_floating_account") === "true";
     const bankCode = isFloating ? String(formData.get("bank_code") || "").trim() : null;
     const bankAccount = isFloating ? String(formData.get("bank_account") || "").trim() : null;
     const itemsJson = String(formData.get("items") || "[]");
