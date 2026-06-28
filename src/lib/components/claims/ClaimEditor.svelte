@@ -1947,7 +1947,7 @@
                                                                 <span
                                                                     role="link"
                                                                     tabindex="0"
-                                                                    class="inline-flex items-center gap-1 text-primary hover:underline"
+                                                                    class="inline-flex cursor-pointer items-center gap-1 text-primary hover:underline"
                                                                     onclick={(
                                                                         e,
                                                                     ) =>
@@ -1980,7 +1980,7 @@
                                                                 <span
                                                                     role="link"
                                                                     tabindex="0"
-                                                                    class="inline-flex items-center gap-1 text-primary hover:underline"
+                                                                    class="inline-flex cursor-pointer items-center gap-1 text-primary hover:underline"
                                                                     onclick={(
                                                                         event,
                                                                     ) =>
