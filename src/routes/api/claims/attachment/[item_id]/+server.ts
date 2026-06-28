@@ -72,8 +72,7 @@ export const GET: RequestHandler = async ({ params, locals: { supabase, getSessi
         throw error(500, 'Failed to generate access URL');
     }
 
-    // 以自動命名後的友善檔名輸出（inline 保留預覽，瀏覽器另存時也用此名稱）。
-    // 取不到友善名稱時退回實體檔名。
+    // 以自動命名後的友善檔名直接觸發下載。取不到友善名稱時退回實體檔名。
     const friendlyName =
         String(item.extra?.original_name || '').trim() ||
         filePath.split('/').pop() ||
@@ -92,8 +91,8 @@ export const GET: RequestHandler = async ({ params, locals: { supabase, getSessi
     return new Response(upstream.body, {
         headers: {
             'Content-Type': contentType,
-            // RFC 5987：filename* 支援中文；filename 提供 ASCII 後備。
-            'Content-Disposition': `inline; filename="attachment"; filename*=UTF-8''${encodedName}`,
+            // attachment：點選即下載；RFC 5987 的 filename* 支援中文，filename 提供 ASCII 後備。
+            'Content-Disposition': `attachment; filename="attachment"; filename*=UTF-8''${encodedName}`,
             'Cache-Control': 'private, max-age=60'
         }
     });

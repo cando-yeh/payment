@@ -37,6 +37,7 @@
         Trash2,
         Eye,
         EyeOff,
+        Download,
         Upload,
         ClipboardList,
         FileText,
@@ -677,11 +678,14 @@
     function openUploadedAttachment(item: ClaimEditorItem, event: Event) {
         event.stopPropagation();
         if (!item.id) return;
-        window.open(
-            `/api/claims/attachment/${item.id}`,
-            "_blank",
-            "noopener,noreferrer",
-        );
+        // 直接觸發下載（後端回 Content-Disposition: attachment，檔名為自動命名）。
+        const link = document.createElement("a");
+        link.href = `/api/claims/attachment/${item.id}`;
+        link.download = "";
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
     }
 
     function closeItemDrawer() {
@@ -1968,9 +1972,9 @@
                                                                         }
                                                                     }}
                                                                 >
-                                                                    <Eye
+                                                                    <Download
                                                                         class="h-3 w-3"
-                                                                    /> 查看附件
+                                                                    /> 下載附件
                                                                 </span>
                                                             {:else if pendingUpload[i]}
                                                                 <span
@@ -2281,10 +2285,10 @@
                                                 href={getCurrentAttachmentUrl(
                                                     itemDraft,
                                                 )}
-                                                target="_blank"
+                                                download
                                                 class="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                                             >
-                                                <Eye class="h-4 w-4" /> 查看附件
+                                                <Download class="h-4 w-4" /> 下載附件
                                             </a>
                                             <div
                                                 class="relative rounded-md border border-border/50 bg-background/70 p-2"
