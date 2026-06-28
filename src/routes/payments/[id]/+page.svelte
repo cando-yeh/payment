@@ -17,6 +17,11 @@
 
     let { data }: { data: PageData } = $props();
     let { payment, claims } = $derived(data);
+
+    function openClaim(claimId: string) {
+        const from = window.location.pathname + window.location.search;
+        goto(`/claims/${claimId}?from=${encodeURIComponent(from)}`);
+    }
     let isConfirmOpen = $state(false);
     let pendingConfirmForm = $state<HTMLFormElement | null>(null);
     let allowConfirmedSubmitFor = $state<HTMLFormElement | null>(null);
@@ -172,10 +177,18 @@
                     </Table.Header>
                     <Table.Body>
                         {#each claims as claim}
-                            <Table.Row>
-                                <Table.Cell class="font-bold"
-                                    >{claim.id}</Table.Cell
-                                >
+                            <Table.Row
+                                class="cursor-pointer transition-colors hover:bg-primary/6"
+                                onclick={() => openClaim(claim.id)}
+                            >
+                                <Table.Cell class="font-bold">
+                                    <span
+                                        class="inline-flex items-center gap-1.5 text-primary"
+                                    >
+                                        {claim.id}
+                                        <ExternalLink class="h-3.5 w-3.5" />
+                                    </span>
+                                </Table.Cell>
                                 <Table.Cell
                                     >{claim.applicant?.full_name}</Table.Cell
                                 >
