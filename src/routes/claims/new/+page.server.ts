@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { uploadFileToStorage, validateFileUpload } from '$lib/server/storage-upload';
+import { applyClaimAttachmentNames } from '$lib/server/claims/attachment-naming';
 import {
     ALLOWED_ATTACHMENT_STATUSES,
     ALLOWED_UPLOAD_MIME_TYPES,
@@ -409,6 +410,9 @@ export const actions: Actions = {
             if (!updatedClaim) {
                 return fail(409, { message: '請款單狀態已變更，請重新整理後再試' });
             }
+
+            // 提交時依明細自動命名附件（best-effort，不阻擋提交）。
+            await applyClaimAttachmentNames(supabase, claimId);
 
             await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
         }

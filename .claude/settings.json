@@ -10,7 +10,8 @@
       "Bash(git version *)",
       "Bash(GIT_TEST=1 git -c core.repositoryformatversion=0 rev-parse --git-dir)",
       "Bash(timeout 20 supabase projects list)",
-      "Bash(supabase projects *)"
+      "Bash(supabase projects *)",
+      "Bash(npx svelte-kit *)"
     ],
     "additionalDirectories": [
       "/Users/candoyeh/Library/CloudStorage/GoogleDrive-cando.yeh@ycfinance.tw/共用雲端硬碟/奕成財創｜YiCheng/07 產品/請款系統/src/lib/constants"

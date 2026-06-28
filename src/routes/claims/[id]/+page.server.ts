@@ -21,6 +21,7 @@ import {
     resolveRejectNextStatus,
     resolveReviewerFlags
 } from '$lib/server/claims/review-policy';
+import { applyClaimAttachmentNames } from '$lib/server/claims/attachment-naming';
 import { getActiveExpenseCategoryNames, getExpenseCategories } from '$lib/server/expense-categories';
 import { triggerNotificationDrain } from '$lib/server/notifications/qstash-trigger';
 import { createClient } from '@supabase/supabase-js';
@@ -251,6 +252,9 @@ async function runEditAction({
     if (!moveResult.ok) {
         return fail(moveResult.status, { message: moveResult.message });
     }
+
+    // 提交時依明細自動命名附件（best-effort，不阻擋提交）。
+    await applyClaimAttachmentNames(supabase, params.id);
 
     await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
     throw redirect(303, '/claims?tab=processing');
@@ -518,6 +522,10 @@ export const actions: Actions = {
         if (!moveResult.ok) {
             return fail(moveResult.status, { message: moveResult.message });
         }
+
+        // 提交時依明細自動命名附件（best-effort，不阻擋提交）。
+        await applyClaimAttachmentNames(supabase, id);
+
         await queueNotificationDrain(new URL(request.url).origin, 'claim.submit');
 
         throw redirect(303, '/claims?tab=processing');
@@ -587,6 +595,10 @@ export const actions: Actions = {
             .eq('status', 'paid_pending_doc');
 
         if (updateError) return fail(500, { message: '提交補件審核失敗' });
+
+        // 補件提交時依明細自動命名附件（best-effort，不阻擋提交）。
+        await applyClaimAttachmentNames(supabase, id);
+
         await queueNotificationDrain(new URL(request.url).origin, 'claim.supplement_submit');
 
         throw redirect(303, '/claims?tab=processing');
