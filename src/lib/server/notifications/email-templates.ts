@@ -313,7 +313,10 @@ export function renderClaimEmailTemplate(
     const actorName = payload.actor_name || "系統";
     const reason = (payload.reason || "").trim();
     const claimTypeLabel = CLAIM_TYPE_LABELS[payload.claim_type || ""] || "-";
-    const link = withHost(appBaseUrl, payload.claim_link_path || `/claims/${claimNo}`);
+    const linkPath = payload.claim_link_path || `/claims/${claimNo}`;
+    const link = withHost(appBaseUrl, linkPath);
+    // 導向審核中心的通知（給審核者）用「前往審核」，導向單據明細的（給申請人）用「前往查看請款單」。
+    const ctaLabel = linkPath.startsWith("/approval") ? "前往審核" : "前往查看請款單";
     const fromStatus = toStatusLabel(payload.from_status);
     const toStatus = toStatusLabel(payload.to_status);
     const statusLine =
@@ -347,7 +350,7 @@ export function renderClaimEmailTemplate(
             <p style="margin: 0 0 8px;"><strong>操作者：</strong>${escapeHtml(actorName)}</p>
             <p style="margin: 0 0 8px;"><strong>原因：</strong>${escapeHtml(reason || "-")}</p>
             <p style="margin: 0 0 8px;"><strong>下一步：</strong>${escapeHtml(copy.nextStep)}</p>
-            <p style="margin: 16px 0 0;"><a href="${escapeHtml(link)}">前往查看請款單</a></p>
+            <p style="margin: 16px 0 0;"><a href="${escapeHtml(link)}">${escapeHtml(ctaLabel)}</a></p>
         </div>
     `.trim();
 
