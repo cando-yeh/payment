@@ -124,7 +124,29 @@ graph TD
 |-----|------|
 | **發送帳號** | noreply@company.com |
 | **每日限額** | 2,000 封 (Workspace 帳號) |
-| **觸發方式** | Supabase Edge Functions 呼叫 |
+| **觸發方式** | 狀態轉移後 QStash delayed message → 回呼 `/api/notify/drain` |
+| **憑證** | `NOTIFY_SMTP_USERNAME` / `NOTIFY_SMTP_PASSWORD`（Gmail App Password）|
+
+#### ⚠️ 已知風險：App Password 靜默失效
+
+Gmail App Password **不會排程過期**，但會被下列事件**撤銷**：寄件帳號登入密碼被改、兩步驟驗證關閉再開、Google 偵測到安全事件、Workspace 管理者政策變更、或被手動刪除。若寄件帳號受 **Workspace 密碼輪替政策**約束，則每次輪替都會連帶撤銷 App Password。
+
+失效時 SMTP 回 `535-5.7.8 BadCredentials`，通知 job 會累積於 `notification_jobs`（`failed` / `queued`）而**不會有任何前台告警**——曾於 2026-07 發生約兩週未被察覺（財務端收不到審核通知）。
+
+**臨時處置**：重產 App Password → 更新 Vercel env `NOTIFY_SMTP_PASSWORD` → **重新部署**（env 變更需重新部署才生效）→ 呼叫 `/api/notify/drain` 補送積壓。已達 `max_attempts` 的舊 `failed` job 不會自動補送，需在審核中心人工核對遺漏案件。
+
+#### 🔄 替代方案：Email API（Resend / SendGrid）
+
+建議在下次通知斷線或啟動 Workspace 密碼輪替時，改用 **Email API 服務**取代 SMTP：
+
+| 方案 | 免費額度 | 付費起點 | 說明 |
+|-----|---------|---------|------|
+| **Resend**（首選）| 3,000 封/月、100 封/日 | $20/月（5 萬封）| API Key 驗證、不綁登入密碼、SvelteKit 生態友善、有寄達/退信儀表板 |
+| SendGrid | 100 封/日永久 | ~$19.95/月起 | 老牌、儀表板完整 |
+
+- **成本**：本系統實際用量約每月數十封，**任一免費方案皆 $0**；換方案的目的是消除「密碼輪替→靜默斷線」風險與取得寄送可觀測性，非為省錢。
+- **改動範圍（預估半天）**：改寫 `src/lib/server/notifications/smtp-client.ts` 為呼叫 Email API；env 由 `NOTIFY_SMTP_*` 換為單一 API key（如 `RESEND_API_KEY`）＋驗證寄件網域；佇列/drain/模板邏輯不動。
+- **附帶收益**：斷線可由服務端儀表板即時發現，不必再挖 `notification_jobs` 排查。
 
 ### 2.5 測試架構 (Testing Stack)
 
@@ -393,7 +415,7 @@ main (生產環境)
 |-----|------|------|
 | 全端框架 | SvelteKit (非 Next.js) | 編譯型效能佳、表單操作流暢 |
 | 後端架構 | 純 SvelteKit (非 Go) | 減少維運複雜度、內部系統流量可控 |
-| Email 服務 | Google SMTP (非 SendGrid) | 已有 Workspace、免費、高送達率 |
+| Email 服務 | Google SMTP（現行；替代方案見 §2.4）| 已有 Workspace、免費、高送達率；**已知風險：App Password 靜默失效**，觸發條件（斷線或密碼輪替）達成時遷移至 Resend/SendGrid |
 | 定時任務 | Vercel Cron (非 pg_cron) | 設定簡單、與部署整合 |
 
 ---
