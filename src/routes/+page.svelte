@@ -10,19 +10,10 @@
 
     const signInWithGoogle = async () => {
         const supabase = createBrowserSupabaseClient();
-        const next = new URLSearchParams(window.location.search).get("next");
-        const safeNext =
-            next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-        const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`;
-
         await supabase.auth.signInWithOAuth({
             provider: "google",
             options: {
-                redirectTo: callbackUrl,
-                // 與 /auth 一致：強制顯示 Google 帳號選擇器
-                queryParams: {
-                    prompt: "select_account",
-                },
+                redirectTo: `${window.location.origin}/auth/callback`,
             },
         });
     };
