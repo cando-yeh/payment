@@ -42,6 +42,15 @@ export const GET: RequestHandler = async (event) => {
     const next = sanitizeRedirectPath(url.searchParams.get('next'));
 
     if (oauthError) {
+        // 記下原始錯誤內容：網域限制是由 Supabase 的 before-user-created hook
+        // 擋下的，被擋帳號的 email 只可能出現在 hook 回傳的訊息裡。
+        // 先把真實訊息記進 log，才知道能不能在登入頁顯示「你剛才用的是哪個帳號」。
+        console.warn('[auth/callback] OAuth 回傳錯誤', {
+            error: oauthError,
+            error_code: url.searchParams.get('error_code'),
+            error_description: oauthErrorDescription
+        });
+
         const restricted = isDomainRestrictionError(oauthErrorDescription) || isDomainRestrictionError(oauthError);
         const reason = restricted ? 'domain_restricted' : 'oauth_failed';
         throw redirect(303, `/auth?reason=${reason}`);
@@ -86,6 +95,12 @@ export const GET: RequestHandler = async (event) => {
         }
 
         if (error) {
+            console.warn('[auth/callback] exchangeCodeForSession 失敗', {
+                code: error.code,
+                status: error.status,
+                message: error.message
+            });
+
             const restricted = isDomainRestrictionError(error.message) || isDomainRestrictionError(error.code);
             const reason = restricted ? 'domain_restricted' : 'oauth_failed';
             throw redirect(303, `/auth?reason=${reason}`);

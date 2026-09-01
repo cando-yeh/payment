@@ -21,7 +21,8 @@
         } else if (reason === "profile_missing") {
             authNotice = "帳號資料異常，請重新登入或聯絡管理員。";
         } else if (reason === "domain_restricted") {
-            authNotice = "此網站僅允許公司網域（@runnii.com）登入，請改用公司帳號。";
+            authNotice =
+                "此網站僅允許公司網域（@runnii.com）登入。請點下方按鈕，在 Google 帳號選單中改選公司帳號。";
         } else if (reason === "oauth_failed") {
             authNotice = "登入驗證失敗，請稍後重試；若持續失敗請聯絡管理員。";
         }
@@ -43,6 +44,13 @@
             options: {
                 // 成功後重導向至 Callback 處理路徑
                 redirectTo: callbackUrl,
+                // 強制顯示 Google 帳號選擇器。
+                // 不帶此參數時，若瀏覽器只登入單一 Google 帳號（手機常態），
+                // Google 會靜默沿用該帳號、不出現選單；使用者被網域限制擋下後
+                // 也無法在登入頁換帳號，形成死循環。
+                queryParams: {
+                    prompt: "select_account",
+                },
             },
         });
     }
