@@ -14,6 +14,10 @@
             provider: "google",
             options: {
                 redirectTo: `${window.location.origin}/auth/callback`,
+                // 與 /auth 一致：強制顯示 Google 帳號選擇器
+                queryParams: {
+                    prompt: "select_account",
+                },
             },
         });
     };
