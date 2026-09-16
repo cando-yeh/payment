@@ -142,15 +142,39 @@ graph TD
 遷移同時移除了 `nodemailer` 相依與 `scripts/lib/smtp-client.mjs` 手刻 SMTP 實作
 （兩者合計約 250 行），並連帶清掉 nodemailer 的 8 筆 high 等級 advisory。
 
-#### ⚠️ 仍未解決：QStash 觸發鏈是單點
+#### 事故紀錄：drain 被釘在 nodejs20.x（2026-09-03 ～ 09-16）
 
-寄信端換掉了，但**觸發端仍是單一路徑**：只要 QStash 沒送出或沒回呼，job 會停在
-`queued`、`attempts=0`、`last_error` 為空，SMTP／API 完全不會進場。2026-09-03～09-16
-就是這個型態，43 封通知卡住 13 天無人察覺。
+43 封通知卡在 `queued` 13 天。追查結果與寄信端完全無關：
 
-已在 `qstash-trigger.ts` 補上缺少 `QSTASH_TOKEN` / drain URL 時的 `console.error`，
-但**根本解仍是補一條獨立的定時 drain**（Vercel Cron 或 QStash Schedule），
-讓事件觸發失敗時仍有排程兜底。
+`/api/notify/drain` 是全專案唯一覆寫 runtime 的路徑（`runtime: "nodejs20.x"`），
+而專案設定是 Node 24.x。`@supabase/realtime-js` 需要原生 WebSocket（Node 22+ 才
+內建），在 Node 20 下 `createServerClient` 直接拋錯：
+
+```
+Error: Node.js detected but native WebSocket not found.
+  at WebSocketFactory.getWebSocketConstructor
+  at createClient (@supabase/supabase-js)
+  at supabaseHandle (chunks/supabase.js:5)
+```
+
+錯誤發生在 `supabaseHandle`（hooks 階段），**handler 從未執行**，因此回傳的是
+Vercel 平台層的 `{"message":"Internal Error"}` 而非本路由的 JSON，job 也就停在
+`queued` / `attempts=0` / `last_error` 為空 —— 資料庫裡完全沒有線索。
+
+**這個失敗型態的辨識法**：`attempts=0` 且 `last_error` 為空 ⇒ drain 從未執行
+（或在認領 job 前就拋錯），問題在觸發端或 function 本身，不在寄信端。
+若是寄信失敗，必定會有 `attempts>0` 與 `last_error`。
+
+**教訓**：不要在單一 route 覆寫 runtime。專案層級的 Node 版本會隨平台演進，
+個別路徑釘死舊版本會在某天無聲失效，且失敗點落在 handler 之前、應用層無從記錄。
+
+#### 觸發端現況
+
+QStash 除了狀態轉移時的 delayed message，另有一支 `* * * * *` 的排程
+（`scd_62S7FYthfDi181AfR1UxEAvT15H8`）每分鐘呼叫 `/api/notify/drain`，
+事件觸發失敗時由它兜底。上述事故期間這支排程一直正常發送，
+每天 1236 筆 `ERROR 500`、`DELIVERED` 掛零 —— 兜底機制本身是好的，
+壞的是端點。**QStash 的 event log 是排查這條鏈最快的入口。**
 
 ### 2.5 測試架構 (Testing Stack)
 
