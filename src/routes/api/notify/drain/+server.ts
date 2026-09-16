@@ -3,9 +3,11 @@ import type { RequestHandler } from "./$types";
 import { drainNotificationJobs } from "$lib/server/notifications/drain";
 
 export const prerender = false;
-export const config = {
-    runtime: "nodejs20.x",
-};
+// 不要在這裡覆寫 runtime。曾釘死在 nodejs20.x，而 @supabase/realtime-js 需要
+// 原生 WebSocket（Node 22+ 才內建），導致 supabaseHandle 在 hooks 階段就拋錯，
+// 這支 function 每次都回平台層 500、handler 從未執行 —— 通知因此停擺 13 天，
+// 且 job 停在 attempts=0 沒有任何錯誤訊息可查。
+// 交給專案設定的 Node 版本（目前 24.x）即可。
 
 function isAuthorized(request: Request): boolean {
     const expected = String(process.env.NOTIFY_DRAIN_TOKEN || "").trim();
