@@ -50,7 +50,7 @@ graph TD
     end
 
     subgraph External [外部服務]
-        SMTP[Google Workspace / SMTP]:::externalStyle
+        SMTP[Resend Email API]:::externalStyle
     end
 
     %% 連線關係
@@ -116,37 +116,41 @@ graph TD
 | **部署方式** | GitHub 主分支 Push 自動部署 |
 | **Edge Network** | 全球 CDN 加速 |
 | **Cron Jobs** | 定時任務執行 (每週清理孤立檔案) |
-| **環境變數** | Supabase URL、API Key、SMTP 設定 |
+| **環境變數** | Supabase URL、API Key、Resend API key、QStash 設定 |
 
-### 2.4 Email 通知：Google Workspace SMTP
+### 2.4 Email 通知：Resend API
 
 | 項目 | 說明 |
 |-----|------|
-| **發送帳號** | noreply@company.com |
-| **每日限額** | 2,000 封 (Workspace 帳號) |
+| **服務** | Resend（`POST https://api.resend.com/emails`） |
+| **免費額度** | 3,000 封/月、100 封/日（本系統實際用量每月數十封） |
 | **觸發方式** | 狀態轉移後 QStash delayed message → 回呼 `/api/notify/drain` |
-| **憑證** | `NOTIFY_SMTP_USERNAME` / `NOTIFY_SMTP_PASSWORD`（Gmail App Password）|
+| **憑證** | `RESEND_API_KEY`（API key，不綁任何登入密碼） |
+| **寄件位址** | `NOTIFY_EMAIL_FROM`，網域須先在 Resend 完成 DNS 驗證 |
+| **實作** | `src/lib/server/notifications/email-client.ts`（worker 版：`scripts/lib/email-client.mjs`） |
+| **速率** | Resend 預設每秒數個請求；`NOTIFY_RATE_DELAY_MS`（預設 250ms）負責節流 |
+| **逾時** | `NOTIFY_EMAIL_TIMEOUT_MS`（預設 15000，前身為 `NOTIFY_SMTP_TIMEOUT_MS`）|
+| **重複寄送防護** | 帶 job id 作為 `Idempotency-Key`，24 小時內重試不會重複寄出 |
 
-#### ⚠️ 已知風險：App Password 靜默失效
+#### 遷移紀錄（2026-09-16）
 
-Gmail App Password **不會排程過期**，但會被下列事件**撤銷**：寄件帳號登入密碼被改、兩步驟驗證關閉再開、Google 偵測到安全事件、Workspace 管理者政策變更、或被手動刪除。若寄件帳號受 **Workspace 密碼輪替政策**約束，則每次輪替都會連帶撤銷 App Password。
+原本走 Google Workspace SMTP + Gmail App Password，因 App Password 會被密碼輪替、
+兩步驟驗證變更等事件**靜默撤銷**，於 2026-06～07 造成一次通知斷線（60 封 `failed`，
+錯誤為 `535-5.7.8 BadCredentials`）。改用 Resend 後憑證不再與登入密碼綁定，寄送結果
+可在 Resend 儀表板直接查閱。
 
-失效時 SMTP 回 `535-5.7.8 BadCredentials`，通知 job 會累積於 `notification_jobs`（`failed` / `queued`）而**不會有任何前台告警**——曾於 2026-07 發生約兩週未被察覺（財務端收不到審核通知）。
+遷移同時移除了 `nodemailer` 相依與 `scripts/lib/smtp-client.mjs` 手刻 SMTP 實作
+（兩者合計約 250 行），並連帶清掉 nodemailer 的 8 筆 high 等級 advisory。
 
-**臨時處置**：重產 App Password → 更新 Vercel env `NOTIFY_SMTP_PASSWORD` → **重新部署**（env 變更需重新部署才生效）→ 呼叫 `/api/notify/drain` 補送積壓。已達 `max_attempts` 的舊 `failed` job 不會自動補送，需在審核中心人工核對遺漏案件。
+#### ⚠️ 仍未解決：QStash 觸發鏈是單點
 
-#### 🔄 替代方案：Email API（Resend / SendGrid）
+寄信端換掉了，但**觸發端仍是單一路徑**：只要 QStash 沒送出或沒回呼，job 會停在
+`queued`、`attempts=0`、`last_error` 為空，SMTP／API 完全不會進場。2026-09-03～09-16
+就是這個型態，43 封通知卡住 13 天無人察覺。
 
-建議在下次通知斷線或啟動 Workspace 密碼輪替時，改用 **Email API 服務**取代 SMTP：
-
-| 方案 | 免費額度 | 付費起點 | 說明 |
-|-----|---------|---------|------|
-| **Resend**（首選）| 3,000 封/月、100 封/日 | $20/月（5 萬封）| API Key 驗證、不綁登入密碼、SvelteKit 生態友善、有寄達/退信儀表板 |
-| SendGrid | 100 封/日永久 | ~$19.95/月起 | 老牌、儀表板完整 |
-
-- **成本**：本系統實際用量約每月數十封，**任一免費方案皆 $0**；換方案的目的是消除「密碼輪替→靜默斷線」風險與取得寄送可觀測性，非為省錢。
-- **改動範圍（預估半天）**：改寫 `src/lib/server/notifications/smtp-client.ts` 為呼叫 Email API；env 由 `NOTIFY_SMTP_*` 換為單一 API key（如 `RESEND_API_KEY`）＋驗證寄件網域；佇列/drain/模板邏輯不動。
-- **附帶收益**：斷線可由服務端儀表板即時發現，不必再挖 `notification_jobs` 排查。
+已在 `qstash-trigger.ts` 補上缺少 `QSTASH_TOKEN` / drain URL 時的 `console.error`，
+但**根本解仍是補一條獨立的定時 drain**（Vercel Cron 或 QStash Schedule），
+讓事件觸發失敗時仍有排程兜底。
 
 ### 2.5 測試架構 (Testing Stack)
 
@@ -323,9 +327,10 @@ main (生產環境)
 | `PUBLIC_SUPABASE_URL` | Supabase 專案 URL | https://xxx.supabase.co |
 | `PUBLIC_SUPABASE_ANON_KEY` | Supabase 公開金鑰 | eyJhbGciOiJIUzI1NiIs... |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase 服務金鑰 (Server 端) | eyJhbGciOiJIUzI1NiIs... |
-| `SMTP_HOST` | SMTP 主機 | smtp.gmail.com |
-| `SMTP_USER` | SMTP 帳號 | noreply@company.com |
-| `SMTP_PASS` | SMTP App Password | xxxx-xxxx-xxxx-xxxx |
+| `RESEND_API_KEY` | Resend API key | re_xxxxxxxx |
+| `NOTIFY_EMAIL_FROM` | 寄件位址（網域須通過 Resend 驗證）| 報銷系統 &lt;no-reply@company.com&gt; |
+| `QSTASH_TOKEN` | Upstash QStash token（缺少時通知不會寄出）| eyJVc2VySUQiOi... |
+| `NOTIFY_DRAIN_TOKEN` | `/api/notify/drain` 的 Bearer token | 自訂隨機字串 |
 
 ---
 
@@ -415,7 +420,7 @@ main (生產環境)
 |-----|------|------|
 | 全端框架 | SvelteKit (非 Next.js) | 編譯型效能佳、表單操作流暢 |
 | 後端架構 | 純 SvelteKit (非 Go) | 減少維運複雜度、內部系統流量可控 |
-| Email 服務 | Google SMTP（現行；替代方案見 §2.4）| 已有 Workspace、免費、高送達率；**已知風險：App Password 靜默失效**，觸發條件（斷線或密碼輪替）達成時遷移至 Resend/SendGrid |
+| Email 服務 | Resend API（2026-09-16 由 Google SMTP 遷入，見 §2.4）| API key 不綁登入密碼，免除 App Password 靜默失效風險；免費額度覆蓋用量；有寄達/退信儀表板 |
 | 定時任務 | Vercel Cron (非 pg_cron) | 設定簡單、與部署整合 |
 
 ---

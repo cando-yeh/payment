@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { renderNotificationEmailTemplate } from "./email-templates";
-import { sendMailSmtp } from "./smtp-client";
+import { sendNotificationEmail } from "./email-client";
 
 type DrainResult = {
     claimed: number;
@@ -21,6 +21,10 @@ function getSupabaseAdminClient() {
     return createClient(url, key);
 }
 
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function calcBackoffMinutes(attempts: number) {
     return Math.min(60, Math.pow(2, Math.max(0, attempts - 1)));
 }
@@ -30,20 +34,16 @@ export async function drainNotificationJobs(limit?: number): Promise<DrainResult
 
     const appBaseUrl = getEnv("APP_BASE_URL") || "http://localhost:5173";
     const batchSize = Number(limit || process.env.NOTIFY_BATCH_SIZE || 20);
-    const timeoutMs = Number(process.env.NOTIFY_SMTP_TIMEOUT_MS || 15000);
+    const timeoutMs = Number(process.env.NOTIFY_EMAIL_TIMEOUT_MS || 15000);
     const maxAttemptsHardCap = Number(process.env.NOTIFY_MAX_ATTEMPTS_CAP || 5);
 
-    const smtp = {
-        host: getEnv("NOTIFY_SMTP_HOST"),
-        port: Number(process.env.NOTIFY_SMTP_PORT || 465),
-        secure: String(process.env.NOTIFY_SMTP_SECURE || "true") === "true",
-        username: getEnv("NOTIFY_SMTP_USERNAME"),
-        password: getEnv("NOTIFY_SMTP_PASSWORD"),
-        from: getEnv("NOTIFY_SMTP_FROM"),
-    };
-    if (!smtp.host || !smtp.from) {
-        throw new Error("Missing SMTP config: NOTIFY_SMTP_HOST / NOTIFY_SMTP_FROM");
+    const apiKey = getEnv("RESEND_API_KEY");
+    const mailFrom = getEnv("NOTIFY_EMAIL_FROM");
+    if (!apiKey || !mailFrom) {
+        throw new Error("Missing email config: RESEND_API_KEY / NOTIFY_EMAIL_FROM");
     }
+    // Resend 預設速率上限為每秒數個請求，補送大量積壓時需要節流。
+    const rateDelayMs = Number(process.env.NOTIFY_RATE_DELAY_MS || 250);
 
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
@@ -82,7 +82,9 @@ export async function drainNotificationJobs(limit?: number): Promise<DrainResult
     let sent = 0;
     let failed = 0;
 
-    for (const job of claimedJobs) {
+    for (const [index, job] of claimedJobs.entries()) {
+        if (index > 0 && rateDelayMs > 0) await sleep(rateDelayMs);
+
         try {
             const payload = job.payload || {};
             const rendered = renderNotificationEmailTemplate(
@@ -91,19 +93,17 @@ export async function drainNotificationJobs(limit?: number): Promise<DrainResult
                 appBaseUrl,
             );
 
-            await sendMailSmtp({
-                host: smtp.host,
-                port: smtp.port,
-                secure: smtp.secure,
-                username: smtp.username,
-                password: smtp.password,
-                from: smtp.from,
+            const { id: providerMessageId } = await sendNotificationEmail({
+                apiKey,
+                from: mailFrom,
                 to: [String(job.recipient_email || "")],
                 cc: Array.isArray(job.cc_emails) ? job.cc_emails : [],
                 subject: rendered.subject,
                 text: rendered.text,
                 html: rendered.html,
                 timeoutMs,
+                // 同一筆 job 重試時不會重複寄出
+                idempotencyKey: String(job.id),
             });
 
             const sentAt = new Date().toISOString();
@@ -128,8 +128,8 @@ export async function drainNotificationJobs(limit?: number): Promise<DrainResult
                 recipient_email: job.recipient_email,
                 cc_emails: job.cc_emails || [],
                 status: "sent",
-                provider: "smtp",
-                response_payload: {},
+                provider: "resend",
+                response_payload: providerMessageId ? { id: providerMessageId } : {},
                 sent_at: sentAt,
             });
 
@@ -166,7 +166,7 @@ export async function drainNotificationJobs(limit?: number): Promise<DrainResult
                 recipient_email: job.recipient_email,
                 cc_emails: job.cc_emails || [],
                 status: "failed",
-                provider: "smtp",
+                provider: "resend",
                 error_message: err instanceof Error ? err.message : String(err),
                 response_payload: {},
             });

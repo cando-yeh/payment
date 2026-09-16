@@ -2,7 +2,7 @@ import * as dotenv from "dotenv";
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { renderClaimEmailTemplate } from "./lib/notification-templates.mjs";
-import { sendMailSmtp } from "./lib/smtp-client.mjs";
+import { sendNotificationEmail } from "./lib/email-client.mjs";
 
 dotenv.config();
 try {
@@ -26,20 +26,14 @@ const supabase = createClient(
 
 const appBaseUrl = process.env.APP_BASE_URL || "http://localhost:5173";
 const batchSize = Number(process.env.NOTIFY_BATCH_SIZE || 20);
-const perMailDelayMs = Number(process.env.NOTIFY_RATE_DELAY_MS || 200);
-const timeoutMs = Number(process.env.NOTIFY_SMTP_TIMEOUT_MS || 15000);
+// Resend 預設速率上限為每秒數個請求，補送大量積壓時需要節流。
+const perMailDelayMs = Number(process.env.NOTIFY_RATE_DELAY_MS || 250);
+const timeoutMs = Number(process.env.NOTIFY_EMAIL_TIMEOUT_MS || 15000);
 const maxAttemptsHardCap = Number(process.env.NOTIFY_MAX_ATTEMPTS_CAP || 5);
-const smtpConfig = {
-    host: process.env.NOTIFY_SMTP_HOST || "",
-    port: Number(process.env.NOTIFY_SMTP_PORT || 465),
-    secure: String(process.env.NOTIFY_SMTP_SECURE || "true") === "true",
-    username: process.env.NOTIFY_SMTP_USERNAME || "",
-    password: process.env.NOTIFY_SMTP_PASSWORD || "",
-    from: process.env.NOTIFY_SMTP_FROM || ""
-};
-
-if (!smtpConfig.host || !smtpConfig.from) {
-    throw new Error("Missing SMTP config: NOTIFY_SMTP_HOST / NOTIFY_SMTP_FROM");
+const resendApiKey = process.env.RESEND_API_KEY || "";
+const mailFrom = process.env.NOTIFY_EMAIL_FROM || "";
+if (!resendApiKey || !mailFrom) {
+    throw new Error("Missing email config: RESEND_API_KEY / NOTIFY_EMAIL_FROM");
 }
 
 function sleep(ms) {
@@ -113,7 +107,7 @@ async function markSent(job, providerMessageId = null) {
         recipient_email: job.recipient_email,
         cc_emails: job.cc_emails || [],
         status: "sent",
-        provider: "smtp",
+        provider: "resend",
         provider_message_id: providerMessageId,
         response_payload: {},
         sent_at: nowIso
@@ -151,7 +145,7 @@ async function markFailed(job, reason) {
         recipient_email: job.recipient_email,
         cc_emails: job.cc_emails || [],
         status: "failed",
-        provider: "smtp",
+        provider: "resend",
         error_message: String(reason || "Unknown error"),
         response_payload: {}
     });
@@ -161,27 +155,18 @@ async function processOne(job) {
     const payload = job.payload || {};
     const rendered = renderClaimEmailTemplate(job.template_key || "", payload, appBaseUrl);
 
-    const watchdog = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("SMTP send timeout")), timeoutMs)
-    );
-
-    await Promise.race([
-        sendMailSmtp({
-            host: smtpConfig.host,
-            port: smtpConfig.port,
-            secure: smtpConfig.secure,
-            username: smtpConfig.username,
-            password: smtpConfig.password,
-            from: smtpConfig.from,
-            to: [job.recipient_email],
-            cc: job.cc_emails || [],
-            subject: rendered.subject,
-            text: rendered.text,
-            html: rendered.html,
-            timeoutMs
-        }),
-        watchdog
-    ]);
+    await sendNotificationEmail({
+        apiKey: resendApiKey,
+        from: mailFrom,
+        to: [job.recipient_email],
+        cc: job.cc_emails || [],
+        subject: rendered.subject,
+        text: rendered.text,
+        html: rendered.html,
+        timeoutMs,
+        // 同一筆 job 重試時不會重複寄出
+        idempotencyKey: String(job.id)
+    });
 }
 
 async function main() {

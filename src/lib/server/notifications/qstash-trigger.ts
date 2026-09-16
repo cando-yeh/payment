@@ -19,10 +19,23 @@ export async function triggerNotificationDrain(
     options: TriggerOptions = {},
 ): Promise<boolean> {
     const qstashToken = String(process.env.QSTASH_TOKEN || "").trim();
-    if (!qstashToken) return false;
+    if (!qstashToken) {
+        // 這裡原本是靜默 return false，正是 2026-09 通知斷線 13 天無人察覺的原因：
+        // job 正常入列，但沒有任何一端去寄，前後台都收不到訊號。
+        console.error("[notify:qstash] 缺少 QSTASH_TOKEN，通知不會被寄出", {
+            reason: options.reason || null,
+        });
+        return false;
+    }
 
     const drainUrl = resolveDrainUrl(options.origin);
-    if (!drainUrl) return false;
+    if (!drainUrl) {
+        console.error(
+            "[notify:qstash] 無法解析 drain URL（需要 NOTIFY_DRAIN_URL 或 APP_BASE_URL），通知不會被寄出",
+            { reason: options.reason || null },
+        );
+        return false;
+    }
 
     const delaySec = Number(process.env.NOTIFY_QSTASH_DELAY_SECONDS || 5);
     const retries = Number(process.env.NOTIFY_QSTASH_RETRIES || 2);
