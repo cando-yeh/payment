@@ -49,8 +49,13 @@ async function claimJobs() {
     const nowIso = new Date().toISOString();
     const { data, error } = await supabase
         .from("notification_jobs")
+        // 只撈 queued。failed 是終端狀態：重試路徑會把 status 設回 queued，
+        // 只有 attempts 用盡才會變 failed，因此 failed 的 job 永遠通不過下面的
+        // attempts 檢查。把它們一起撈進來，只會佔掉 limit(batchSize*3) 的候選
+        // 名額 —— 2026-09 就是 60 筆 6 月的 failed 剛好塞滿 60 格的視窗，
+        // 導致 44 筆 queued 永遠排不進來、一封都寄不出去。
         .select("*")
-        .in("status", ["queued", "failed"])
+        .eq("status", "queued")
         .lte("scheduled_at", nowIso)
         .order("scheduled_at", { ascending: true })
         .order("created_at", { ascending: true })
@@ -70,7 +75,7 @@ async function claimJobs() {
                 updated_at: new Date().toISOString()
             })
             .eq("id", job.id)
-            .in("status", ["queued", "failed"])
+            .eq("status", "queued")
             .select("*")
             .maybeSingle();
 
